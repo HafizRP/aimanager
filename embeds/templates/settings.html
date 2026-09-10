@@ -123,15 +123,15 @@
           <ol class="small text-light ps-3 mb-3 d-flex flex-column gap-2">
             <li>Open <strong>Cursor Settings &gt; Models &gt; OpenAI API Key</strong>.</li>
             <li>Enable <strong>Override OpenAI Base URL</strong> and enter:
-              <div class="mt-2 mb-2 d-flex align-items-center gap-2">
-                <code class="p-2 rounded-2 flex-grow-1 font-monospace current-base-url-text" style="background: #0b0d14; border: 1px solid var(--border-subtle); color: #38bdf8;">{{ .CurrentBaseURL }}</code>
-                <button class="btn-modern-ghost btn-sm copy-btn" data-copy="{{ .CurrentBaseURL }}">Copy</button>
+              <div class="mt-2 mb-2 d-flex align-items-center gap-2" style="min-width: 0;">
+                <code class="p-2 rounded-2 flex-grow-1 font-monospace current-base-url-text text-truncate" style="background: #0b0d14; border: 1px solid var(--border-subtle); color: #38bdf8; min-width: 0;" title="{{ .CurrentBaseURL }}">{{ .CurrentBaseURL }}</code>
+                <button class="btn-modern-ghost btn-sm copy-btn flex-shrink-0" data-copy="{{ .CurrentBaseURL }}">Copy</button>
               </div>
             </li>
             <li>Paste your <strong>API Key</strong>:
-              <div class="mt-1 mb-2 d-flex align-items-center gap-2">
-                <code class="p-2 rounded-2 flex-grow-1 font-monospace text-warning" style="background: #0b0d14; border: 1px solid var(--border-subtle);">{{ .UserKey }}</code>
-                <button class="btn-modern-ghost btn-sm copy-btn" data-copy="{{ .UserKey }}">Copy Key</button>
+              <div class="mt-1 mb-2 d-flex align-items-center gap-2" style="min-width: 0;">
+                <code class="p-2 rounded-2 flex-grow-1 font-monospace text-warning text-truncate" style="background: #0b0d14; border: 1px solid var(--border-subtle); min-width: 0;" title="{{ .UserKey }}">{{ .UserKey }}</code>
+                <button class="btn-modern-ghost btn-sm copy-btn flex-shrink-0" data-copy="{{ .UserKey }}">Copy Key</button>
               </div>
             </li>
             <li>Select or type whitelisted model ID: <code class="text-info font-monospace">{{ .UserModel }}</code></li>

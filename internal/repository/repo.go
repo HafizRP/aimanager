@@ -36,6 +36,7 @@ type Repository interface {
 	// Logs
 	CreateRequestLog(ctx context.Context, log *models.RequestLog) error
 	GetRequestLogs(ctx context.Context, limit, offset int, userID, modelFilter string, statusFilter int) ([]models.RequestLog, int, error)
+	GetRequestLogsCursor(ctx context.Context, limit int, cursor, direction, userID, modelFilter string, statusFilter int) ([]models.RequestLog, *models.CursorPageInfo, error)
 
 	// Stats
 	GetDashboardStats(ctx context.Context) (*models.DashboardStats, error)
@@ -435,6 +436,130 @@ func (r *SQLiteRepo) GetRequestLogs(ctx context.Context, limit, offset int, user
 		logs = append(logs, l)
 	}
 	return logs, total, nil
+}
+
+func (r *SQLiteRepo) GetRequestLogsCursor(ctx context.Context, limit int, cursor, direction, userID, modelFilter string, statusFilter int) ([]models.RequestLog, *models.CursorPageInfo, error) {
+	if limit <= 0 {
+		limit = 25
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
+	whereClauses := []string{"1=1"}
+	args := []interface{}{}
+
+	if userID != "" {
+		whereClauses = append(whereClauses, "l.user_id = ?")
+		args = append(args, userID)
+	}
+	if modelFilter != "" {
+		whereClauses = append(whereClauses, "l.model LIKE ?")
+		args = append(args, "%"+modelFilter+"%")
+	}
+	if statusFilter > 0 {
+		whereClauses = append(whereClauses, "l.status_code = ?")
+		args = append(args, statusFilter)
+	}
+
+	whereSQL := strings.Join(whereClauses, " AND ")
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM request_logs l WHERE %s", whereSQL)
+	var total int
+	_ = r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total)
+
+	cursorTime, cursorID, hasCursor := DecodeCursor(cursor)
+	isPrev := (direction == "prev" && hasCursor)
+
+	cursorWhere := ""
+	cursorArgs := []interface{}{}
+	orderDir := "DESC"
+
+	if hasCursor {
+		if isPrev {
+			cursorWhere = " AND (l.created_at > ? OR (l.created_at = ? AND l.id > ?))"
+			cursorArgs = append(cursorArgs, cursorTime, cursorTime, cursorID)
+			orderDir = "ASC"
+		} else {
+			cursorWhere = " AND (l.created_at < ? OR (l.created_at = ? AND l.id < ?))"
+			cursorArgs = append(cursorArgs, cursorTime, cursorTime, cursorID)
+			orderDir = "DESC"
+		}
+	}
+
+	dataQuery := fmt.Sprintf(`
+		SELECT l.id, l.user_id, l.api_key_id, l.path, l.method, l.model, l.is_stream, 
+		       l.prompt_tokens, l.completion_tokens, l.total_tokens, l.status_code, 
+		       l.duration_ms, l.client_ip, COALESCE(l.error_message, ''), l.created_at,
+		       COALESCE(u.name, 'Unknown') as user_name,
+		       COALESCE(k.name, 'Deleted Key') as key_name
+		FROM request_logs l
+		LEFT JOIN users u ON l.user_id = u.id
+		LEFT JOIN api_keys k ON l.api_key_id = k.id
+		WHERE %s%s
+		ORDER BY l.created_at %s, l.id %s
+		LIMIT ?`, whereSQL, cursorWhere, orderDir, orderDir)
+
+	allArgs := append(args, cursorArgs...)
+	allArgs = append(allArgs, limit+1)
+
+	rows, err := r.db.QueryContext(ctx, dataQuery, allArgs...)
+	if err != nil {
+		return nil, &models.CursorPageInfo{Limit: limit, TotalCount: total}, err
+	}
+	defer rows.Close()
+
+	var logs []models.RequestLog
+	for rows.Next() {
+		var l models.RequestLog
+		var createdAt string
+		var isStream int
+		if err := rows.Scan(
+			&l.ID, &l.UserID, &l.APIKeyID, &l.Path, &l.Method, &l.Model, &isStream,
+			&l.PromptTokens, &l.CompletionTokens, &l.TotalTokens, &l.StatusCode,
+			&l.DurationMs, &l.ClientIP, &l.ErrorMessage, &createdAt,
+			&l.UserName, &l.KeyName,
+		); err != nil {
+			return nil, &models.CursorPageInfo{Limit: limit, TotalCount: total}, err
+		}
+		l.IsStream = (isStream == 1)
+		l.CreatedAt = parseTimeFlexible(createdAt)
+		logs = append(logs, l)
+	}
+
+	pageInfo := &models.CursorPageInfo{
+		Limit:      limit,
+		TotalCount: total,
+	}
+
+	if isPrev {
+		if len(logs) > limit {
+			pageInfo.HasPrev = true
+			logs = logs[:limit]
+		}
+		pageInfo.HasNext = true
+
+		// Reverse logs to restore DESC order
+		for i, j := 0, len(logs)-1; i < j; i, j = i+1, j-1 {
+			logs[i], logs[j] = logs[j], logs[i]
+		}
+	} else {
+		if hasCursor {
+			pageInfo.HasPrev = true
+		}
+		if len(logs) > limit {
+			pageInfo.HasNext = true
+			logs = logs[:limit]
+		}
+	}
+
+	if len(logs) > 0 {
+		first := logs[0]
+		last := logs[len(logs)-1]
+		pageInfo.PrevCursor = EncodeCursor(first.CreatedAt, first.ID)
+		pageInfo.NextCursor = EncodeCursor(last.CreatedAt, last.ID)
+	}
+
+	return logs, pageInfo, nil
 }
 
 // Dashboard statistics

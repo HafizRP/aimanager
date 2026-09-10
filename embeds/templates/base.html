@@ -15,7 +15,7 @@
   <!-- Bootstrap Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <!-- Custom Modern Design System -->
-  <link href="/static/css/custom.css?v=4" rel="stylesheet">
+  <link href="/static/css/custom.css?v=5" rel="stylesheet">
 </head>
 <body>
   <div class="app-wrapper">
@@ -151,7 +151,7 @@
       </header>
 
       <!-- Flash Messages -->
-      <div class="container-fluid px-4 mt-3">
+      <div class="container-fluid px-3 px-sm-4 mt-3">
         {{ if .SuccessMsg }}
           <div class="alert card-modern border-success border-opacity-50 p-3 mb-3 d-flex align-items-center justify-content-between text-light alert-dismissible fade show" role="alert">
             <div class="d-flex align-items-center gap-2">
@@ -173,7 +173,7 @@
       </div>
 
       <!-- Main Body Content -->
-      <main class="container-fluid px-4 py-3 flex-grow-1">
+      <main class="container-fluid px-3 px-sm-4 py-3 flex-grow-1" style="min-width: 0; max-width: 100%; overflow-x: hidden;">
         {{ template "content" . }}
       </main>
     </div>
@@ -182,7 +182,7 @@
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="/static/js/app.js?v=4"></script>
+  <script src="/static/js/app.js?v=5"></script>
   {{ block "scripts" . }}{{ end }}
 </body>
 </html>

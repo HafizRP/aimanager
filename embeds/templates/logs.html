@@ -127,22 +127,34 @@
     </table>
   </div>
 
-  <!-- Pagination Controls -->
-  <div class="d-flex justify-content-between align-items-center p-3 border-top border-secondary border-opacity-10 small text-dim">
+  <!-- Cursor-Based Pagination Controls -->
+  <div class="d-flex flex-column flex-sm-row justify-content-between align-items-center gap-3 p-3 border-top border-secondary border-opacity-10 small text-dim">
     <div>
-      Showing <span class="text-light fw-medium">{{ len .Logs }}</span> of <span class="text-light fw-medium">{{ .TotalCount }}</span> entries
+      Showing <span class="text-light fw-medium">{{ len .Logs }}</span> of approx <span class="text-light fw-medium">{{ .PageInfo.TotalCount }}</span> requests
     </div>
-    <div class="d-flex gap-2">
-      {{ if gt .CurrentPage 1 }}
-        <a href="/logs?page={{ sub .CurrentPage 1 }}&user_id={{ .FilterUser }}&model={{ .FilterModel }}&status={{ .FilterStatus }}" class="btn-modern-ghost btn-sm text-decoration-none">
-          &larr; Previous
+    <div class="d-flex align-items-center gap-2">
+      {{ if .PageInfo.HasPrev }}
+        <a href="/logs?cursor={{ .PageInfo.PrevCursor }}&dir=prev&user_id={{ .FilterUser }}&model={{ .FilterModel }}&status={{ .FilterStatus }}" class="btn-modern-ghost btn-sm text-decoration-none">
+          <i class="bi bi-chevron-left me-1"></i> Newer
         </a>
+      {{ else }}
+        <button class="btn-modern-ghost btn-sm disabled opacity-40" disabled>
+          <i class="bi bi-chevron-left me-1"></i> Newer
+        </button>
       {{ end }}
-      <span class="btn-modern-ghost btn-sm disabled opacity-75">Page {{ .CurrentPage }}</span>
-      {{ if .HasNextPage }}
-        <a href="/logs?page={{ add .CurrentPage 1 }}&user_id={{ .FilterUser }}&model={{ .FilterModel }}&status={{ .FilterStatus }}" class="btn-modern-ghost btn-sm text-decoration-none">
-          Next &rarr;
+
+      <span class="badge-modern badge-gray px-2 py-1 font-monospace" style="font-size: 0.72rem;">
+        Cursor Sync
+      </span>
+
+      {{ if .PageInfo.HasNext }}
+        <a href="/logs?cursor={{ .PageInfo.NextCursor }}&dir=next&user_id={{ .FilterUser }}&model={{ .FilterModel }}&status={{ .FilterStatus }}" class="btn-modern-ghost btn-sm text-decoration-none">
+          Older <i class="bi bi-chevron-right ms-1"></i>
         </a>
+      {{ else }}
+        <button class="btn-modern-ghost btn-sm disabled opacity-40" disabled>
+          Older <i class="bi bi-chevron-right ms-1"></i>
+        </button>
       {{ end }}
     </div>
   </div>

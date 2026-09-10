@@ -21,27 +21,24 @@ func (h *Handler) LogsPage(w http.ResponseWriter, r *http.Request) {
 	statusStr := r.URL.Query().Get("status")
 	filterStatus, _ := strconv.Atoi(statusStr)
 
-	pageStr := r.URL.Query().Get("page")
-	page, _ := strconv.Atoi(pageStr)
-	if page < 1 {
-		page = 1
+	cursor := r.URL.Query().Get("cursor")
+	dir := r.URL.Query().Get("dir")
+	if dir != "prev" && dir != "next" {
+		dir = "next"
 	}
 
-	limit := 30
-	offset := (page - 1) * limit
+	limit := 25
 
-	logs, total, err := h.repo.GetRequestLogs(ctx, limit, offset, filterUser, filterModel, filterStatus)
+	logs, pageInfo, err := h.repo.GetRequestLogsCursor(ctx, limit, cursor, dir, filterUser, filterModel, filterStatus)
 	if err != nil {
 		logs = nil
-		total = 0
+		pageInfo = &models.CursorPageInfo{Limit: limit}
 	}
 
 	var users []models.User
 	if currentUser != nil && currentUser.IsAdmin() {
 		users, _ = h.repo.GetAllUsers(ctx)
 	}
-
-	hasNext := (offset + len(logs)) < total
 
 	h.render(w, r, "logs.html", "base.html", map[string]interface{}{
 		"ActivePage":   "logs",
@@ -50,8 +47,6 @@ func (h *Handler) LogsPage(w http.ResponseWriter, r *http.Request) {
 		"FilterUser":   filterUser,
 		"FilterModel":  filterModel,
 		"FilterStatus": filterStatus,
-		"CurrentPage":  page,
-		"TotalCount":   total,
-		"HasNextPage":  hasNext,
+		"PageInfo":     pageInfo,
 	})
 }

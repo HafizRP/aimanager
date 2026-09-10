@@ -103,6 +103,15 @@ type DashboardStats struct {
 	RecentLogs    []RequestLog   `json:"recent_logs"`
 }
 
+type CursorPageInfo struct {
+	HasNext    bool   `json:"has_next"`
+	HasPrev    bool   `json:"has_prev"`
+	NextCursor string `json:"next_cursor"`
+	PrevCursor string `json:"prev_cursor"`
+	Limit      int    `json:"limit"`
+	TotalCount int    `json:"total_count"`
+}
+
 type TokenPackage struct {
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`
