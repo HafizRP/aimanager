@@ -212,8 +212,14 @@ func main() {
 		authRouter.Get("/logs", h.LogsPage)
 		authRouter.Get("/api/logs", h.APILogs)
 		authRouter.Get("/models", h.ModelsPage)
+		authRouter.Get("/api/models/alias", h.APIModelAliasesGet)
 		authRouter.Get("/settings", h.SettingsPage)
 		authRouter.Post("/settings/password", h.UpdatePasswordPost)
+
+		// Workspace: Chat Playground & CLI Tools Setup Hub
+		authRouter.Get("/chat", h.ChatPage)
+		authRouter.Get("/playground", h.ChatPage)
+		authRouter.Get("/cli-tools", h.CLIToolsPage)
 
 		// Admin-Only Routes (User Management & Administrative Overrides)
 		authRouter.Group(func(adminOnly chi.Router) {
@@ -227,6 +233,36 @@ func main() {
 			adminOnly.Post("/users/{id}/reset-usage", h.ResetUsage)
 			adminOnly.Post("/users/{id}/toggle", h.ToggleUserStatus)
 			adminOnly.Post("/users/{id}/delete", h.DeleteUser)
+
+			// 9router Core: Upstream Providers Management
+			adminOnly.Get("/providers", h.ProvidersPage)
+			adminOnly.Post("/api/providers/toggle", h.APIProvidersToggle)
+			adminOnly.Post("/api/providers/priority", h.APIProvidersPriority)
+			adminOnly.Get("/api/providers/test", h.APIProvidersTest)
+			adminOnly.Post("/api/providers/test", h.APIProvidersTest)
+			adminOnly.Post("/api/providers/delete", h.APIProvidersDelete)
+			adminOnly.Post("/api/providers/create", h.APIProvidersCreate)
+
+			// 9router Core: Combos & Fallbacks
+			adminOnly.Get("/combos", h.CombosPage)
+			adminOnly.Post("/api/combos/create", h.APICombosCreate)
+			adminOnly.Post("/api/combos/update", h.APICombosUpdate)
+			adminOnly.Post("/api/combos/delete", h.APICombosDelete)
+
+			// 9router Core: Token Saver, RTK, Provider Thinking, Caveman
+			adminOnly.Get("/token-saver", h.TokenSaverPage)
+			adminOnly.Post("/api/token-saver/save", h.APITokenSaverSave)
+
+			// 9router Core: Proxy Pools
+			adminOnly.Get("/proxy-pools", h.ProxyPoolsPage)
+			adminOnly.Post("/api/proxy-pools/create", h.APIProxyPoolsCreate)
+			adminOnly.Post("/api/proxy-pools/delete", h.APIProxyPoolsDelete)
+			adminOnly.Post("/api/proxy-pools/test", h.APIProxyPoolsTest)
+
+			// 9router Core: Model Aliases CRUD
+			adminOnly.Post("/api/models/alias", h.APIModelAliasSet)
+			adminOnly.Delete("/api/models/alias", h.APIModelAliasDelete)
+			adminOnly.Post("/api/models/alias/delete", h.APIModelAliasDelete)
 
 			// Admin Billing Actions
 			adminOnly.Post("/api/billing/manual-credit", h.ManualCreditTokens)

@@ -1,0 +1,254 @@
+{{ define "title" }}Model Combos & Fallbacks - AI Manager{{ end }}
+
+{{ define "content" }}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+  <div>
+    <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
+      <i class="bi bi-diagram-3-fill text-indigo"></i> Model Combos & Smart Fallbacks
+    </h4>
+    <p class="text-dim small mb-0">Group multiple upstream models into a resilient unified endpoint. If the primary model encounters rate limits or errors, 9router automatically fails over to the next.</p>
+  </div>
+  <div class="d-flex align-items-center gap-2">
+    <button type="button" class="btn-modern-primary d-inline-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#comboModal" onclick="openCreateComboModal()">
+      <i class="bi bi-plus-lg"></i> Create Combo
+    </button>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  {{ if .Combos }}
+    {{ range .Combos }}
+      <div class="col-12 col-xl-6" id="combo-card-{{ .ID }}">
+        <div class="card-modern p-4 h-100 d-flex flex-column justify-content-between">
+          <div>
+            <div class="d-flex align-items-center justify-content-between mb-3">
+              <div class="d-flex align-items-center gap-2">
+                <div class="brand-glow" style="width: 36px; height: 36px; font-size: 1.1rem; border-radius: 10px;">
+                  <i class="bi bi-shuffle"></i>
+                </div>
+                <div>
+                  <h5 class="fw-bold text-light mb-0 font-monospace">{{ .Name }}</h5>
+                  <span class="text-dim small" style="font-size: 0.72rem;">{{ len .Models }} fallback models chained</span>
+                </div>
+              </div>
+              <div class="d-flex align-items-center gap-1">
+                <button type="button" class="btn-modern-ghost btn-sm py-1 px-2" onclick="openEditComboModal('{{ .ID }}', '{{ .Name }}', {{ .Models }})" title="Edit Combo">
+                  <i class="bi bi-pencil-square"></i> Edit
+                </button>
+                <button type="button" class="btn-modern-ghost btn-sm text-danger border-0 p-1" onclick="deleteCombo('{{ .ID }}', '{{ .Name }}')" title="Delete Combo">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Fallback Chain Visualizer -->
+            <label class="form-label small text-muted mb-2 text-uppercase tracking-wider font-monospace" style="font-size: 0.68rem;">Fallback Sequence</label>
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+              {{ range $idx, $m := .Models }}
+                <div class="d-flex align-items-center gap-2">
+                  <span class="badge-modern badge-gray font-monospace d-flex align-items-center gap-1.5" style="font-size: 0.75rem; padding: 0.35rem 0.6rem;">
+                    <span class="text-primary fw-bold" style="font-size: 0.68rem;">#{{ add $idx 1 }}</span>
+                    <span>{{ $m }}</span>
+                  </span>
+                  {{ if lt (add $idx 1) (len $.Combos) }}
+                    <i class="bi bi-arrow-right text-dim opacity-50 small"></i>
+                  {{ end }}
+                </div>
+              {{ end }}
+            </div>
+          </div>
+
+          <div class="pt-3 border-top border-secondary border-opacity-10 d-flex align-items-center justify-content-between text-dim small" style="font-size: 0.72rem;">
+            <span>ID: <code class="text-muted">{{ .ID }}</code></span>
+            <span>Updated: <span class="font-monospace text-light">{{ .UpdatedAt }}</span></span>
+          </div>
+        </div>
+      </div>
+    {{ end }}
+  {{ else }}
+    <div class="col-12">
+      <div class="card-modern p-5 text-center text-dim">
+        <i class="bi bi-diagram-3 fs-1 d-block mb-3 opacity-40"></i>
+        <h5>No Model Combos Defined</h5>
+        <p class="small text-muted mb-3">Create your first combo to enable automatic failover between models.</p>
+        <button type="button" class="btn-modern-primary btn-sm d-inline-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#comboModal" onclick="openCreateComboModal()">
+          <i class="bi bi-plus-lg"></i> Create Combo
+        </button>
+      </div>
+    </div>
+  {{ end }}
+</div>
+
+<!-- Combo Create/Edit Modal -->
+<div class="modal fade" id="comboModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content card-modern border-0" style="background: var(--bg-surface);">
+      <div class="modal-header border-secondary border-opacity-10">
+        <h5 class="modal-title fw-bold text-light d-flex align-items-center gap-2" id="comboModalTitle">
+          <i class="bi bi-diagram-3 text-primary"></i> Create Model Combo
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="comboForm" onsubmit="submitCombo(event)">
+        <input type="hidden" id="comboId" value="">
+        <div class="modal-body d-flex flex-column gap-3">
+          <div>
+            <label class="form-label small text-muted mb-1">Combo Name</label>
+            <input type="text" class="form-control form-control-modern font-monospace" id="comboName" placeholder="e.g. main, coding-trio, fast-free" required>
+            <div class="text-dim small mt-1" style="font-size: 0.72rem;">Clients can call this combo directly in API requests like <code>"model": "main"</code>.</div>
+          </div>
+
+          <div>
+            <label class="form-label small text-muted mb-1 d-flex justify-content-between align-items-center">
+              <span>Chained Fallback Models (In Order of Priority)</span>
+              <span class="badge-modern badge-indigo font-monospace" id="selectedCountBadge">0 Selected</span>
+            </label>
+            
+            <!-- Selected Models Chips (Ordered) -->
+            <div class="p-2 rounded-3 mb-2 min-h-60" style="background: rgba(16, 20, 32, 0.7); border: 1px solid var(--border-subtle);" id="selectedModelsContainer">
+              <div class="text-dim small text-center py-2" id="emptySelectedNotice">Click models from the catalog below to add them to this combo.</div>
+            </div>
+
+            <!-- Model Search Box -->
+            <div class="input-group mb-2">
+              <span class="input-group-text bg-transparent border-0 text-muted"><i class="bi bi-search"></i></span>
+              <input type="text" class="form-control form-control-modern border-0" id="searchCatalogInput" placeholder="Search available models to add..." oninput="filterCatalog(this.value)">
+            </div>
+
+            <!-- Available Models Catalog Box -->
+            <div class="p-2 rounded-3" style="background: rgba(10, 13, 22, 0.5); border: 1px solid var(--border-subtle); max-height: 220px; overflow-y: auto;" id="catalogContainer">
+              {{ range .Models }}
+                <button type="button" class="btn-modern-ghost btn-sm text-start font-monospace d-inline-flex align-items-center justify-content-between m-1 catalog-item" data-id="{{ .ID }}" onclick="addModelToCombo('{{ .ID }}')">
+                  <span>{{ .ID }}</span>
+                  <i class="bi bi-plus ms-2"></i>
+                </button>
+              {{ end }}
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-secondary border-opacity-10">
+          <button type="button" class="btn-modern-ghost" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn-modern-primary" id="btnSaveCombo">Save Combo</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentSelectedModels = [];
+
+function openCreateComboModal() {
+  document.getElementById('comboModalTitle').innerHTML = '<i class="bi bi-diagram-3 text-primary"></i> Create Model Combo';
+  document.getElementById('comboId').value = '';
+  document.getElementById('comboName').value = '';
+  document.getElementById('comboName').readOnly = false;
+  currentSelectedModels = [];
+  renderSelectedChips();
+}
+
+function openEditComboModal(id, name, models) {
+  document.getElementById('comboModalTitle').innerHTML = `<i class="bi bi-pencil-square text-primary"></i> Edit Combo: <span class="font-monospace text-light">${name}</span>`;
+  document.getElementById('comboId').value = id;
+  document.getElementById('comboName').value = name;
+  currentSelectedModels = Array.isArray(models) ? [...models] : [];
+  renderSelectedChips();
+  const modal = new bootstrap.Modal(document.getElementById('comboModal'));
+  modal.show();
+}
+
+function renderSelectedChips() {
+  const container = document.getElementById('selectedModelsContainer');
+  const badge = document.getElementById('selectedCountBadge');
+  badge.textContent = `${currentSelectedModels.length} Selected`;
+
+  if (currentSelectedModels.length === 0) {
+    container.innerHTML = '<div class="text-dim small text-center py-2" id="emptySelectedNotice">Click models from the catalog below to add them to this combo.</div>';
+    return;
+  }
+
+  container.innerHTML = '';
+  currentSelectedModels.forEach((m, idx) => {
+    const chip = document.createElement('div');
+    chip.className = 'badge-modern badge-gray font-monospace d-inline-flex align-items-center gap-2 m-1 py-1.5 px-2.5';
+    chip.innerHTML = `
+      <span class="text-primary fw-bold">#${idx + 1}</span>
+      <span class="text-light">${m}</span>
+      <button type="button" class="btn-close btn-close-white" style="font-size: 0.55rem;" onclick="removeModelFromCombo(${idx})"></button>
+    `;
+    container.appendChild(chip);
+  });
+}
+
+function addModelToCombo(id) {
+  if (!currentSelectedModels.includes(id)) {
+    currentSelectedModels.push(id);
+    renderSelectedChips();
+  }
+}
+
+function removeModelFromCombo(idx) {
+  currentSelectedModels.splice(idx, 1);
+  renderSelectedChips();
+}
+
+function filterCatalog(q) {
+  q = (q || '').toLowerCase().trim();
+  const items = document.querySelectorAll('#catalogContainer .catalog-item');
+  items.forEach(item => {
+    const id = (item.getAttribute('data-id') || '').toLowerCase();
+    item.style.display = id.includes(q) ? 'inline-flex' : 'none';
+  });
+}
+
+async function submitCombo(e) {
+  e.preventDefault();
+  const id = document.getElementById('comboId').value;
+  const name = document.getElementById('comboName').value.trim();
+  if (!name) {
+    alert('Please enter a combo name');
+    return;
+  }
+  if (currentSelectedModels.length === 0) {
+    alert('Please select at least one model for the combo');
+    return;
+  }
+
+  const btn = document.getElementById('btnSaveCombo');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  try {
+    const endpoint = id ? '/api/combos/update' : '/api/combos/create';
+    const payload = id ? { id, name, models: currentSelectedModels } : { name, models: currentSelectedModels };
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(err || 'Failed to save combo');
+    }
+    window.location.reload();
+  } catch (err) {
+    alert('Error: ' + err.message);
+    btn.disabled = false;
+    btn.textContent = 'Save Combo';
+  }
+}
+
+async function deleteCombo(id, name) {
+  if (!confirm(`Are you sure you want to delete combo "${name}"?`)) return;
+  try {
+    const res = await fetch(`/api/combos/delete?id=${encodeURIComponent(id)}`, { method: 'POST' });
+    if (!res.ok) throw new Error('Delete failed');
+    const el = document.getElementById(`combo-card-${id}`);
+    if (el) el.remove();
+  } catch (err) {
+    alert('Failed to delete combo: ' + err.message);
+  }
+}
+</script>
+{{ end }}

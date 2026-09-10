@@ -78,11 +78,14 @@ func (h *Handler) ModelsPage(w http.ResponseWriter, r *http.Request) {
 		users, _ = h.repo.GetAllUsers(ctx)
 	}
 
+	aliases, _ := h.coreClient.GetModelAliases(ctx)
+
 	h.render(w, r, "models.html", "base.html", map[string]interface{}{
 		"ActivePage":  "models",
 		"Models":      modelViews,
 		"Users":       users,
 		"QuotaReport": quotaReport,
+		"Aliases":     aliases,
 	})
 }
 

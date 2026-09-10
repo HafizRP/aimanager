@@ -1,0 +1,278 @@
+{{ define "title" }}Upstream Providers - AI Manager{{ end }}
+
+{{ define "content" }}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+  <div>
+    <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
+      <i class="bi bi-hdd-network text-primary"></i> Upstream Provider Connections
+    </h4>
+    <p class="text-dim small mb-0">Manage upstream AI accounts (Antigravity, Kiro AI, OpenAI-compatible nodes) connected to 9router Core.</p>
+  </div>
+  <div class="d-flex align-items-center gap-2">
+    <button type="button" class="btn-modern-primary d-inline-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#addProviderModal">
+      <i class="bi bi-plus-lg"></i> Add Connection
+    </button>
+  </div>
+</div>
+
+<!-- Providers Table Card -->
+<div class="card-modern mb-4">
+  <div class="table-responsive">
+    <table class="table table-modern mb-0" id="providersTable">
+      <thead>
+        <tr>
+          <th>Provider / Account</th>
+          <th>Auth Type</th>
+          <th>Priority</th>
+          <th>Status</th>
+          <th>Test Connectivity</th>
+          <th>Created</th>
+          <th class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{ if .Providers }}
+          {{ range .Providers }}
+            <tr id="provider-row-{{ .ID }}">
+              <td>
+                <div class="d-flex align-items-center gap-2">
+                  <div class="kpi-icon {{ if eq .Provider "antigravity" }}kpi-icon-indigo{{ else if eq .Provider "kiro" }}kpi-icon-amber{{ else }}kpi-icon-cyan{{ end }}" style="width: 32px; height: 32px; font-size: 0.85rem; border-radius: 8px;">
+                    {{ if eq .Provider "antigravity" }}<i class="bi bi-google"></i>
+                    {{ else if eq .Provider "kiro" }}<i class="bi bi-robot"></i>
+                    {{ else }}<i class="bi bi-cpu"></i>
+                    {{ end }}
+                  </div>
+                  <div>
+                    <div class="fw-bold text-light small">{{ if .Name }}{{ .Name }}{{ else }}{{ .Provider }}{{ end }}</div>
+                    <div class="text-dim font-monospace" style="font-size: 0.72rem;">{{ if .Email }}{{ .Email }}{{ else }}{{ .Provider }}{{ end }}</div>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <span class="badge-modern badge-gray text-uppercase font-monospace" style="font-size: 0.68rem;">{{ .AuthType }}</span>
+              </td>
+              <td>
+                <div class="d-flex align-items-center gap-1">
+                  <span class="badge-modern badge-indigo font-monospace" id="prio-badge-{{ .ID }}" style="font-size: 0.75rem;">#{{ .Priority }}</span>
+                  <button type="button" class="btn btn-sm btn-link p-0 text-muted" onclick="editPriority('{{ .ID }}', {{ .Priority }})" title="Change Priority">
+                    <i class="bi bi-pencil-square" style="font-size: 0.75rem;"></i>
+                  </button>
+                </div>
+              </td>
+              <td>
+                <div class="form-check form-switch m-0">
+                  <input class="form-check-input" type="checkbox" role="switch" id="toggle-{{ .ID }}" {{ if .IsActive }}checked{{ end }} onchange="toggleProvider('{{ .ID }}', this.checked)">
+                  <label class="form-check-label text-dim small ms-1" id="toggle-label-{{ .ID }}" for="toggle-{{ .ID }}">
+                    {{ if .IsActive }}<span class="text-emerald">Active</span>{{ else }}<span class="text-muted">Disabled</span>{{ end }}
+                  </label>
+                </div>
+              </td>
+              <td>
+                <div class="d-flex align-items-center gap-2">
+                  <button type="button" class="btn-modern-ghost btn-sm py-1 px-2 d-inline-flex align-items-center gap-1" id="test-btn-{{ .ID }}" onclick="testProvider('{{ .ID }}')">
+                    <i class="bi bi-broadcast"></i> Test Ping
+                  </button>
+                  <span class="small font-monospace" id="test-result-{{ .ID }}"></span>
+                </div>
+              </td>
+              <td class="text-dim font-monospace small" style="font-size: 0.78rem;">
+                {{ .CreatedAt }}
+              </td>
+              <td class="text-end">
+                <button type="button" class="btn-modern-ghost btn-sm text-danger border-0 p-1" onclick="deleteProvider('{{ .ID }}', '{{ if .Name }}{{ .Name }}{{ else }}{{ .Provider }}{{ end }}')" title="Delete Provider">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </td>
+            </tr>
+          {{ end }}
+        {{ else }}
+          <tr>
+            <td colspan="7" class="text-center text-dim py-5">
+              <i class="bi bi-hdd-network fs-2 d-block mb-2 opacity-50"></i>
+              No provider connections configured.
+            </td>
+          </tr>
+        {{ end }}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Add Provider Modal -->
+<div class="modal fade" id="addProviderModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content card-modern border-0" style="background: var(--bg-surface);">
+      <div class="modal-header border-secondary border-opacity-10">
+        <h5 class="modal-title fw-bold text-light d-flex align-items-center gap-2">
+          <i class="bi bi-plus-circle text-primary"></i> Add Provider Connection
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="addProviderForm" onsubmit="submitAddProvider(event)">
+        <div class="modal-body d-flex flex-column gap-3">
+          <div>
+            <label class="form-label small text-muted mb-1">Provider Type</label>
+            <select class="form-select form-select-modern" id="newProvType" required onchange="handleProvTypeChange()">
+              <option value="openai-compatible">OpenAI Compatible (Any standard LLM proxy)</option>
+              <option value="openai">OpenAI Official</option>
+              <option value="anthropic">Anthropic Official</option>
+              <option value="gemini">Google Gemini API</option>
+              <option value="openrouter">OpenRouter</option>
+              <option value="deepseek">DeepSeek</option>
+              <option value="groq">Groq</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="form-label small text-muted mb-1">Connection Name</label>
+            <input type="text" class="form-control form-control-modern" id="newProvName" placeholder="e.g. My OpenRouter Backup, Local VLLM" required>
+          </div>
+
+          <div id="baseUrlGroup">
+            <label class="form-label small text-muted mb-1">Base URL</label>
+            <input type="url" class="form-control form-control-modern" id="newProvBaseUrl" placeholder="https://api.openai.com/v1" value="https://api.openai.com/v1">
+          </div>
+
+          <div>
+            <label class="form-label small text-muted mb-1">API Key / Token</label>
+            <input type="password" class="form-control form-control-modern font-monospace" id="newProvKey" placeholder="sk-..." required>
+          </div>
+
+          <div>
+            <label class="form-label small text-muted mb-1">Priority Order (1 = Highest)</label>
+            <input type="number" class="form-control form-control-modern" id="newProvPriority" value="1" min="1" max="100">
+          </div>
+        </div>
+        <div class="modal-footer border-secondary border-opacity-10">
+          <button type="button" class="btn-modern-ghost" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn-modern-primary" id="btnSaveProvider">Save Connection</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function handleProvTypeChange() {
+  const type = document.getElementById('newProvType').value;
+  const urlGrp = document.getElementById('baseUrlGroup');
+  const urlInput = document.getElementById('newProvBaseUrl');
+  if (type === 'openai-compatible') {
+    urlGrp.style.display = 'block';
+    urlInput.required = true;
+  } else {
+    urlGrp.style.display = 'none';
+    urlInput.required = false;
+  }
+}
+
+async function toggleProvider(id, isActive) {
+  const label = document.getElementById(`toggle-label-${id}`);
+  try {
+    const res = await fetch('/api/providers/toggle', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ id, isActive })
+    });
+    if (!res.ok) throw new Error('Toggle failed');
+    label.innerHTML = isActive ? '<span class="text-emerald">Active</span>' : '<span class="text-muted">Disabled</span>';
+  } catch (err) {
+    alert('Failed to update provider status: ' + err.message);
+    document.getElementById(`toggle-${id}`).checked = !isActive;
+  }
+}
+
+async function editPriority(id, currentPrio) {
+  const newPrio = prompt('Enter new priority for this provider (1 = highest):', currentPrio);
+  if (!newPrio || isNaN(newPrio)) return;
+  try {
+    const res = await fetch('/api/providers/priority', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ id, priority: parseInt(newPrio) })
+    });
+    if (!res.ok) throw new Error('Priority update failed');
+    document.getElementById(`prio-badge-${id}`).textContent = '#' + newPrio;
+  } catch (err) {
+    alert('Failed to set priority: ' + err.message);
+  }
+}
+
+async function testProvider(id) {
+  const btn = document.getElementById(`test-btn-${id}`);
+  const resultSpan = document.getElementById(`test-result-${id}`);
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Testing...';
+  resultSpan.textContent = '';
+
+  try {
+    const res = await fetch(`/api/providers/test?id=${encodeURIComponent(id)}`, { method: 'POST' });
+    const data = await res.json();
+    if (data.valid) {
+      resultSpan.innerHTML = '<span class="badge-modern badge-emerald text-emerald"><i class="bi bi-check-circle me-1"></i> Valid (200 OK)</span>';
+    } else {
+      resultSpan.innerHTML = `<span class="badge-modern badge-rose text-danger" title="${data.error || 'Test failed'}"><i class="bi bi-x-circle me-1"></i> ${data.error || 'Failed'}</span>`;
+    }
+  } catch (err) {
+    resultSpan.innerHTML = `<span class="badge-modern badge-rose text-danger"><i class="bi bi-x-circle me-1"></i> Timeout</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-broadcast"></i> Test Ping';
+  }
+}
+
+async function deleteProvider(id, name) {
+  if (!confirm(`Are you sure you want to remove connection "${name}"?`)) return;
+  try {
+    const res = await fetch(`/api/providers/delete?id=${encodeURIComponent(id)}`, { method: 'POST' });
+    if (!res.ok) throw new Error('Delete failed');
+    const row = document.getElementById(`provider-row-${id}`);
+    if (row) row.remove();
+  } catch (err) {
+    alert('Failed to delete provider: ' + err.message);
+  }
+}
+
+async function submitAddProvider(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btnSaveProvider');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  const provider = document.getElementById('newProvType').value;
+  const name = document.getElementById('newProvName').value;
+  const apiKey = document.getElementById('newProvKey').value;
+  const priority = parseInt(document.getElementById('newProvPriority').value) || 1;
+  const baseUrl = document.getElementById('newProvBaseUrl').value;
+
+  const payload = {
+    provider,
+    name,
+    apiKey,
+    priority,
+    isActive: true
+  };
+
+  if (provider === 'openai-compatible' && baseUrl) {
+    payload.baseUrl = baseUrl;
+  }
+
+  try {
+    const res = await fetch('/api/providers/create', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || 'Create provider failed');
+    }
+    window.location.reload();
+  } catch (err) {
+    alert('Error: ' + err.message);
+    btn.disabled = false;
+    btn.textContent = 'Save Connection';
+  }
+}
+</script>
+{{ end }}

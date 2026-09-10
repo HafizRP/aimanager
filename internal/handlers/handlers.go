@@ -47,6 +47,7 @@ type Handler struct {
 	repo         repository.Repository
 	syncer       *syncer.Syncer
 	quotaManager *upstream.QuotaManager
+	coreClient   *upstream.CoreClient
 	templates    map[string]*template.Template
 }
 
@@ -56,6 +57,7 @@ func NewHandler(cfg *config.Config, repo repository.Repository, sync *syncer.Syn
 		repo:         repo,
 		syncer:       sync,
 		quotaManager: quotaMgr,
+		coreClient:   upstream.NewCoreClient(cfg),
 		templates:    make(map[string]*template.Template),
 	}
 
@@ -184,7 +186,11 @@ func NewHandler(cfg *config.Config, repo repository.Repository, sync *syncer.Syn
 		},
 	}
 
-	pages := []string{"dashboard.html", "users.html", "user_detail.html", "keys.html", "logs.html", "models.html", "settings.html", "billing.html"}
+	pages := []string{
+		"dashboard.html", "users.html", "user_detail.html", "keys.html", "logs.html", "models.html",
+		"settings.html", "billing.html", "providers.html", "combos.html", "token_saver.html",
+		"chat.html", "cli_tools.html", "proxy_pools.html",
+	}
 	for _, page := range pages {
 		tmpl, err := template.New("").Funcs(funcMap).ParseFS(embeds.FS, "templates/base.html", "templates/"+page)
 		if err != nil {
@@ -453,4 +459,39 @@ func CheckPasswordHash(password, hash string) bool {
 	}
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	return err == nil
+}
+
+func (h *Handler) deriveCurrentBaseURL(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+		scheme = "https"
+	}
+	host := r.Host
+	if xfh := r.Header.Get("X-Forwarded-Host"); xfh != "" {
+		host = xfh
+	}
+	return fmt.Sprintf("%s://%s/v1", scheme, host)
+}
+
+func (h *Handler) fetchUpstreamModels(ctx context.Context) ([]UpstreamModelItem, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, h.cfg.UpstreamURL+"/v1/models", nil)
+	if err != nil {
+		return nil, err
+	}
+	if h.cfg.UpstreamAPIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+h.cfg.UpstreamAPIKey)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var res struct {
+		Data []UpstreamModelItem `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return nil, err
+	}
+	return res.Data, nil
 }

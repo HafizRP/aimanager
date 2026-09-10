@@ -1,0 +1,253 @@
+{{ define "title" }}CLI Tools & Coding Agents - AI Manager{{ end }}
+
+{{ define "content" }}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+  <div>
+    <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
+      <i class="bi bi-tools text-primary"></i> CLI Tools & Coding Agents Setup
+    </h4>
+    <p class="text-dim small mb-0">Connect Claude Code, Codex, Cursor, Cline, Copilot, Hermes Agent, and more to your AI Manager gateway with auto-fallback and token quota management.</p>
+  </div>
+  <div class="d-flex align-items-center gap-2">
+    <div class="badge-modern badge-gray font-monospace" style="font-size: 0.75rem;">
+      Gateway: <span class="text-primary">{{ .BaseURL }}</span>
+    </div>
+  </div>
+</div>
+
+<!-- Main Tools Card -->
+<div class="card-modern p-0 overflow-hidden mb-4">
+  <!-- Nav Tabs -->
+  <div class="p-3 border-bottom border-secondary border-opacity-10 bg-black bg-opacity-20">
+    <ul class="nav nav-pills gap-2" id="cliToolsTabs" role="tablist">
+      <li class="nav-item">
+        <button class="nav-link active font-monospace small py-1.5 px-3" id="claude-tab" data-bs-toggle="pill" data-bs-target="#tab-claude" type="button">
+          Claude Code
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link font-monospace small py-1.5 px-3" id="cursor-tab" data-bs-toggle="pill" data-bs-target="#tab-cursor" type="button">
+          Cursor IDE
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link font-monospace small py-1.5 px-3" id="codex-tab" data-bs-toggle="pill" data-bs-target="#tab-codex" type="button">
+          Codex CLI
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link font-monospace small py-1.5 px-3" id="cline-tab" data-bs-toggle="pill" data-bs-target="#tab-cline" type="button">
+          Cline (VSCode)
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link font-monospace small py-1.5 px-3" id="hermes-tab" data-bs-toggle="pill" data-bs-target="#tab-hermes" type="button">
+          Hermes Agent
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link font-monospace small py-1.5 px-3" id="copilot-tab" data-bs-toggle="pill" data-bs-target="#tab-copilot" type="button">
+          Copilot / OpenCode
+        </button>
+      </li>
+    </ul>
+  </div>
+
+  <!-- Tab Contents -->
+  <div class="p-4 tab-content" id="cliToolsTabContent">
+    <!-- Claude Code -->
+    <div class="tab-pane fade show active" id="tab-claude" role="tabpanel">
+      <div class="d-flex align-items-center gap-3 mb-3">
+        <div class="brand-glow" style="width: 42px; height: 42px; font-size: 1.2rem; border-radius: 10px;">
+          <i class="bi bi-terminal-fill"></i>
+        </div>
+        <div>
+          <h5 class="fw-bold text-light mb-0">Claude Code CLI Setup</h5>
+          <span class="text-dim small">Run Anthropic Claude Code backed by your AI Manager high-speed quota</span>
+        </div>
+      </div>
+      
+      <p class="text-dim small mb-3">Export these environment variables in your terminal before launching <code>claude</code>:</p>
+
+      <div class="position-relative mb-3">
+        <pre class="code-box p-3 m-0 font-monospace text-light rounded-3" id="claudeSnippet"><code>export ANTHROPIC_BASE_URL="{{ .BaseURL }}"
+export ANTHROPIC_API_KEY="{{ .UserKey }}"
+export CLAUDE_DEFAULT_MODEL="main"
+claude</code></pre>
+        <button type="button" class="btn btn-sm btn-modern-ghost position-absolute top-0 end-0 m-2" onclick="copySnippet('claudeSnippet')">
+          <i class="bi bi-clipboard"></i> Copy
+        </button>
+      </div>
+
+      <div class="p-3 rounded-3" style="background: rgba(16, 20, 32, 0.7); border: 1px solid var(--border-subtle);">
+        <div class="text-emerald small font-monospace"><i class="bi bi-check-circle me-1"></i> Tip: Use "main" as model to automatically failover from Claude Sonnet to Gemini 3.8 Flash if rate limits hit!</div>
+      </div>
+    </div>
+
+    <!-- Cursor IDE -->
+    <div class="tab-pane fade" id="tab-cursor" role="tabpanel">
+      <div class="d-flex align-items-center gap-3 mb-3">
+        <div class="brand-glow" style="width: 42px; height: 42px; font-size: 1.2rem; border-radius: 10px;">
+          <i class="bi bi-cursor-fill"></i>
+        </div>
+        <div>
+          <h5 class="fw-bold text-light mb-0">Cursor IDE Setup</h5>
+          <span class="text-dim small">Configure Custom OpenAI API in Cursor Settings</span>
+        </div>
+      </div>
+
+      <div class="d-flex flex-column gap-3 mb-3">
+        <div class="d-flex gap-2">
+          <span class="badge-modern badge-indigo font-monospace">Step 1</span>
+          <span class="text-dim small">Open Cursor <strong>Settings</strong> &rarr; <strong>Models</strong> &rarr; Enable <strong>OpenAI API Key</strong>.</span>
+        </div>
+        <div class="d-flex gap-2">
+          <span class="badge-modern badge-indigo font-monospace">Step 2</span>
+          <span class="text-dim small">Click <strong>Override OpenAI Base URL</strong> and enter:</span>
+        </div>
+      </div>
+
+      <div class="position-relative mb-3">
+        <pre class="code-box p-3 m-0 font-monospace text-light rounded-3" id="cursorUrlSnippet"><code>{{ .BaseURL }}</code></pre>
+        <button type="button" class="btn btn-sm btn-modern-ghost position-absolute top-0 end-0 m-2" onclick="copySnippet('cursorUrlSnippet')">
+          <i class="bi bi-clipboard"></i> Copy
+        </button>
+      </div>
+
+      <div class="d-flex gap-2 mb-2">
+        <span class="badge-modern badge-indigo font-monospace">Step 3</span>
+        <span class="text-dim small">Enter your AI Manager API Key:</span>
+      </div>
+      <div class="position-relative mb-3">
+        <pre class="code-box p-3 m-0 font-monospace text-light rounded-3" id="cursorKeySnippet"><code>{{ .UserKey }}</code></pre>
+        <button type="button" class="btn btn-sm btn-modern-ghost position-absolute top-0 end-0 m-2" onclick="copySnippet('cursorKeySnippet')">
+          <i class="bi bi-clipboard"></i> Copy
+        </button>
+      </div>
+    </div>
+
+    <!-- Codex CLI -->
+    <div class="tab-pane fade" id="tab-codex" role="tabpanel">
+      <div class="d-flex align-items-center gap-3 mb-3">
+        <div class="brand-glow" style="width: 42px; height: 42px; font-size: 1.2rem; border-radius: 10px;">
+          <i class="bi bi-code-slash"></i>
+        </div>
+        <div>
+          <h5 class="fw-bold text-light mb-0">OpenAI Codex CLI Setup</h5>
+          <span class="text-dim small">Terminal coding with OpenAI models via AI Manager</span>
+        </div>
+      </div>
+
+      <div class="position-relative mb-3">
+        <pre class="code-box p-3 m-0 font-monospace text-light rounded-3" id="codexSnippet"><code>export OPENAI_BASE_URL="{{ .BaseURL }}"
+export OPENAI_API_KEY="{{ .UserKey }}"
+export CODEX_MODEL="main"
+codex</code></pre>
+        <button type="button" class="btn btn-sm btn-modern-ghost position-absolute top-0 end-0 m-2" onclick="copySnippet('codexSnippet')">
+          <i class="bi bi-clipboard"></i> Copy
+        </button>
+      </div>
+    </div>
+
+    <!-- Cline -->
+    <div class="tab-pane fade" id="tab-cline" role="tabpanel">
+      <div class="d-flex align-items-center gap-3 mb-3">
+        <div class="brand-glow" style="width: 42px; height: 42px; font-size: 1.2rem; border-radius: 10px;">
+          <i class="bi bi-robot"></i>
+        </div>
+        <div>
+          <h5 class="fw-bold text-light mb-0">Cline (VSCode Extension) Setup</h5>
+          <span class="text-dim small">Autonomous coding in Visual Studio Code</span>
+        </div>
+      </div>
+
+      <p class="text-dim small mb-3">In the Cline extension settings, select <strong>OpenAI Compatible</strong> provider:</p>
+
+      <ul class="text-dim small d-flex flex-column gap-2 mb-3">
+        <li><strong>Base URL:</strong> <code class="text-primary font-monospace">{{ .BaseURL }}</code></li>
+        <li><strong>API Key:</strong> <code class="text-primary font-monospace">{{ .UserKey }}</code></li>
+        <li><strong>Model ID:</strong> <code class="text-primary font-monospace">main</code> or <code class="text-light font-monospace">ag/gemini-3.8-flash-high</code></li>
+      </ul>
+    </div>
+
+    <!-- Hermes Agent -->
+    <div class="tab-pane fade" id="tab-hermes" role="tabpanel">
+      <div class="d-flex align-items-center gap-3 mb-3">
+        <div class="brand-glow" style="width: 42px; height: 42px; font-size: 1.2rem; border-radius: 10px;">
+          <i class="bi bi-lightning-charge-fill"></i>
+        </div>
+        <div>
+          <h5 class="fw-bold text-light mb-0">Hermes Agent Configuration</h5>
+          <span class="text-dim small">Connect Hermes Agent to AI Manager custom provider</span>
+        </div>
+      </div>
+
+      <p class="text-dim small mb-3">In your <code>~/.hermes/config.yaml</code>:</p>
+
+      <div class="position-relative mb-3">
+        <pre class="code-box p-3 m-0 font-monospace text-light rounded-3" id="hermesSnippet"><code>llm:
+  provider: custom
+  base_url: "{{ .BaseURL }}"
+  api_key: "{{ .UserKey }}"
+  model: "main"</code></pre>
+        <button type="button" class="btn btn-sm btn-modern-ghost position-absolute top-0 end-0 m-2" onclick="copySnippet('hermesSnippet')">
+          <i class="bi bi-clipboard"></i> Copy
+        </button>
+      </div>
+    </div>
+
+    <!-- Copilot / OpenCode -->
+    <div class="tab-pane fade" id="tab-copilot" role="tabpanel">
+      <div class="d-flex align-items-center gap-3 mb-3">
+        <div class="brand-glow" style="width: 42px; height: 42px; font-size: 1.2rem; border-radius: 10px;">
+          <i class="bi bi-github"></i>
+        </div>
+        <div>
+          <h5 class="fw-bold text-light mb-0">GitHub Copilot & OpenCode</h5>
+          <span class="text-dim small">Proxy copilot and opencode through AI Manager</span>
+        </div>
+      </div>
+
+      <div class="position-relative mb-3">
+        <pre class="code-box p-3 m-0 font-monospace text-light rounded-3" id="copilotSnippet"><code>export OPENCODE_BASE_URL="{{ .BaseURL }}"
+export OPENCODE_API_KEY="{{ .UserKey }}"
+export OPENCODE_MODEL="main"</code></pre>
+        <button type="button" class="btn btn-sm btn-modern-ghost position-absolute top-0 end-0 m-2" onclick="copySnippet('copilotSnippet')">
+          <i class="bi bi-clipboard"></i> Copy
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function copySnippet(elementId) {
+  const el = document.getElementById(elementId);
+  const text = el.innerText || el.textContent;
+  
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      alert('Copied configuration snippet to clipboard!');
+    }).catch(() => fallbackCopy(text));
+  } else {
+    fallbackCopy(text);
+  }
+}
+
+function fallbackCopy(text) {
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.select();
+  try {
+    document.execCommand('copy');
+    alert('Copied configuration snippet to clipboard!');
+  } catch (err) {
+    alert('Failed to copy. Please select and copy manually.');
+  }
+  document.body.removeChild(textarea);
+}
+</script>
+{{ end }}

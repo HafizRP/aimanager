@@ -47,10 +47,19 @@
       <div class="sidebar-content">
         <!-- Main Navigation Group -->
         <div class="sidebar-nav-group">
-          <span class="sidebar-group-title">Menu</span>
+          <span class="sidebar-group-title">Workspace</span>
           <a class="sidebar-link {{ if eq .ActivePage "dashboard" }}active{{ end }}" href="/">
             <i class="bi bi-speedometer2"></i>
             <span>Dashboard</span>
+          </a>
+          <a class="sidebar-link {{ if eq .ActivePage "chat" }}active{{ end }}" href="/chat">
+            <i class="bi bi-terminal-fill text-primary"></i>
+            <span>Playground</span>
+            <span class="badge-modern badge-indigo ms-auto" style="font-size:0.65rem; padding:0.1rem 0.4rem;">Chat</span>
+          </a>
+          <a class="sidebar-link {{ if eq .ActivePage "cli-tools" }}active{{ end }}" href="/cli-tools">
+            <i class="bi bi-tools text-cyan"></i>
+            <span>CLI Tools Hub</span>
           </a>
           <a class="sidebar-link {{ if eq .ActivePage "billing" }}active{{ end }}" href="/billing">
             <i class="bi bi-wallet2 text-emerald"></i>
@@ -67,21 +76,37 @@
           </a>
           <a class="sidebar-link {{ if eq .ActivePage "models" }}active{{ end }}" href="/models">
             <i class="bi bi-cpu text-primary"></i>
-            <span>Models Catalog</span>
+            <span>Models & Aliases</span>
           </a>
         </div>
 
-        <!-- Administration Group (Admin Only) -->
+        <!-- 9router Core Administration Group (Admin Only) -->
         {{ if .IsAdmin }}
           <div class="sidebar-nav-group">
-            <span class="sidebar-group-title">Administration</span>
+            <span class="sidebar-group-title">9router Core Admin</span>
+            <a class="sidebar-link {{ if eq .ActivePage "providers" }}active{{ end }}" href="/providers">
+              <i class="bi bi-hdd-network text-primary"></i>
+              <span>Providers</span>
+            </a>
+            <a class="sidebar-link {{ if eq .ActivePage "combos" }}active{{ end }}" href="/combos">
+              <i class="bi bi-diagram-3-fill text-indigo"></i>
+              <span>Model Combos</span>
+            </a>
+            <a class="sidebar-link {{ if eq .ActivePage "token-saver" }}active{{ end }}" href="/token-saver">
+              <i class="bi bi-magic text-emerald"></i>
+              <span>Token Saver & RTK</span>
+            </a>
+            <a class="sidebar-link {{ if eq .ActivePage "proxy-pools" }}active{{ end }}" href="/proxy-pools">
+              <i class="bi bi-shield-shaded text-cyan"></i>
+              <span>Proxy Pools</span>
+            </a>
             <a class="sidebar-link {{ if eq .ActivePage "users" }}active{{ end }}" href="/users">
-              <i class="bi bi-people-fill text-primary"></i>
+              <i class="bi bi-people-fill text-warning"></i>
               <span>Users & Quotas</span>
             </a>
             <a class="sidebar-link {{ if eq .ActivePage "settings" }}active{{ end }}" href="/settings">
-              <i class="bi bi-sliders text-warning"></i>
-              <span>Quick Setup & Config</span>
+              <i class="bi bi-sliders text-muted"></i>
+              <span>Gateway Settings</span>
             </a>
           </div>
         {{ else }}

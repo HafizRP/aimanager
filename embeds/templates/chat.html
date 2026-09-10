@@ -1,0 +1,339 @@
+{{ define "title" }}Chat Playground - AI Manager{{ end }}
+
+{{ define "content" }}
+<div class="d-flex flex-column h-100" style="min-height: calc(100vh - 120px);">
+  <!-- Top Control Bar -->
+  <div class="card-modern p-3 mb-3 d-flex flex-wrap align-items-center justify-content-between gap-3">
+    <div class="d-flex align-items-center gap-3 flex-grow-1">
+      <div class="d-flex align-items-center gap-2">
+        <div class="brand-glow" style="width: 34px; height: 34px; font-size: 1rem; border-radius: 8px;">
+          <i class="bi bi-terminal"></i>
+        </div>
+        <span class="fw-bold text-light small d-none d-sm-inline">Playground</span>
+      </div>
+
+      <!-- Model Selector -->
+      <div style="min-width: 260px; max-width: 380px;" class="flex-grow-1">
+        <select class="form-select form-select-modern font-monospace py-1.5" id="chatModelSelect" style="font-size: 0.85rem;">
+          <optgroup label="Combos & Fallbacks">
+            <option value="main" selected>main (Auto-failover chain)</option>
+            <option value="free-only">free-only</option>
+          </optgroup>
+          <optgroup label="Direct Models">
+            {{ range .Models }}
+              <option value="{{ .ID }}">{{ .ID }}</option>
+            {{ end }}
+          </optgroup>
+        </select>
+      </div>
+    </div>
+
+    <div class="d-flex align-items-center gap-2">
+      <button type="button" class="btn-modern-ghost btn-sm py-1.5 px-2.5 d-inline-flex align-items-center gap-1.5" data-bs-toggle="collapse" data-bs-target="#systemPromptCollapse">
+        <i class="bi bi-sliders"></i> <span class="d-none d-md-inline">System Prompt</span>
+      </button>
+      <button type="button" class="btn-modern-ghost btn-sm py-1.5 px-2.5 text-danger border-0 d-inline-flex align-items-center gap-1.5" onclick="clearChat()">
+        <i class="bi bi-trash"></i> <span class="d-none d-md-inline">Clear</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- System Prompt Collapse -->
+  <div class="collapse mb-3" id="systemPromptCollapse">
+    <div class="card-modern p-3">
+      <div class="row g-3">
+        <div class="col-12 col-md-8">
+          <label class="form-label small text-muted mb-1 font-monospace" style="font-size: 0.72rem;">SYSTEM INSTRUCTIONS</label>
+          <textarea class="form-control form-control-modern" id="systemPrompt" rows="2" placeholder="You are a helpful, concise AI assistant."></textarea>
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label small text-muted mb-1 font-monospace d-flex justify-content-between" style="font-size: 0.72rem;">
+            <span>TEMPERATURE</span>
+            <span id="tempVal" class="text-primary font-monospace">0.7</span>
+          </label>
+          <input type="range" class="form-range" id="tempRange" min="0" max="1" step="0.05" value="0.7" oninput="document.getElementById('tempVal').textContent = this.value">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chat Messages Container -->
+  <div class="card-modern p-3 p-md-4 flex-grow-1 d-flex flex-column justify-content-between mb-3" style="min-height: 480px; max-height: calc(100vh - 280px); overflow-y: auto;" id="chatScrollArea">
+    <div class="d-flex flex-column gap-3" id="messagesList">
+      <!-- Welcome Intro -->
+      <div class="text-center text-dim py-5 my-auto" id="chatEmptyState">
+        <div class="brand-glow mx-auto mb-3" style="width: 52px; height: 52px; font-size: 1.5rem; border-radius: 14px;">
+          <i class="bi bi-chat-square-quote"></i>
+        </div>
+        <h5 class="fw-bold text-light mb-1">AI Manager Interactive Playground</h5>
+        <p class="small text-muted mb-4" style="max-width: 480px; margin: 0 auto;">
+          Test any upstream model or fallback combo directly. Requests are routed through the AI Manager gateway and tracked in Request Audit Logs.
+        </p>
+        <div class="d-flex flex-wrap justify-content-center gap-2">
+          <button type="button" class="btn-modern-ghost btn-sm font-monospace text-dim" onclick="setPromptAndSend('Hello! Who are you and which model is active?')">
+            "Who are you and which model is active?"
+          </button>
+          <button type="button" class="btn-modern-ghost btn-sm font-monospace text-dim" onclick="setPromptAndSend('Write a quick Go Chi HTTP handler that returns JSON.')">
+            "Write a Go Chi HTTP handler"
+          </button>
+          <button type="button" class="btn-modern-ghost btn-sm font-monospace text-dim" onclick="setPromptAndSend('Explain quantum computing in 3 simple bullet points.')">
+            "Explain quantum computing in 3 bullets"
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Chat Input Bar -->
+  <div class="card-modern p-2 p-md-3">
+    <form id="chatForm" onsubmit="handleSendChat(event)" class="d-flex align-items-end gap-2">
+      <div class="flex-grow-1">
+        <textarea class="form-control form-control-modern border-0 py-2" id="chatInput" rows="1" placeholder="Type a message... (Press Enter to send, Shift+Enter for new line)" style="resize: none; max-height: 160px; overflow-y: auto;" onkeydown="handleInputKey(event)" oninput="autoResizeTextarea(this)"></textarea>
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <button type="button" class="btn-modern-ghost text-danger border-0 d-none" id="btnStopGen" onclick="stopGeneration()">
+          <i class="bi bi-stop-circle"></i> Stop
+        </button>
+        <button type="submit" class="btn-modern-primary py-2 px-3.5 d-inline-flex align-items-center gap-2" id="btnSendChat">
+          <i class="bi bi-send-fill"></i> <span class="d-none d-sm-inline">Send</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+let chatMessages = [];
+let isGenerating = false;
+let abortController = null;
+const userApiKey = "{{ .UserKey }}";
+
+function autoResizeTextarea(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+}
+
+function handleInputKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    handleSendChat(e);
+  }
+}
+
+function clearChat() {
+  chatMessages = [];
+  document.getElementById('messagesList').innerHTML = `
+    <div class="text-center text-dim py-5 my-auto" id="chatEmptyState">
+      <div class="brand-glow mx-auto mb-3" style="width: 52px; height: 52px; font-size: 1.5rem; border-radius: 14px;">
+        <i class="bi bi-chat-square-quote"></i>
+      </div>
+      <h5 class="fw-bold text-light mb-1">AI Manager Interactive Playground</h5>
+      <p class="small text-muted mb-4" style="max-width: 480px; margin: 0 auto;">
+        Test any upstream model or fallback combo directly. Requests are routed through the AI Manager gateway and tracked in Request Audit Logs.
+      </p>
+    </div>
+  `;
+}
+
+function setPromptAndSend(text) {
+  document.getElementById('chatInput').value = text;
+  handleSendChat(new Event('submit'));
+}
+
+function scrollToBottom() {
+  const area = document.getElementById('chatScrollArea');
+  area.scrollTop = area.scrollHeight;
+}
+
+function stopGeneration() {
+  if (abortController) {
+    abortController.abort();
+  }
+  isGenerating = false;
+  document.getElementById('btnStopGen').classList.add('d-none');
+  document.getElementById('btnSendChat').disabled = false;
+}
+
+async function handleSendChat(e) {
+  if (e) e.preventDefault();
+  const inputEl = document.getElementById('chatInput');
+  const userText = inputEl.value.trim();
+  if (!userText || isGenerating) return;
+
+  const emptyState = document.getElementById('chatEmptyState');
+  if (emptyState) emptyState.remove();
+
+  // Reset input
+  inputEl.value = '';
+  inputEl.style.height = 'auto';
+
+  // Append user message
+  chatMessages.push({ role: 'user', content: userText });
+  appendMessageBubble('user', userText);
+
+  const model = document.getElementById('chatModelSelect').value;
+  const systemPrompt = document.getElementById('systemPrompt').value.trim();
+  const temperature = parseFloat(document.getElementById('tempRange').value) || 0.7;
+
+  // Prepare messages array for API
+  const apiMessages = [];
+  if (systemPrompt) {
+    apiMessages.push({ role: 'system', content: systemPrompt });
+  }
+  chatMessages.forEach(m => apiMessages.push({ role: m.role, content: m.content }));
+
+  // Create empty assistant bubble
+  const assistantBubble = appendMessageBubble('assistant', '', model);
+  const contentSpan = assistantBubble.querySelector('.msg-content');
+  const badgeSpan = assistantBubble.querySelector('.msg-stats');
+
+  isGenerating = true;
+  document.getElementById('btnSendChat').disabled = true;
+  document.getElementById('btnStopGen').classList.remove('d-none');
+  abortController = new AbortController();
+
+  const startTime = performance.now();
+  let fullResponse = '';
+
+  try {
+    const res = await fetch('/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${userApiKey}`
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: apiMessages,
+        temperature: temperature,
+        stream: true
+      }),
+      signal: abortController.signal
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      contentSpan.innerHTML = `<span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i> Error: ${errText}</span>`;
+      isGenerating = false;
+      document.getElementById('btnStopGen').classList.add('d-none');
+      document.getElementById('btnSendChat').disabled = false;
+      return;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // Keep partial line in buffer
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data: ')) continue;
+        const jsonStr = trimmed.slice(6);
+        if (jsonStr === '[DONE]') continue;
+
+        try {
+          const parsed = JSON.parse(jsonStr);
+          const delta = parsed.choices?.[0]?.delta?.content || '';
+          if (delta) {
+            fullResponse += delta;
+            renderMarkdownInto(contentSpan, fullResponse);
+            scrollToBottom();
+          }
+        } catch (err) {
+          // ignore partial JSON parse
+        }
+      }
+    }
+
+    const elapsed = Math.round(performance.now() - startTime);
+    badgeSpan.innerHTML = `<span class="badge-modern badge-gray font-monospace" style="font-size: 0.68rem;"><i class="bi bi-clock me-1"></i>${elapsed}ms</span>`;
+    chatMessages.push({ role: 'assistant', content: fullResponse });
+
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      badgeSpan.innerHTML = '<span class="badge-modern badge-amber font-monospace" style="font-size: 0.68rem;">Stopped</span>';
+    } else {
+      contentSpan.innerHTML = `<span class="text-danger"><i class="bi bi-exclamation-triangle me-1"></i> Request failed: ${err.message}</span>`;
+    }
+  } finally {
+    isGenerating = false;
+    document.getElementById('btnStopGen').classList.add('d-none');
+    document.getElementById('btnSendChat').disabled = false;
+  }
+}
+
+function appendMessageBubble(role, text, modelName) {
+  const container = document.getElementById('messagesList');
+  const bubble = document.createElement('div');
+  bubble.className = `d-flex gap-2.5 ${role === 'user' ? 'justify-content-end' : 'justify-content-start'}`;
+
+  if (role === 'user') {
+    bubble.innerHTML = `
+      <div class="p-3 rounded-3" style="max-width: 80%; background: var(--color-primary); color: #fff; border-bottom-right-radius: 4px;">
+        <div class="msg-content text-break" style="white-space: pre-wrap; font-size: 0.9rem;">${escapeHtml(text)}</div>
+      </div>
+      <div class="kpi-icon kpi-icon-indigo flex-shrink-0" style="width: 32px; height: 32px; font-size: 0.85rem; border-radius: 8px;">
+        <i class="bi bi-person-fill"></i>
+      </div>
+    `;
+  } else {
+    bubble.innerHTML = `
+      <div class="brand-glow flex-shrink-0" style="width: 32px; height: 32px; font-size: 0.85rem; border-radius: 8px;">
+        <i class="bi bi-cpu"></i>
+      </div>
+      <div class="p-3 rounded-3 flex-grow-1" style="max-width: 85%; background: rgba(16, 20, 32, 0.8); border: 1px solid var(--border-subtle); border-bottom-left-radius: 4px;">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <span class="badge-modern badge-indigo font-monospace" style="font-size: 0.68rem;">${escapeHtml(modelName || 'Assistant')}</span>
+          <span class="msg-stats"></span>
+        </div>
+        <div class="msg-content text-break" style="font-size: 0.9rem; line-height: 1.6;">
+          <span class="spinner-grow spinner-grow-sm text-primary" role="status"></span>
+        </div>
+      </div>
+    `;
+  }
+
+  container.appendChild(bubble);
+  scrollToBottom();
+  return bubble;
+}
+
+function escapeHtml(str) {
+  return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function renderMarkdownInto(element, rawText) {
+  // Simple markdown renderer for code blocks, bold, lists
+  let html = escapeHtml(rawText);
+
+  // Triple backtick code blocks
+  html = html.replace(/```([a-z0-9_-]*)\n([\s\S]*?)```/gi, (match, lang, code) => {
+    return `<div class="rounded-3 my-2 overflow-hidden border border-secondary border-opacity-15">
+      <div class="bg-black bg-opacity-40 px-3 py-1 text-dim font-monospace d-flex justify-content-between align-items-center" style="font-size: 0.72rem;">
+        <span>${lang || 'code'}</span>
+        <button type="button" class="btn btn-sm btn-link text-dim p-0 text-decoration-none" onclick="navigator.clipboard.writeText(this.parentElement.nextElementSibling.innerText)">Copy</button>
+      </div>
+      <pre class="p-3 m-0 font-monospace text-light" style="background: rgba(8, 10, 18, 0.9); font-size: 0.82rem; overflow-x: auto;"><code>${code}</code></pre>
+    </div>`;
+  });
+
+  // Single backticks inline code
+  html = html.replace(/`([^`]+)`/g, '<code class="font-monospace text-primary px-1 rounded" style="background: rgba(99, 102, 241, 0.1); font-size: 0.85em;">$1</code>');
+
+  // Bold
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+  // Line breaks
+  html = html.replace(/\n/g, '<br>');
+
+  element.innerHTML = html;
+}
+</script>
+{{ end }}

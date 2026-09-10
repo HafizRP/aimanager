@@ -1,0 +1,244 @@
+{{ define "title" }}Token Saver & Optimization - AI Manager{{ end }}
+
+{{ define "content" }}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+  <div>
+    <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
+      <i class="bi bi-magic text-emerald"></i> Token Saver & Thinking Optimizer
+    </h4>
+    <p class="text-dim small mb-0">Configure prompt token compression, thinking intensity modes, capacity fallbacks, and response optimization algorithms.</p>
+  </div>
+  <div class="d-flex align-items-center gap-2">
+    <button type="button" class="btn-modern-primary d-inline-flex align-items-center gap-2" id="btnSaveAll" onclick="saveSettings()">
+      <i class="bi bi-check2-circle"></i> Save Settings
+    </button>
+  </div>
+</div>
+
+<div class="row g-4">
+  <!-- RTK Real-Time Compression -->
+  <div class="col-12 col-lg-6">
+    <div class="card-modern p-4 h-100">
+      <div class="d-flex align-items-start justify-content-between mb-3">
+        <div class="d-flex align-items-center gap-2">
+          <div class="kpi-icon kpi-icon-emerald" style="width: 38px; height: 38px; font-size: 1.1rem; border-radius: 10px;">
+            <i class="bi bi-percent"></i>
+          </div>
+          <div>
+            <h6 class="fw-bold text-light mb-0">RTK Real-Time Token Saver</h6>
+            <span class="text-dim small" style="font-size: 0.72rem;">Lossless prompt pruning algorithm</span>
+          </div>
+        </div>
+        <div class="form-check form-switch m-0">
+          <input class="form-check-input" type="checkbox" role="switch" id="rtkEnabled" {{ if .Settings.rtkEnabled }}checked{{ end }}>
+        </div>
+      </div>
+      <p class="text-dim small mb-3">
+        Reduces incoming prompt token size by <strong>up to 40%</strong> by removing redundant whitespace, deduplicating repetitive instructions, and compacting JSON payloads before forwarding to upstream providers.
+      </p>
+      <div class="p-3 rounded-3" style="background: rgba(16, 20, 32, 0.7); border: 1px solid var(--border-subtle);">
+        <div class="d-flex align-items-center justify-content-between text-dim small">
+          <span>Target Token Compression:</span>
+          <span class="text-emerald fw-bold font-monospace">-30% to -40%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Provider Thinking Modes -->
+  <div class="col-12 col-lg-6">
+    <div class="card-modern p-4 h-100">
+      <div class="d-flex align-items-center gap-2 mb-3">
+        <div class="kpi-icon kpi-icon-indigo" style="width: 38px; height: 38px; font-size: 1.1rem; border-radius: 10px;">
+          <i class="bi bi-lightbulb-fill"></i>
+        </div>
+        <div>
+          <h6 class="fw-bold text-light mb-0">Provider Thinking Intensity</h6>
+          <span class="text-dim small" style="font-size: 0.72rem;">Configure reasoning budget for thinking models</span>
+        </div>
+      </div>
+      <p class="text-dim small mb-3">
+        Controls how much thinking/reasoning effort models like Gemini 2.0 Flash Thinking, Gemini 3.8, and Claude 3.7 are allowed to expend.
+      </p>
+
+      <div class="d-flex flex-column gap-3">
+        <div>
+          <label class="form-label small text-muted mb-1">Google Antigravity Thinking Mode</label>
+          <select class="form-select form-select-modern" id="antigravityThinking">
+            <option value="off">Off (Fastest response, no thought trace)</option>
+            <option value="lite">Lite (Low reasoning overhead)</option>
+            <option value="normal">Normal (Balanced)</option>
+            <option value="high">High (Deep reasoning)</option>
+            <option value="xhigh">Extra High (Maximum problem-solving depth)</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="form-label small text-muted mb-1">OpenCode Thinking Mode</label>
+          <select class="form-select form-select-modern" id="opencodeThinking">
+            <option value="off">Off</option>
+            <option value="lite">Lite</option>
+            <option value="normal">Normal</option>
+            <option value="max">Max (Deepest coding reasoning)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Caveman & Ponytail Modes -->
+  <div class="col-12 col-lg-6">
+    <div class="card-modern p-4 h-100">
+      <div class="d-flex align-items-center gap-2 mb-3">
+        <div class="kpi-icon kpi-icon-amber" style="width: 38px; height: 38px; font-size: 1.1rem; border-radius: 10px;">
+          <i class="bi bi-chat-left-dots-fill"></i>
+        </div>
+        <div>
+          <h6 class="fw-bold text-light mb-0">Conciseness & Speed Modes</h6>
+          <span class="text-dim small" style="font-size: 0.72rem;">Reduce output completion tokens</span>
+        </div>
+      </div>
+
+      <div class="p-3 rounded-3 mb-3" style="background: rgba(16, 20, 32, 0.7); border: 1px solid var(--border-subtle);">
+        <div class="d-flex align-items-start justify-content-between mb-2">
+          <div>
+            <div class="fw-bold text-light small">Caveman Mode</div>
+            <div class="text-dim small" style="font-size: 0.72rem;">Instructs models to skip pleasantries and provide blunt, direct answers.</div>
+          </div>
+          <div class="form-check form-switch m-0">
+            <input class="form-check-input" type="checkbox" role="switch" id="cavemanEnabled" {{ if .Settings.cavemanEnabled }}checked{{ end }}>
+          </div>
+        </div>
+        <select class="form-select form-select-modern form-select-sm" id="cavemanLevel">
+          <option value="lite">Lite (Concise, no fluff)</option>
+          <option value="normal">Normal (Bullet points, minimal prose)</option>
+          <option value="hardcore">Hardcore (Strict keywords, code snippets only)</option>
+        </select>
+      </div>
+
+      <div class="p-3 rounded-3" style="background: rgba(16, 20, 32, 0.7); border: 1px solid var(--border-subtle);">
+        <div class="d-flex align-items-start justify-content-between mb-2">
+          <div>
+            <div class="fw-bold text-light small">Ponytail Fast-Streaming</div>
+            <div class="text-dim small" style="font-size: 0.72rem;">Flushes chunks aggressively for lower perceived time-to-first-token.</div>
+          </div>
+          <div class="form-check form-switch m-0">
+            <input class="form-check-input" type="checkbox" role="switch" id="ponytailEnabled" {{ if .Settings.ponytailEnabled }}checked{{ end }}>
+          </div>
+        </div>
+        <select class="form-select form-select-modern form-select-sm" id="ponytailLevel">
+          <option value="lite">Lite</option>
+          <option value="normal">Normal</option>
+          <option value="heavy">Aggressive</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Capacity Adapter & Fallbacks -->
+  <div class="col-12 col-lg-6">
+    <div class="card-modern p-4 h-100">
+      <div class="d-flex align-items-center gap-2 mb-3">
+        <div class="kpi-icon kpi-icon-cyan" style="width: 38px; height: 38px; font-size: 1.1rem; border-radius: 10px;">
+          <i class="bi bi-eye-fill"></i>
+        </div>
+        <div>
+          <h6 class="fw-bold text-light mb-0">Multimodal Capacity Adapters</h6>
+          <span class="text-dim small" style="font-size: 0.72rem;">Automatic fallbacks when primary vision/audio model is overloaded</span>
+        </div>
+      </div>
+
+      <div class="p-3 rounded-3 mb-3" style="background: rgba(16, 20, 32, 0.7); border: 1px solid var(--border-subtle);">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <span class="fw-bold text-light small">Vision Capacity Fallback</span>
+          <div class="form-check form-switch m-0">
+            <input class="form-check-input" type="checkbox" role="switch" id="visionEnabled" checked>
+          </div>
+        </div>
+        <div class="text-dim small mb-2" style="font-size: 0.72rem;">If a vision request fails due to capacity limits, automatically retry using:</div>
+        <input type="text" class="form-control form-control-modern form-control-sm font-monospace" id="visionModel" value="ag/gemini-pro-agent">
+      </div>
+
+      <div class="p-3 rounded-3" style="background: rgba(16, 20, 32, 0.7); border: 1px solid var(--border-subtle);">
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <span class="fw-bold text-light small">Outbound Egress Proxy</span>
+          <div class="form-check form-switch m-0">
+            <input class="form-check-input" type="checkbox" role="switch" id="outboundProxyEnabled" {{ if .Settings.outboundProxyEnabled }}checked{{ end }}>
+          </div>
+        </div>
+        <div class="text-dim small mb-2" style="font-size: 0.72rem;">Route upstream provider requests through an HTTP/SOCKS proxy.</div>
+        <input type="url" class="form-control form-control-modern form-control-sm font-monospace" id="outboundProxyUrl" placeholder="http://127.0.0.1:1080" value="{{ if .Settings.outboundProxyUrl }}{{ .Settings.outboundProxyUrl }}{{ end }}">
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Pre-fill existing settings
+const existingSettings = {{ .Settings }};
+if (existingSettings) {
+  if (existingSettings.providerThinking) {
+    if (existingSettings.providerThinking.antigravity && existingSettings.providerThinking.antigravity.mode) {
+      document.getElementById('antigravityThinking').value = existingSettings.providerThinking.antigravity.mode;
+    }
+    if (existingSettings.providerThinking.opencode && existingSettings.providerThinking.opencode.mode) {
+      document.getElementById('opencodeThinking').value = existingSettings.providerThinking.opencode.mode;
+    }
+  }
+  if (existingSettings.cavemanLevel) {
+    document.getElementById('cavemanLevel').value = existingSettings.cavemanLevel;
+  }
+  if (existingSettings.ponytailLevel) {
+    document.getElementById('ponytailLevel').value = existingSettings.ponytailLevel;
+  }
+}
+
+async function saveSettings() {
+  const btn = document.getElementById('btnSaveAll');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Saving...';
+
+  const payload = {
+    rtkEnabled: document.getElementById('rtkEnabled').checked,
+    cavemanEnabled: document.getElementById('cavemanEnabled').checked,
+    cavemanLevel: document.getElementById('cavemanLevel').value,
+    ponytailEnabled: document.getElementById('ponytailEnabled').checked,
+    ponytailLevel: document.getElementById('ponytailLevel').value,
+    providerThinking: {
+      antigravity: { mode: document.getElementById('antigravityThinking').value },
+      opencode: { mode: document.getElementById('opencodeThinking').value }
+    },
+    capacityAdapter: {
+      vision: {
+        enabled: document.getElementById('visionEnabled').checked,
+        roundRobin: true,
+        models: [document.getElementById('visionModel').value.trim() || 'ag/gemini-pro-agent']
+      }
+    },
+    outboundProxyEnabled: document.getElementById('outboundProxyEnabled').checked,
+    outboundProxyUrl: document.getElementById('outboundProxyUrl').value.trim()
+  };
+
+  try {
+    const res = await fetch('/api/token-saver/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(err || 'Failed to save settings');
+    }
+    btn.innerHTML = '<i class="bi bi-check2 text-emerald"></i> Saved!';
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-check2-circle"></i> Save Settings';
+    }, 2000);
+  } catch (err) {
+    alert('Error saving settings: ' + err.message);
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-check2-circle"></i> Save Settings';
+  }
+}
+</script>
+{{ end }}
