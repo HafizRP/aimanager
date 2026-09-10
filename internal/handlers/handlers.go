@@ -500,8 +500,29 @@ func (h *Handler) fetchUpstreamModels(ctx context.Context) ([]UpstreamModelItem,
 	if err != nil {
 		return nil, err
 	}
-	if apiKey := h.cfg.GetUpstreamAPIKey(); apiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+apiKey)
+	authKey := h.cfg.GetUpstreamAPIKey()
+	// Fallback to a synced gateway admin key if no master upstream key is configured
+	if authKey == "" {
+		if users, err := h.repo.GetAllUsers(ctx); err == nil {
+			for _, u := range users {
+				if u.IsAdmin() {
+					if keys, err := h.repo.GetAPIKeysByUserID(ctx, u.ID); err == nil {
+						for _, k := range keys {
+							if k.IsActive && strings.HasPrefix(k.Key, "sk-gw-admin-") {
+								authKey = k.Key
+								break
+							}
+						}
+					}
+				}
+				if authKey != "" {
+					break
+				}
+			}
+		}
+	}
+	if authKey != "" {
+		req.Header.Set("Authorization", "Bearer "+authKey)
 	}
 	resp, err := h.httpClient.Do(req)
 	if err != nil {
