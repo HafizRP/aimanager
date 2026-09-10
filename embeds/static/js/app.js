@@ -119,6 +119,12 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   });
 
+  // Dynamic Base URL adaptation to current browser origin
+  const browserBaseURL = window.location.origin + "/v1";
+  document.querySelectorAll(".current-base-url-text").forEach(el => {
+    el.textContent = browserBaseURL;
+  });
+
   // Direct Click on Key Display
   document.addEventListener("click", function(e) {
     const keyDisplay = e.target.closest(".key-display");

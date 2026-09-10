@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -62,11 +63,22 @@ func (h *Handler) SettingsPage(w http.ResponseWriter, r *http.Request) {
 	successMsg := r.URL.Query().Get("msg")
 	errorMsg := r.URL.Query().Get("error")
 
+	scheme := "http"
+	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+		scheme = "https"
+	}
+	host := r.Host
+	if xfh := r.Header.Get("X-Forwarded-Host"); xfh != "" {
+		host = xfh
+	}
+	currentBaseURL := fmt.Sprintf("%s://%s/v1", scheme, host)
+
 	h.render(w, r, "settings.html", "base.html", map[string]interface{}{
-		"ActivePage": "settings",
-		"Config":     h.cfg,
-		"SuccessMsg": successMsg,
-		"ErrorMsg":   errorMsg,
+		"ActivePage":     "settings",
+		"Config":         h.cfg,
+		"CurrentBaseURL": currentBaseURL,
+		"SuccessMsg":     successMsg,
+		"ErrorMsg":       errorMsg,
 	})
 }
 

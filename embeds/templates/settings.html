@@ -94,8 +94,8 @@
             <li>Open <strong>Cursor Settings &gt; Models &gt; OpenAI API Key</strong>.</li>
             <li>Enable <strong>Override OpenAI Base URL</strong> and enter:
               <div class="mt-2 mb-2 d-flex align-items-center gap-2">
-                <code class="p-2 rounded-2 flex-grow-1 font-monospace" style="background: #0b0d14; border: 1px solid var(--border-subtle); color: #38bdf8;">http://100.108.204.127:20129/v1</code>
-                <button class="btn-modern-ghost btn-sm copy-btn" data-copy="http://100.108.204.127:20129/v1">Copy</button>
+                <code class="p-2 rounded-2 flex-grow-1 font-monospace current-base-url-text" style="background: #0b0d14; border: 1px solid var(--border-subtle); color: #38bdf8;">{{ .CurrentBaseURL }}</code>
+                <button class="btn-modern-ghost btn-sm copy-btn" data-copy="{{ .CurrentBaseURL }}">Copy</button>
               </div>
             </li>
             <li>Paste your user <strong>API Key</strong> (<code>sk-gw-...</code>) created from the Users/Keys menu.</li>
@@ -108,8 +108,8 @@
           <div class="p-3 rounded-3 small mb-3" style="background: #0b0d14; border: 1px solid var(--border-subtle);">
             <div class="mb-2 text-dim">API Provider: <strong class="text-light font-monospace">OpenAI Compatible</strong></div>
             <div class="mb-2 text-dim d-flex align-items-center justify-content-between">
-              <div>Base URL: <strong class="text-info font-monospace">http://100.108.204.127:20129/v1</strong></div>
-              <button class="btn-modern-ghost btn-sm py-0 px-2 copy-btn" data-copy="http://100.108.204.127:20129/v1">Copy</button>
+              <div>Base URL: <strong class="text-info font-monospace current-base-url-text">{{ .CurrentBaseURL }}</strong></div>
+              <button class="btn-modern-ghost btn-sm py-0 px-2 copy-btn" data-copy="{{ .CurrentBaseURL }}">Copy</button>
             </div>
             <div class="mb-2 text-dim">API Key: <strong class="text-warning font-monospace">sk-gw-your-api-key</strong></div>
             <div class="text-dim">Model ID: <strong class="text-light font-monospace">ag/gemini-3.8-flash-high</strong></div>
@@ -123,8 +123,8 @@
             <button class="btn-modern-ghost btn-sm py-0 px-2 copy-btn" data-target="#hermesYamlCode">Copy YAML</button>
           </div>
           <pre class="code-box-modern mb-2"><code id="hermesYamlCode">custom_providers:
-  - name: 9router Gateway
-    base_url: http://localhost:20129/v1
+  - name: AI Manager
+    base_url: {{ .CurrentBaseURL }}
     key_env: GATEWAY_API_KEY
     model: ag/gemini-3.8-flash-high
     api_mode: chat_completions</code></pre>
@@ -136,7 +136,7 @@
             <span class="small text-dim">Test Curl Command:</span>
             <button class="btn-modern-ghost btn-sm py-1 px-2 copy-btn" data-target="#curlCodeBlock">Copy</button>
           </div>
-          <pre class="code-box-modern"><code id="curlCodeBlock">curl -X POST http://100.108.204.127:20129/v1/chat/completions \
+          <pre class="code-box-modern"><code id="curlCodeBlock">curl -X POST {{ .CurrentBaseURL }}/chat/completions \
   -H "Authorization: Bearer sk-gw-..." \
   -H "Content-Type: application/json" \
   -d '{
