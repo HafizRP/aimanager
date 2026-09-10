@@ -67,9 +67,9 @@ func (p *GatewayProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. Check Token Quota
-	if user.TokenQuota > 0 && user.TokensUsed >= user.TokenQuota {
-		msg := fmt.Sprintf("Token quota limit reached (%d / %d tokens used). Please contact admin to increase quota.", user.TokensUsed, user.TokenQuota)
+	// 2. Check Token Quota (Admins are exempt from quota lockout)
+	if !user.IsAdmin() && user.TokenQuota > 0 && user.TokensUsed >= user.TokenQuota {
+		msg := fmt.Sprintf("Token quota limit reached (%d / %d tokens used). Please purchase tokens or contact admin.", user.TokensUsed, user.TokenQuota)
 		p.writeJSONError(w, http.StatusTooManyRequests, msg, "insufficient_quota")
 		return
 	}
