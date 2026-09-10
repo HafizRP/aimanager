@@ -112,6 +112,35 @@ func main() {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(middleware.GetHead)
+
+	// Automatic HTTPS redirect & HSTS for public domains behind reverse proxy/Cloudflare
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			proto := r.Header.Get("X-Forwarded-Proto")
+			host := r.Host
+			isLocal := strings.HasPrefix(host, "localhost") ||
+				strings.HasPrefix(host, "127.0.0.1") ||
+				strings.HasPrefix(host, "100.") ||
+				strings.HasPrefix(host, "192.168.") ||
+				strings.HasPrefix(host, "10.")
+
+			// If accessed via plain HTTP on public domain -> permanently redirect to HTTPS
+			if proto == "http" && !isLocal {
+				target := "https://" + host + r.URL.RequestURI()
+				http.Redirect(w, r, target, http.StatusMovedPermanently)
+				return
+			}
+
+			// Enforce HSTS for HTTPS connections
+			if proto == "https" {
+				w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	})
+
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
