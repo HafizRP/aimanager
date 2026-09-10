@@ -1,4 +1,4 @@
-package handlers
+package v1
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 
 	"9router-gateway/internal/config"
 	"9router-gateway/internal/database"
-	"9router-gateway/internal/models"
+	"9router-gateway/internal/entity"
 	"9router-gateway/internal/proxy"
 	"9router-gateway/internal/repository"
 )
@@ -150,7 +150,7 @@ func TestUpdateUpstreamPost_Admin(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/settings/upstream", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	ctx := context.WithValue(req.Context(), userContextKey, &models.User{Role: "admin"})
+	ctx := context.WithValue(req.Context(), userContextKey, &entity.User{Role: "admin"})
 	req = req.WithContext(ctx)
 
 	rr := httptest.NewRecorder()
@@ -212,7 +212,7 @@ func TestUpdateUpstreamPost_Validation(t *testing.T) {
 	formEmpty.Set("upstream_url", "")
 	reqEmpty := httptest.NewRequest(http.MethodPost, "/settings/upstream", strings.NewReader(formEmpty.Encode()))
 	reqEmpty.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	reqEmpty = reqEmpty.WithContext(context.WithValue(reqEmpty.Context(), userContextKey, &models.User{Role: "admin"}))
+	reqEmpty = reqEmpty.WithContext(context.WithValue(reqEmpty.Context(), userContextKey, &entity.User{Role: "admin"}))
 
 	rrEmpty := httptest.NewRecorder()
 	h.UpdateUpstreamPost(rrEmpty, reqEmpty)
@@ -225,7 +225,7 @@ func TestUpdateUpstreamPost_Validation(t *testing.T) {
 	formInvalid.Set("upstream_url", "ftp://127.0.0.1:20128")
 	reqInvalid := httptest.NewRequest(http.MethodPost, "/settings/upstream", strings.NewReader(formInvalid.Encode()))
 	reqInvalid.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	reqInvalid = reqInvalid.WithContext(context.WithValue(reqInvalid.Context(), userContextKey, &models.User{Role: "admin"}))
+	reqInvalid = reqInvalid.WithContext(context.WithValue(reqInvalid.Context(), userContextKey, &entity.User{Role: "admin"}))
 
 	rrInvalid := httptest.NewRecorder()
 	h.UpdateUpstreamPost(rrInvalid, reqInvalid)
@@ -238,7 +238,7 @@ func TestUpdateUpstreamPost_Validation(t *testing.T) {
 	formNormal.Set("upstream_url", "http://127.0.0.1:20128")
 	reqUser := httptest.NewRequest(http.MethodPost, "/settings/upstream", strings.NewReader(formNormal.Encode()))
 	reqUser.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	reqUser = reqUser.WithContext(context.WithValue(reqUser.Context(), userContextKey, &models.User{Role: "user"}))
+	reqUser = reqUser.WithContext(context.WithValue(reqUser.Context(), userContextKey, &entity.User{Role: "user"}))
 
 	rrUser := httptest.NewRecorder()
 	h.UpdateUpstreamPost(rrUser, reqUser)
@@ -267,7 +267,7 @@ func TestAPICacheStats(t *testing.T) {
 
 	// GET returns fresh stats (all zero)
 	req := httptest.NewRequest(http.MethodGet, "/api/cache/stats", nil)
-	req = req.WithContext(context.WithValue(req.Context(), userContextKey, &models.User{Role: "admin"}))
+	req = req.WithContext(context.WithValue(req.Context(), userContextKey, &entity.User{Role: "admin"}))
 	rr := httptest.NewRecorder()
 	h.APICacheStats(rr, req)
 
@@ -284,7 +284,7 @@ func TestAPICacheStats(t *testing.T) {
 
 	// DELETE resets (no crash)
 	reqDel := httptest.NewRequest(http.MethodDelete, "/api/cache/stats", nil)
-	reqDel = reqDel.WithContext(context.WithValue(reqDel.Context(), userContextKey, &models.User{Role: "admin"}))
+	reqDel = reqDel.WithContext(context.WithValue(reqDel.Context(), userContextKey, &entity.User{Role: "admin"}))
 	rrDel := httptest.NewRecorder()
 	h.APICacheStats(rrDel, reqDel)
 	if rrDel.Code != http.StatusOK {
@@ -311,7 +311,7 @@ func TestTestUpstreamConnection(t *testing.T) {
 
 	// Test default configured URL
 	req := httptest.NewRequest(http.MethodGet, "/api/upstream/test", nil)
-	req = req.WithContext(context.WithValue(req.Context(), userContextKey, &models.User{Role: "admin"}))
+	req = req.WithContext(context.WithValue(req.Context(), userContextKey, &entity.User{Role: "admin"}))
 
 	rr := httptest.NewRecorder()
 	h.TestUpstreamConnection(rr, req)
@@ -330,7 +330,7 @@ func TestTestUpstreamConnection(t *testing.T) {
 
 	// Test candidate URL parameter
 	reqCandidate := httptest.NewRequest(http.MethodGet, "/api/upstream/test?url="+url.QueryEscape(mockServer.URL), nil)
-	reqCandidate = reqCandidate.WithContext(context.WithValue(reqCandidate.Context(), userContextKey, &models.User{Role: "admin"}))
+	reqCandidate = reqCandidate.WithContext(context.WithValue(reqCandidate.Context(), userContextKey, &entity.User{Role: "admin"}))
 
 	rrCandidate := httptest.NewRecorder()
 	h.TestUpstreamConnection(rrCandidate, reqCandidate)

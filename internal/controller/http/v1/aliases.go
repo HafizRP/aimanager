@@ -1,10 +1,11 @@
-package handlers
+package v1
 
 import (
 	"encoding/json"
 	"net/http"
 )
 
+// APIModelAliasesGet returns the current model alias map as JSON.
 func (h *Handler) APIModelAliasesGet(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	aliases, err := h.coreClient.GetModelAliases(ctx)
@@ -16,6 +17,7 @@ func (h *Handler) APIModelAliasesGet(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{"aliases": aliases})
 }
 
+// APIModelAliasSet creates or updates a model alias in 9router Core.
 func (h *Handler) APIModelAliasSet(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req struct {
@@ -36,6 +38,7 @@ func (h *Handler) APIModelAliasSet(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
 
+// APIModelAliasDelete removes a model alias from 9router Core.
 func (h *Handler) APIModelAliasDelete(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	alias := r.URL.Query().Get("alias")

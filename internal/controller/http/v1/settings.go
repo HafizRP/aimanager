@@ -1,25 +1,29 @@
-package handlers
+package v1
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
-	"9router-gateway/internal/models"
+	"9router-gateway/internal/entity"
 	"9router-gateway/internal/upstream"
+	"9router-gateway/internal/usecase"
 )
 
+// ModelViewItem is a model descriptor for the models page.
 type ModelViewItem struct {
 	UpstreamModelItem
 	Quota upstream.ModelQuotaSummary `json:"quota"`
 }
 
+// ModelsPage renders the model whitelist/alias settings page.
 func (h *Handler) ModelsPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	currentUser := GetUserFromContext(ctx)
@@ -30,8 +34,8 @@ func (h *Handler) ModelsPage(w http.ResponseWriter, r *http.Request) {
 	// Filter for non-admin user
 	displayModels := allModels
 	if currentUser != nil && !currentUser.IsAdmin() {
-		allowedList := models.ParseAllowedModels(currentUser.AllowedModels)
-		if !models.HasWildcard(allowedList) {
+		allowedList := entity.ParseAllowedModels(currentUser.AllowedModels)
+		if !entity.HasWildcard(allowedList) {
 			allowedMap := make(map[string]bool)
 			for _, m := range allowedList {
 				allowedMap[strings.TrimSpace(m)] = true
@@ -62,14 +66,14 @@ func (h *Handler) ModelsPage(w http.ResponseWriter, r *http.Request) {
 		modelViews = append(modelViews, item)
 	}
 
-	var users []models.User
+	var users []entity.User
 	if currentUser != nil && currentUser.IsAdmin() {
 		users, _ = h.repo.GetAllUsers(ctx)
 	}
 
 	aliases, _ := h.coreClient.GetModelAliases(ctx)
 
-	h.render(w, r, "models.html", "base.html", map[string]interface{}{
+	h.render(w, r, "entity.html", "base.html", map[string]interface{}{
 		"ActivePage":  "models",
 		"Models":      modelViews,
 		"Users":       users,
@@ -79,6 +83,7 @@ func (h *Handler) ModelsPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// SettingsPage renders the gateway settings page.
 func (h *Handler) SettingsPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	currentUser := GetUserFromContext(ctx)
@@ -116,8 +121,8 @@ func (h *Handler) SettingsPage(w http.ResponseWriter, r *http.Request) {
 			if currentUser.IsAdmin() {
 				prefix = "sk-gw-admin-"
 			}
-			newKey := GenerateSecureAPIKey(prefix)
-			apiKey := &models.APIKey{
+			newKey := usecase.GenerateSecureAPIKey(prefix)
+			apiKey := &entity.APIKey{
 				ID:       uuid.New().String(),
 				UserID:   currentUser.ID,
 				Key:      newKey,
@@ -132,12 +137,12 @@ func (h *Handler) SettingsPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if userKey == "" {
-		userKey = "sk-gw-your-api-key"
+		userKey = "«redacted:sk-…»"
 	}
 
 	userModel := "ag/gemini-3.8-flash-high"
 	if currentUser != nil {
-		allowed := models.ParseAllowedModels(currentUser.AllowedModels)
+		allowed := entity.ParseAllowedModels(currentUser.AllowedModels)
 		if len(allowed) > 0 && allowed[0] != "*" {
 			userModel = allowed[0]
 		}
@@ -154,6 +159,7 @@ func (h *Handler) SettingsPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// UpdatePasswordPost changes the current user's password.
 func (h *Handler) UpdatePasswordPost(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	ctx := r.Context()
@@ -173,17 +179,12 @@ func (h *Handler) UpdatePasswordPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Verify current password
-	valid := CheckPasswordHash(currentPass, currentUser.PasswordHash)
-	if !valid && (currentUser.Username == "admin" || currentUser.Username == h.cfg.AdminUsername) {
-		valid = (currentPass == h.cfg.AdminPassword)
-	}
-
-	if !valid {
+	if !h.auth.VerifySessionPassword(currentUser, currentPass) {
 		http.Redirect(w, r, "/settings?error=Current+password+does+not+match", http.StatusSeeOther)
 		return
 	}
 
-	newHash, err := HashPassword(newPass)
+	newHash, err := usecase.HashPassword(newPass)
 	if err != nil {
 		http.Redirect(w, r, "/settings?error=Failed+to+encrypt+password", http.StatusSeeOther)
 		return
@@ -197,6 +198,7 @@ func (h *Handler) UpdatePasswordPost(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/settings?msg=Password+updated+successfully", http.StatusSeeOther)
 }
 
+// UpdateMidtransPost saves Midtrans gateway keys (admin).
 func (h *Handler) UpdateMidtransPost(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	ctx := r.Context()
@@ -206,32 +208,22 @@ func (h *Handler) UpdateMidtransPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	serverKey := strings.TrimSpace(r.FormValue("server_key"))
-	clientKey := strings.TrimSpace(r.FormValue("client_key"))
-	merchantID := strings.TrimSpace(r.FormValue("merchant_id"))
-	isProduction := (r.FormValue("is_production") == "true")
-
-	if serverKey != "" {
-		h.cfg.MidtransServerKey = serverKey
+	err := h.settings.UpdateMidtrans(
+		ctx,
+		strings.TrimSpace(r.FormValue("server_key")),
+		strings.TrimSpace(r.FormValue("client_key")),
+		strings.TrimSpace(r.FormValue("merchant_id")),
+		r.FormValue("is_production") == "true",
+	)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to save Midtrans settings")
+		http.Redirect(w, r, "/settings?error=Failed+to+save+Midtrans+configuration", http.StatusSeeOther)
+		return
 	}
-	if clientKey != "" {
-		h.cfg.MidtransClientKey = clientKey
-	}
-	h.cfg.MidtransMerchantID = merchantID
-	h.cfg.MidtransIsProduction = isProduction
-
-	_ = h.repo.SaveSetting(ctx, "midtrans_server_key", h.cfg.MidtransServerKey)
-	_ = h.repo.SaveSetting(ctx, "midtrans_client_key", h.cfg.MidtransClientKey)
-	_ = h.repo.SaveSetting(ctx, "midtrans_merchant_id", h.cfg.MidtransMerchantID)
-	if isProduction {
-		_ = h.repo.SaveSetting(ctx, "midtrans_is_production", "true")
-	} else {
-		_ = h.repo.SaveSetting(ctx, "midtrans_is_production", "false")
-	}
-
 	http.Redirect(w, r, "/settings?msg=Midtrans+configuration+saved+successfully", http.StatusSeeOther)
 }
 
+// UpdateUpstreamPost saves the 9router Core upstream settings (admin).
 func (h *Handler) UpdateUpstreamPost(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	ctx := r.Context()
@@ -241,42 +233,15 @@ func (h *Handler) UpdateUpstreamPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	upstreamURL := strings.TrimSpace(r.FormValue("upstream_url"))
-	dbPath := strings.TrimSpace(r.FormValue("ninerouter_db_path"))
-	apiKey := strings.TrimSpace(r.FormValue("upstream_api_key"))
-
-	if upstreamURL == "" {
-		http.Redirect(w, r, "/settings?error=Upstream+URL+cannot+be+empty", http.StatusSeeOther)
+	err := h.settings.UpdateUpstream(
+		ctx,
+		strings.TrimSpace(r.FormValue("upstream_url")),
+		strings.TrimSpace(r.FormValue("ninerouter_db_path")),
+		strings.TrimSpace(r.FormValue("upstream_api_key")),
+	)
+	if err != nil {
+		http.Redirect(w, r, "/settings?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
-	}
-	if !strings.HasPrefix(upstreamURL, "http://") && !strings.HasPrefix(upstreamURL, "https://") {
-		http.Redirect(w, r, "/settings?error=Invalid+upstream+URL+(must+start+with+http://+or+https://)", http.StatusSeeOther)
-		return
-	}
-	upstreamURL = strings.TrimRight(upstreamURL, "/")
-
-	h.cfg.SetUpstreamURL(upstreamURL)
-	if err := h.repo.SaveSetting(ctx, "upstream_url", upstreamURL); err != nil {
-		log.Error().Err(err).Msg("Failed to save upstream_url setting")
-	}
-
-	if dbPath != "" {
-		h.cfg.SetNineRouterDBPath(dbPath)
-		if err := h.repo.SaveSetting(ctx, "ninerouter_db_path", dbPath); err != nil {
-			log.Error().Err(err).Msg("Failed to save ninerouter_db_path setting")
-		}
-		if h.syncer != nil {
-			h.syncer.UpdateDBPath(dbPath)
-			// Trigger re-sync of all active keys
-			if allKeys, err := h.repo.GetAllAPIKeys(ctx); err == nil {
-				_ = h.syncer.BackfillAll(allKeys)
-			}
-		}
-	}
-
-	h.cfg.SetUpstreamAPIKey(apiKey)
-	if err := h.repo.SaveSetting(ctx, "upstream_api_key", apiKey); err != nil {
-		log.Error().Err(err).Msg("Failed to save upstream_api_key setting")
 	}
 
 	if h.coreClient != nil {
@@ -284,13 +249,14 @@ func (h *Handler) UpdateUpstreamPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Info().
-		Str("upstream_url", upstreamURL).
-		Str("db_path", dbPath).
+		Str("upstream_url", h.cfg.GetUpstreamURL()).
+		Str("db_path", h.cfg.GetNineRouterDBPath()).
 		Msg("Updated upstream 9router Core settings in database and runtime config")
 
 	http.Redirect(w, r, "/settings?msg=Upstream+9router+Core+configuration+updated+successfully", http.StatusSeeOther)
 }
 
+// TestUpstreamConnection pings the configured upstream and reports latency.
 func (h *Handler) TestUpstreamConnection(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()

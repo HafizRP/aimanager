@@ -1,3 +1,4 @@
+// Package proxy implements the OpenAI/Anthropic-compatible reverse proxy gateway.
 package proxy
 
 import (
@@ -19,6 +20,7 @@ type cachedResponse struct {
 	Model       string
 }
 
+// CacheStats is a snapshot of response-cache analytics for reporting.
 type CacheStats struct {
 	Enabled       bool        `json:"enabled"`
 	Entries       int         `json:"entries"`
@@ -36,6 +38,7 @@ type CacheStats struct {
 	CreatedAt     time.Time   `json:"created_at"`
 }
 
+// ModelStat aggregates cache analytics for a single model.
 type ModelStat struct {
 	Model        string `json:"model"`
 	Hits         int64  `json:"hits"`
@@ -44,6 +47,7 @@ type ModelStat struct {
 	AvgLatencyMs int64  `json:"avg_latency_ms"` // Avg upstream round-trip avoided
 }
 
+// ResponseCache stores exact-match responses with expiration and analytics.
 type ResponseCache struct {
 	mu      sync.RWMutex
 	items   map[string]*cachedResponse
@@ -65,6 +69,7 @@ const (
 	cacheTTL        = 15 * time.Minute
 )
 
+// NewResponseCache creates a cache and starts its background expiry cleanup.
 func NewResponseCache() *ResponseCache {
 	rc := &ResponseCache{
 		items:      make(map[string]*cachedResponse),
@@ -91,12 +96,14 @@ func NewResponseCache() *ResponseCache {
 	return rc
 }
 
+// SetEnabled enables or disables cache lookups and writes.
 func (rc *ResponseCache) SetEnabled(enabled bool) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 	rc.enabled = enabled
 }
 
+// GenerateKey derives a SHA-256 key from the model, messages, and temperature.
 func (rc *ResponseCache) GenerateKey(model string, messages interface{}, temperature float64) string {
 	msgBytes, _ := json.Marshal(messages)
 	h := sha256.New()
@@ -107,6 +114,7 @@ func (rc *ResponseCache) GenerateKey(model string, messages interface{}, tempera
 	return hex.EncodeToString(h.Sum(nil))
 }
 
+// Get returns the cached response for key, updating hit statistics.
 func (rc *ResponseCache) Get(key string) (*cachedResponse, bool) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
@@ -142,6 +150,7 @@ func (rc *ResponseCache) Get(key string) (*cachedResponse, bool) {
 	return item, true
 }
 
+// Set stores a response under key with the given TTL, evicting old entries as needed.
 func (rc *ResponseCache) Set(key string, body []byte, statusCode int, contentType string, tokens int, model string, ttl time.Duration) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
@@ -269,6 +278,7 @@ func (rc *ResponseCache) ResetStats() {
 	rc.lastHit = time.Time{}
 }
 
+// Clear empties all cached entries.
 func (rc *ResponseCache) Clear() {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()

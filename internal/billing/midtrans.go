@@ -1,3 +1,4 @@
+// Package billing provides integration with the Midtrans payment gateway.
 package billing
 
 import (
@@ -16,6 +17,7 @@ import (
 	"9router-gateway/internal/config"
 )
 
+// MidtransClient communicates with the Midtrans Snap API for payment processing.
 type MidtransClient struct {
 	serverKey    string
 	clientKey    string
@@ -23,6 +25,7 @@ type MidtransClient struct {
 	httpClient   *http.Client
 }
 
+// NewMidtransClient creates a MidtransClient from the supplied configuration.
 func NewMidtransClient(cfg *config.Config) *MidtransClient {
 	return &MidtransClient{
 		serverKey:    cfg.MidtransServerKey,
@@ -34,6 +37,7 @@ func NewMidtransClient(cfg *config.Config) *MidtransClient {
 	}
 }
 
+// SnapURL returns the Midtrans Snap.js URL for the configured environment.
 func (m *MidtransClient) SnapURL() string {
 	if m.isProduction {
 		return "https://app.midtrans.com/snap/snap.js"
@@ -48,6 +52,7 @@ func (m *MidtransClient) snapAPIURL() string {
 	return "https://app.sandbox.midtrans.com/snap/v1/transactions"
 }
 
+// SnapTransactionRequest is the request body sent to the Midtrans Snap API.
 type SnapTransactionRequest struct {
 	TransactionDetails struct {
 		OrderID     string `json:"order_id"`
@@ -65,12 +70,14 @@ type SnapTransactionRequest struct {
 	} `json:"customer_details"`
 }
 
+// SnapTransactionResponse holds the token and redirect URL returned by Midtrans.
 type SnapTransactionResponse struct {
 	Token         string   `json:"token"`
 	RedirectURL   string   `json:"redirect_url"`
 	ErrorMessages []string `json:"error_messages,omitempty"`
 }
 
+// CreateSnapTransaction creates a new Snap payment transaction and returns a redirect URL.
 func (m *MidtransClient) CreateSnapTransaction(orderID string, amount int64, packageName string, packageID string, userName string) (*SnapTransactionResponse, error) {
 	reqBody := SnapTransactionRequest{}
 	reqBody.TransactionDetails.OrderID = orderID
@@ -132,6 +139,7 @@ func (m *MidtransClient) CreateSnapTransaction(orderID string, amount int64, pac
 	return &snapResp, nil
 }
 
+// MidtransWebhookPayload represents the JSON payload received from a Midtrans webhook callback.
 type MidtransWebhookPayload struct {
 	TransactionTime   string `json:"transaction_time"`
 	TransactionStatus string `json:"transaction_status"` // "settlement", "capture", "pending", "expire", "cancel"

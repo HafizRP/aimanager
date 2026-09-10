@@ -1,10 +1,11 @@
-package handlers
+package v1
 
 import (
 	"encoding/json"
 	"net/http"
 )
 
+// ProvidersPage renders the upstream provider management page.
 func (h *Handler) ProvidersPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	conns, err := h.coreClient.GetProviders(ctx)
@@ -18,6 +19,7 @@ func (h *Handler) ProvidersPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// APIProvidersToggle enables/disables an upstream provider.
 func (h *Handler) APIProvidersToggle(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req struct {
@@ -38,6 +40,7 @@ func (h *Handler) APIProvidersToggle(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
 
+// APIProvidersPriority reorders provider priority.
 func (h *Handler) APIProvidersPriority(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req struct {
@@ -58,6 +61,7 @@ func (h *Handler) APIProvidersPriority(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
 
+// APIProvidersTest tests connectivity to an upstream provider.
 func (h *Handler) APIProvidersTest(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := r.URL.Query().Get("id")
@@ -83,6 +87,7 @@ func (h *Handler) APIProvidersTest(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(res)
 }
 
+// APIProvidersDelete removes an upstream provider.
 func (h *Handler) APIProvidersDelete(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := r.URL.Query().Get("id")
@@ -107,6 +112,7 @@ func (h *Handler) APIProvidersDelete(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
 
+// APIProvidersCreate adds a new upstream provider.
 func (h *Handler) APIProvidersCreate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var payload map[string]interface{}

@@ -1,3 +1,4 @@
+// Package proxy implements the OpenAI/Anthropic-compatible reverse proxy gateway.
 package proxy
 
 import (
@@ -11,11 +12,13 @@ type clientBucket struct {
 	tokenCount  int64
 }
 
+// RateLimiter enforces per-identifier RPM and TPM limits.
 type RateLimiter struct {
 	mu      sync.Mutex
 	buckets map[string]*clientBucket
 }
 
+// NewRateLimiter creates a limiter and starts its periodic bucket cleanup.
 func NewRateLimiter() *RateLimiter {
 	rl := &RateLimiter{
 		buckets: make(map[string]*clientBucket),

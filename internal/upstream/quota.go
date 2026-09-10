@@ -1,3 +1,4 @@
+// Package upstream provides a client for the 9router Core management API.
 package upstream
 
 import (
@@ -19,6 +20,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// UpstreamQuotaInfo carries quota usage for a single upstream model or credit bucket.
 type UpstreamQuotaInfo struct {
 	Used                float64   `json:"used"`
 	Total               float64   `json:"total"`
@@ -31,6 +33,7 @@ type UpstreamQuotaInfo struct {
 	Unlimited           bool      `json:"unlimited"`
 }
 
+// ProviderAccount captures quota status for one upstream provider connection.
 type ProviderAccount struct {
 	ID        string                       `json:"id"`
 	Provider  string                       `json:"provider"`
@@ -43,6 +46,7 @@ type ProviderAccount struct {
 	FetchedAt time.Time                    `json:"fetched_at"`
 }
 
+// FlashQuota returns the best-matching Gemini Flash quota, or nil.
 func (p ProviderAccount) FlashQuota() *UpstreamQuotaInfo {
 	for _, k := range []string{"gemini-3.8-flash-high", "gemini-3.8-flash-medium", "gemini-3.8-flash-low", "gemini-3.7-flash-high", "gemini-3.7-flash-medium"} {
 		if q, ok := p.Quotas[k]; ok {
@@ -52,6 +56,7 @@ func (p ProviderAccount) FlashQuota() *UpstreamQuotaInfo {
 	return nil
 }
 
+// ClaudeQuota returns the best-matching Claude quota, or nil.
 func (p ProviderAccount) ClaudeQuota() *UpstreamQuotaInfo {
 	for _, k := range []string{"claude-sonnet-4-6", "claude-opus-4-6-thinking"} {
 		if q, ok := p.Quotas[k]; ok {
@@ -61,6 +66,7 @@ func (p ProviderAccount) ClaudeQuota() *UpstreamQuotaInfo {
 	return nil
 }
 
+// KiroCredit returns the Kiro credit quota, or nil.
 func (p ProviderAccount) KiroCredit() *UpstreamQuotaInfo {
 	if q, ok := p.Quotas["credit"]; ok {
 		return &q
@@ -68,6 +74,7 @@ func (p ProviderAccount) KiroCredit() *UpstreamQuotaInfo {
 	return nil
 }
 
+// DisplayProvider returns a human-friendly label for the provider.
 func (p ProviderAccount) DisplayProvider() string {
 	if p.Provider == "antigravity" {
 		return "Antigravity (Google)"
@@ -81,6 +88,7 @@ func (p ProviderAccount) DisplayProvider() string {
 	return p.Provider
 }
 
+// ModelAccountDetail describes one account's quota for a given model.
 type ModelAccountDetail struct {
 	AccountName string  `json:"account_name"`
 	Email       string  `json:"email"`
@@ -92,6 +100,7 @@ type ModelAccountDetail struct {
 	IsReady     bool    `json:"is_ready"`
 }
 
+// ModelQuotaSummary aggregates quota status across accounts for a single model.
 type ModelQuotaSummary struct {
 	ModelID          string               `json:"model_id"`
 	Provider         string               `json:"provider"`
@@ -108,6 +117,7 @@ type ModelQuotaSummary struct {
 	DescriptionLabel string               `json:"description_label"`
 }
 
+// UpstreamQuotaReport is a full snapshot of account quotas and per-model summaries.
 type UpstreamQuotaReport struct {
 	Accounts       []ProviderAccount            `json:"accounts"`
 	FetchedAt      time.Time                    `json:"fetched_at"`
@@ -115,6 +125,7 @@ type UpstreamQuotaReport struct {
 	ModelSummaries map[string]ModelQuotaSummary `json:"model_summaries"`
 }
 
+// QuotaManager fetches and caches upstream account quotas.
 type QuotaManager struct {
 	cfg        *config.Config
 	httpClient *http.Client
@@ -124,6 +135,7 @@ type QuotaManager struct {
 	cacheTTL   time.Duration
 }
 
+// NewQuotaManager creates a QuotaManager with a short-lived result cache.
 func NewQuotaManager(cfg *config.Config) *QuotaManager {
 	return &QuotaManager{
 		cfg: cfg,
@@ -187,6 +199,7 @@ func (m *QuotaManager) formatWIB(t time.Time) (string, string) {
 	return resetWIB, resetIn
 }
 
+// FetchAllQuotas fetches live quota data from 9router Core, using the cache unless force is true.
 func (m *QuotaManager) FetchAllQuotas(ctx context.Context, force bool) (*UpstreamQuotaReport, error) {
 	m.mu.RLock()
 	if !force && m.cache != nil && time.Since(m.cacheTime) < m.cacheTTL {
@@ -426,6 +439,7 @@ func (m *QuotaManager) FetchAllQuotas(ctx context.Context, force bool) (*Upstrea
 	return report, nil
 }
 
+// GetModelSummary builds a per-model quota summary from a fetched report.
 func (m *QuotaManager) GetModelSummary(modelID string, report *UpstreamQuotaReport) ModelQuotaSummary {
 	summary := ModelQuotaSummary{
 		ModelID:        modelID,

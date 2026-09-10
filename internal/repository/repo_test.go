@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"9router-gateway/internal/database"
-	"9router-gateway/internal/models"
+	"9router-gateway/internal/entity"
 )
 
 func setupTestRepo(t *testing.T) (*SQLiteRepo, func()) {
@@ -34,7 +34,7 @@ func TestUserOperations(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. Create User
-	u := &models.User{
+	u := &entity.User{
 		ID:            "user-1",
 		Username:      "alice",
 		Name:          "Alice Wonderland",
@@ -130,7 +130,7 @@ func TestAPIKeyOperations(t *testing.T) {
 	ctx := context.Background()
 
 	// Setup user first
-	u := &models.User{
+	u := &entity.User{
 		ID:            "user-keys",
 		Username:      "bob",
 		Name:          "Bob",
@@ -143,7 +143,7 @@ func TestAPIKeyOperations(t *testing.T) {
 	}
 
 	// 1. Create Key
-	key := &models.APIKey{
+	key := &entity.APIKey{
 		ID:            "key-1",
 		UserID:        "user-keys",
 		Key:           "sk-gw-test-key-12345",
@@ -205,7 +205,7 @@ func TestSessionAndSettings(t *testing.T) {
 	ctx := context.Background()
 
 	// Create user
-	u := &models.User{
+	u := &entity.User{
 		ID:            "user-session",
 		Username:      "charlie",
 		Name:          "Charlie",
@@ -259,7 +259,7 @@ func TestRequestLogs(t *testing.T) {
 	ctx := context.Background()
 
 	// Log entry
-	logEntry := &models.RequestLog{
+	logEntry := &entity.RequestLog{
 		UserID:           "user-logs",
 		APIKeyID:         "key-logs",
 		Path:             "/v1/chat/completions",
@@ -297,7 +297,7 @@ func TestCleanExpiredSessionsAndLoginAttempts(t *testing.T) {
 	ctx := context.Background()
 
 	// 1. Session cleanup
-	u := &models.User{
+	u := &entity.User{
 		ID:            "user-clean",
 		Username:      "dan",
 		Name:          "Dan",

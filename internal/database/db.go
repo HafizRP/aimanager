@@ -1,3 +1,4 @@
+// Package database initialises and migrates the SQLite database used by the gateway.
 package database
 
 import (
@@ -9,6 +10,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// InitDB opens (or creates) the SQLite database at dbPath and runs schema migrations.
 func InitDB(dbPath string) (*sql.DB, error) {
 	dir := filepath.Dir(dbPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {

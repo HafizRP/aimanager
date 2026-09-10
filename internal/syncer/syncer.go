@@ -1,3 +1,4 @@
+// Package syncer synchronises API keys from the gateway into 9router Core's SQLite database.
 package syncer
 
 import (
@@ -10,16 +11,18 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"9router-gateway/internal/models"
+	"9router-gateway/internal/entity"
 
 	_ "modernc.org/sqlite"
 )
 
+// Syncer writes API key data into 9router Core's database.
 type Syncer struct {
 	dbPath    string
 	machineID string
 }
 
+// NewSyncer creates a Syncer that targets the given 9router Core database path.
 func NewSyncer(dbPath string) *Syncer {
 	machineID := "33b8f86c23c91fec"
 	// Read machineId from core directory relative to dbPath or local ./data/core
@@ -46,6 +49,7 @@ func NewSyncer(dbPath string) *Syncer {
 	}
 }
 
+// UpdateDBPath changes the target 9router Core database path at runtime.
 func (s *Syncer) UpdateDBPath(newPath string) {
 	s.dbPath = newPath
 }
@@ -64,7 +68,7 @@ func (s *Syncer) getDB() (*sql.DB, error) {
 }
 
 // SyncKey inserts or updates an API key in 9router Core's database
-func (s *Syncer) SyncKey(key *models.APIKey, userName string) error {
+func (s *Syncer) SyncKey(key *entity.APIKey, userName string) error {
 	db, err := s.getDB()
 	if err != nil {
 		log.Warn().Err(err).Msg("9router sync skipped (cannot open db)")
@@ -131,7 +135,7 @@ func (s *Syncer) DeleteKey(keyID string) error {
 }
 
 // BackfillAll syncs all gateway keys into 9router Core's database
-func (s *Syncer) BackfillAll(keys []models.APIKey) error {
+func (s *Syncer) BackfillAll(keys []entity.APIKey) error {
 	db, err := s.getDB()
 	if err != nil {
 		return err

@@ -1,4 +1,4 @@
-package handlers
+package v1
 
 import (
 	"encoding/csv"
@@ -9,9 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"9router-gateway/internal/models"
+	"9router-gateway/internal/entity"
+	"9router-gateway/internal/usecase"
 )
 
+// LogsPage renders the request logs page.
 func (h *Handler) LogsPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	currentUser := GetUserFromContext(ctx)
@@ -25,21 +27,20 @@ func (h *Handler) LogsPage(w http.ResponseWriter, r *http.Request) {
 	statusStr := r.URL.Query().Get("status")
 	filterStatus, _ := strconv.Atoi(statusStr)
 
-	cursor := r.URL.Query().Get("cursor")
-	dir := r.URL.Query().Get("dir")
-	if dir != "prev" && dir != "next" {
-		dir = "next"
-	}
-
-	limit := 25
-
-	logs, pageInfo, err := h.repo.GetRequestLogsCursor(ctx, limit, cursor, dir, filterUser, filterModel, filterStatus)
+	logs, pageInfo, err := h.logs.List(ctx, usecase.LogQuery{
+		Limit:        25,
+		Cursor:       r.URL.Query().Get("cursor"),
+		Direction:    r.URL.Query().Get("dir"),
+		UserID:       filterUser,
+		ModelFilter:  filterModel,
+		StatusFilter: filterStatus,
+	})
 	if err != nil {
 		logs = nil
-		pageInfo = &models.CursorPageInfo{Limit: limit}
+		pageInfo = &entity.CursorPageInfo{Limit: 25}
 	}
 
-	var users []models.User
+	var users []entity.User
 	if currentUser != nil && currentUser.IsAdmin() {
 		users, _ = h.repo.GetAllUsers(ctx)
 	}
@@ -69,18 +70,17 @@ func (h *Handler) APILogs(w http.ResponseWriter, r *http.Request) {
 	statusStr := r.URL.Query().Get("status")
 	filterStatus, _ := strconv.Atoi(statusStr)
 
-	cursor := r.URL.Query().Get("cursor")
-	dir := r.URL.Query().Get("dir")
-	if dir != "prev" && dir != "next" {
-		dir = "next"
-	}
-
-	limit := 25
-
-	logs, pageInfo, err := h.repo.GetRequestLogsCursor(ctx, limit, cursor, dir, filterUser, filterModel, filterStatus)
+	logs, pageInfo, err := h.logs.List(ctx, usecase.LogQuery{
+		Limit:        25,
+		Cursor:       r.URL.Query().Get("cursor"),
+		Direction:    r.URL.Query().Get("dir"),
+		UserID:       filterUser,
+		ModelFilter:  filterModel,
+		StatusFilter: filterStatus,
+	})
 	if err != nil {
 		logs = nil
-		pageInfo = &models.CursorPageInfo{Limit: limit}
+		pageInfo = &entity.CursorPageInfo{Limit: 25}
 	}
 
 	type logRow struct {
@@ -149,7 +149,14 @@ func (h *Handler) ExportLogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Fetch up to 1000 logs for export
-	logs, _, err := h.repo.GetRequestLogsCursor(ctx, 1000, "", "next", filterUser, filterModel, filterStatus)
+	logs, _, err := h.logs.List(ctx, usecase.LogQuery{
+		Limit:        1000,
+		Cursor:       "",
+		Direction:    "next",
+		UserID:       filterUser,
+		ModelFilter:  filterModel,
+		StatusFilter: filterStatus,
+	})
 	if err != nil {
 		http.Error(w, "Failed to retrieve logs", http.StatusInternalServerError)
 		return

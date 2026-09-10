@@ -1,14 +1,14 @@
-package handlers
+package v1
 
 import (
 	"encoding/json"
 	"net/http"
 	"strings"
 
-	"9router-gateway/internal/models"
 	"9router-gateway/internal/upstream"
 )
 
+// DashboardPage renders the stats dashboard for the current user.
 func (h *Handler) DashboardPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user := GetUserFromContext(ctx)
@@ -18,15 +18,7 @@ func (h *Handler) DashboardPage(w http.ResponseWriter, r *http.Request) {
 		timeframe = "1d"
 	}
 
-	var stats *models.DashboardStats
-	var err error
-
-	if user != nil && user.IsAdmin() {
-		stats, err = h.repo.GetDashboardStats(ctx, timeframe)
-	} else if user != nil {
-		stats, err = h.repo.GetUserDashboardStats(ctx, user.ID, timeframe)
-	}
-
+	stats, err := h.dash.GetStats(ctx, user, timeframe)
 	if err != nil {
 		stats = nil
 	}
@@ -49,6 +41,7 @@ func (h *Handler) DashboardPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// APIStats returns dashboard statistics as JSON (role-scoped).
 func (h *Handler) APIStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	user := GetUserFromContext(ctx)
@@ -58,15 +51,7 @@ func (h *Handler) APIStats(w http.ResponseWriter, r *http.Request) {
 		timeframe = "1d"
 	}
 
-	var stats *models.DashboardStats
-	var err error
-
-	if user != nil && user.IsAdmin() {
-		stats, err = h.repo.GetDashboardStats(ctx, timeframe)
-	} else if user != nil {
-		stats, err = h.repo.GetUserDashboardStats(ctx, user.ID, timeframe)
-	}
-
+	stats, err := h.dash.GetStats(ctx, user, timeframe)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -75,6 +60,7 @@ func (h *Handler) APIStats(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(stats)
 }
 
+// APICacheStats returns or clears response cache analytics.
 func (h *Handler) APICacheStats(w http.ResponseWriter, r *http.Request) {
 	if h.cache == nil {
 		http.Error(w, "Cache not initialized", http.StatusInternalServerError)
@@ -94,12 +80,14 @@ func (h *Handler) APICacheStats(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// CacheAnalyticsPage renders the cache analytics page.
 func (h *Handler) CacheAnalyticsPage(w http.ResponseWriter, r *http.Request) {
 	h.render(w, r, "cache_analytics.html", "base.html", map[string]interface{}{
 		"ActivePage": "cache-analytics",
 	})
 }
 
+// APIUpstreamQuotas returns upstream quota summaries as JSON.
 func (h *Handler) APIUpstreamQuotas(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	force := r.URL.Query().Get("refresh") == "true"

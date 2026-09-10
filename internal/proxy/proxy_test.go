@@ -6,37 +6,37 @@ import (
 	"testing"
 	"time"
 
-	"9router-gateway/internal/models"
+	"9router-gateway/internal/entity"
 )
 
 func TestParseAllowedModels(t *testing.T) {
 	// Empty string -> wildcard
-	list1 := models.ParseAllowedModels("")
+	list1 := entity.ParseAllowedModels("")
 	if len(list1) != 1 || list1[0] != "*" {
 		t.Errorf("expected ['*'], got %v", list1)
 	}
 
 	// JSON array
-	list2 := models.ParseAllowedModels(`["ag/gemini-3.8-flash", "main"]`)
+	list2 := entity.ParseAllowedModels(`["ag/gemini-3.8-flash", "main"]`)
 	if len(list2) != 2 || list2[0] != "ag/gemini-3.8-flash" || list2[1] != "main" {
 		t.Errorf("unexpected json array parse: %v", list2)
 	}
 
 	// Comma separated
-	list3 := models.ParseAllowedModels("gpt-4o, claude-3-5-sonnet")
+	list3 := entity.ParseAllowedModels("gpt-4o, claude-3-5-sonnet")
 	if len(list3) != 2 || list3[0] != "gpt-4o" || list3[1] != "claude-3-5-sonnet" {
 		t.Errorf("unexpected comma-separated parse: %v", list3)
 	}
 }
 
 func TestHasWildcard(t *testing.T) {
-	if !models.HasWildcard([]string{"*"}) {
+	if !entity.HasWildcard([]string{"*"}) {
 		t.Error("expected wildcard true for ['*']")
 	}
-	if !models.HasWildcard([]string{"model-a", "*", "model-b"}) {
+	if !entity.HasWildcard([]string{"model-a", "*", "model-b"}) {
 		t.Error("expected wildcard true when '*' is in slice")
 	}
-	if models.HasWildcard([]string{"model-a", "model-b"}) {
+	if entity.HasWildcard([]string{"model-a", "model-b"}) {
 		t.Error("expected wildcard false when '*' is not in slice")
 	}
 }
@@ -173,28 +173,28 @@ func TestAPIKey_IsExpired(t *testing.T) {
 	now := time.Now()
 
 	// Nil ExpiresAt → never expires
-	k1 := &models.APIKey{}
+	k1 := &entity.APIKey{}
 	if k1.IsExpired() {
 		t.Error("expected nil ExpiresAt to not be expired")
 	}
 
 	// Future expiry → not expired
 	future := now.Add(24 * time.Hour)
-	k2 := &models.APIKey{ExpiresAt: &future}
+	k2 := &entity.APIKey{ExpiresAt: &future}
 	if k2.IsExpired() {
 		t.Error("expected future expiry to not be expired")
 	}
 
 	// Past expiry → expired
 	past := now.Add(-1 * time.Hour)
-	k3 := &models.APIKey{ExpiresAt: &past}
+	k3 := &entity.APIKey{ExpiresAt: &past}
 	if !k3.IsExpired() {
 		t.Error("expected past expiry to be expired")
 	}
 
 	// Precisely now (with some buffer) → expired
 	justNow := now.Add(-1 * time.Millisecond)
-	k4 := &models.APIKey{ExpiresAt: &justNow}
+	k4 := &entity.APIKey{ExpiresAt: &justNow}
 	if !k4.IsExpired() {
 		t.Error("expected past-ish expiry to be expired")
 	}

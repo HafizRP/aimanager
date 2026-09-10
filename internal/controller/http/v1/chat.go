@@ -1,10 +1,11 @@
-package handlers
+package v1
 
 import (
-	"9router-gateway/internal/models"
+	"9router-gateway/internal/entity"
 	"net/http"
 )
 
+// ChatPage renders the chat playground page.
 func (h *Handler) ChatPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	currentUser := GetUserFromContext(ctx)
@@ -16,7 +17,7 @@ func (h *Handler) ChatPage(w http.ResponseWriter, r *http.Request) {
 	// Filter models by whitelist if standard user
 	var availableModels []UpstreamModelItem
 	if currentUser != nil && !currentUser.IsAdmin() {
-		allowed := models.ParseAllowedModels(currentUser.AllowedModels)
+		allowed := entity.ParseAllowedModels(currentUser.AllowedModels)
 		isWildcard := len(allowed) == 1 && allowed[0] == "*"
 		for _, m := range allModels {
 			match := isWildcard

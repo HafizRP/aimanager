@@ -1,10 +1,11 @@
-package handlers
+package v1
 
 import (
 	"encoding/json"
 	"net/http"
 )
 
+// ProxyPoolsPage renders the proxy pool management page.
 func (h *Handler) ProxyPoolsPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	pools, err := h.coreClient.GetProxyPools(ctx)
@@ -18,6 +19,7 @@ func (h *Handler) ProxyPoolsPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// APIProxyPoolsCreate creates a proxy pool in 9router Core.
 func (h *Handler) APIProxyPoolsCreate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var payload map[string]interface{}
@@ -35,6 +37,7 @@ func (h *Handler) APIProxyPoolsCreate(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
 
+// APIProxyPoolsDelete deletes a proxy pool.
 func (h *Handler) APIProxyPoolsDelete(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := r.URL.Query().Get("id")
@@ -59,6 +62,7 @@ func (h *Handler) APIProxyPoolsDelete(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
 
+// APIProxyPoolsTest tests a proxy pool connection.
 func (h *Handler) APIProxyPoolsTest(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := r.URL.Query().Get("id")

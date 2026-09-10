@@ -1,3 +1,4 @@
+// Package upstream provides a client for the 9router Core management API.
 package upstream
 
 import (
@@ -18,6 +19,7 @@ import (
 	"9router-gateway/internal/config"
 )
 
+// CoreClient talks to the 9router Core HTTP API.
 type CoreClient struct {
 	cfg        *config.Config
 	httpClient *http.Client
@@ -25,6 +27,7 @@ type CoreClient struct {
 	cliToken   string
 }
 
+// NewCoreClient creates a CoreClient targeting the configured upstream.
 func NewCoreClient(cfg *config.Config) *CoreClient {
 	return &CoreClient{
 		cfg: cfg,
@@ -145,6 +148,7 @@ func (c *CoreClient) doRequest(ctx context.Context, method, endpoint string, req
 // Providers Management
 // -------------------------------------------------------------
 
+// ProviderConnection describes one configured upstream provider account.
 type ProviderConnection struct {
 	ID                   string                 `json:"id"`
 	Provider             string                 `json:"provider"`
@@ -161,6 +165,7 @@ type ProviderConnection struct {
 	ProviderSpecificData map[string]interface{} `json:"providerSpecificData,omitempty"`
 }
 
+// GetProviders lists all configured provider connections.
 func (c *CoreClient) GetProviders(ctx context.Context) ([]ProviderConnection, error) {
 	data, err := c.doRequest(ctx, http.MethodGet, "/api/providers", nil)
 	if err != nil {
@@ -176,6 +181,7 @@ func (c *CoreClient) GetProviders(ctx context.Context) ([]ProviderConnection, er
 	return result.Connections, nil
 }
 
+// ToggleProvider activates or deactivates a provider connection.
 func (c *CoreClient) ToggleProvider(ctx context.Context, id string, isActive bool) error {
 	payload := map[string]interface{}{
 		"isActive": isActive,
@@ -184,6 +190,7 @@ func (c *CoreClient) ToggleProvider(ctx context.Context, id string, isActive boo
 	return err
 }
 
+// SetProviderPriority updates the routing priority of a provider connection.
 func (c *CoreClient) SetProviderPriority(ctx context.Context, id string, priority int) error {
 	payload := map[string]interface{}{
 		"priority": priority,
@@ -192,6 +199,7 @@ func (c *CoreClient) SetProviderPriority(ctx context.Context, id string, priorit
 	return err
 }
 
+// TestProvider asks 9router Core to test connectivity for a provider connection.
 func (c *CoreClient) TestProvider(ctx context.Context, id string) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodPost, fmt.Sprintf("/api/providers/%s/test", id), nil)
 	if err != nil {
@@ -202,11 +210,13 @@ func (c *CoreClient) TestProvider(ctx context.Context, id string) (map[string]in
 	return res, nil
 }
 
+// DeleteProvider removes a provider connection by ID.
 func (c *CoreClient) DeleteProvider(ctx context.Context, id string) error {
 	_, err := c.doRequest(ctx, http.MethodDelete, fmt.Sprintf("/api/providers/%s", id), nil)
 	return err
 }
 
+// CreateProvider creates a new provider connection and returns its data.
 func (c *CoreClient) CreateProvider(ctx context.Context, payload map[string]interface{}) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodPost, "/api/providers", payload)
 	if err != nil {
@@ -221,6 +231,7 @@ func (c *CoreClient) CreateProvider(ctx context.Context, payload map[string]inte
 // Combos Management
 // -------------------------------------------------------------
 
+// Combo is a named group of models routable through the upstream.
 type Combo struct {
 	ID        string   `json:"id"`
 	Name      string   `json:"name"`
@@ -230,6 +241,7 @@ type Combo struct {
 	UpdatedAt string   `json:"updatedAt"`
 }
 
+// GetCombos lists all model combos.
 func (c *CoreClient) GetCombos(ctx context.Context) ([]Combo, error) {
 	data, err := c.doRequest(ctx, http.MethodGet, "/api/combos", nil)
 	if err != nil {
@@ -245,6 +257,7 @@ func (c *CoreClient) GetCombos(ctx context.Context) ([]Combo, error) {
 	return result.Combos, nil
 }
 
+// CreateCombo creates a new combo with the given name and model list.
 func (c *CoreClient) CreateCombo(ctx context.Context, name string, models []string) error {
 	payload := map[string]interface{}{
 		"name":   name,
@@ -254,6 +267,7 @@ func (c *CoreClient) CreateCombo(ctx context.Context, name string, models []stri
 	return err
 }
 
+// UpdateCombo updates the name and model list of an existing combo.
 func (c *CoreClient) UpdateCombo(ctx context.Context, id string, name string, models []string) error {
 	payload := map[string]interface{}{
 		"name":   name,
@@ -263,6 +277,7 @@ func (c *CoreClient) UpdateCombo(ctx context.Context, id string, name string, mo
 	return err
 }
 
+// DeleteCombo removes a combo by ID.
 func (c *CoreClient) DeleteCombo(ctx context.Context, id string) error {
 	_, err := c.doRequest(ctx, http.MethodDelete, fmt.Sprintf("/api/combos/%s", id), nil)
 	return err
@@ -272,6 +287,7 @@ func (c *CoreClient) DeleteCombo(ctx context.Context, id string) error {
 // Settings & Token Saver
 // -------------------------------------------------------------
 
+// GetSettings retrieves the current 9router Core settings.
 func (c *CoreClient) GetSettings(ctx context.Context) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodGet, "/api/settings", nil)
 	if err != nil {
@@ -284,6 +300,7 @@ func (c *CoreClient) GetSettings(ctx context.Context) (map[string]interface{}, e
 	return res, nil
 }
 
+// UpdateSettings applies partial updates to 9router Core settings.
 func (c *CoreClient) UpdateSettings(ctx context.Context, updates map[string]interface{}) error {
 	_, err := c.doRequest(ctx, http.MethodPost, "/api/settings", updates)
 	return err
@@ -293,6 +310,7 @@ func (c *CoreClient) UpdateSettings(ctx context.Context, updates map[string]inte
 // Model Aliases
 // -------------------------------------------------------------
 
+// GetModelAliases returns all model aliases as alias-to-model pairs.
 func (c *CoreClient) GetModelAliases(ctx context.Context) (map[string]string, error) {
 	data, err := c.doRequest(ctx, http.MethodGet, "/api/models/alias", nil)
 	if err != nil {
@@ -307,6 +325,7 @@ func (c *CoreClient) GetModelAliases(ctx context.Context) (map[string]string, er
 	return res.Aliases, nil
 }
 
+// SetModelAlias maps an alias to a model.
 func (c *CoreClient) SetModelAlias(ctx context.Context, alias, model string) error {
 	payload := map[string]string{
 		"alias": alias,
@@ -316,6 +335,7 @@ func (c *CoreClient) SetModelAlias(ctx context.Context, alias, model string) err
 	return err
 }
 
+// DeleteModelAlias removes an alias mapping.
 func (c *CoreClient) DeleteModelAlias(ctx context.Context, alias string) error {
 	ep := fmt.Sprintf("/api/models/alias?alias=%s", strings.TrimSpace(alias))
 	_, err := c.doRequest(ctx, http.MethodDelete, ep, nil)
@@ -326,6 +346,7 @@ func (c *CoreClient) DeleteModelAlias(ctx context.Context, alias string) error {
 // Proxy Pools
 // -------------------------------------------------------------
 
+// ProxyPool describes one configured upstream proxy pool.
 type ProxyPool struct {
 	ID         string                 `json:"id"`
 	IsActive   bool                   `json:"isActive"`
@@ -335,6 +356,7 @@ type ProxyPool struct {
 	UpdatedAt  string                 `json:"updatedAt"`
 }
 
+// GetProxyPools lists all configured proxy pools.
 func (c *CoreClient) GetProxyPools(ctx context.Context) ([]ProxyPool, error) {
 	data, err := c.doRequest(ctx, http.MethodGet, "/api/proxy-pools", nil)
 	if err != nil {
@@ -349,16 +371,19 @@ func (c *CoreClient) GetProxyPools(ctx context.Context) ([]ProxyPool, error) {
 	return res.ProxyPools, nil
 }
 
+// CreateProxyPool creates a new proxy pool.
 func (c *CoreClient) CreateProxyPool(ctx context.Context, payload map[string]interface{}) error {
 	_, err := c.doRequest(ctx, http.MethodPost, "/api/proxy-pools", payload)
 	return err
 }
 
+// DeleteProxyPool removes a proxy pool by ID.
 func (c *CoreClient) DeleteProxyPool(ctx context.Context, id string) error {
 	_, err := c.doRequest(ctx, http.MethodDelete, fmt.Sprintf("/api/proxy-pools/%s", id), nil)
 	return err
 }
 
+// TestProxyPool asks 9router Core to test connectivity for a proxy pool.
 func (c *CoreClient) TestProxyPool(ctx context.Context, id string) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodPost, fmt.Sprintf("/api/proxy-pools/%s/test", id), nil)
 	if err != nil {
