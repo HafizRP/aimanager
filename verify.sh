@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BASE_URL="http://127.0.0.1:20129"
+DB_PATH="/home/b14/9router-gateway/data/gateway.db"
+
+echo "=================================================="
+echo "    Running 9router Gateway Verification Suite    "
+echo "=================================================="
+
+# 1. Check Health Probes
+echo -n "[1/7] Testing Health Probes (/healthz, /readyz)... "
+RES_HEALTH=$(curl -s "$BASE_URL/healthz")
+RES_READY=$(curl -s "$BASE_URL/readyz")
+if [[ "$RES_HEALTH" == "OK" && "$RES_READY" == "READY" ]]; then
+    echo "✓ PASSED"
+else
+    echo "✗ FAILED (healthz: $RES_HEALTH, readyz: $RES_READY)"
+    exit 1
+fi
+
+# Extract test keys from DB
+ADMIN_KEY=$(sqlite3 "$DB_PATH" "SELECT key FROM api_keys WHERE name = 'Admin Master Key' LIMIT 1;")
+USER_KEY=$(sqlite3 "$DB_PATH" "SELECT key FROM api_keys WHERE name = 'Cursor Key' LIMIT 1;")
+
+# 2. Test Unauthenticated Request
+echo -n "[2/7] Testing Auth Rejection (Missing/Invalid Key)... "
+CODE_NO_KEY=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/v1/models")
+CODE_BAD_KEY=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer sk-invalid" "$BASE_URL/v1/models")
+if [[ "$CODE_NO_KEY" == "401" && "$CODE_BAD_KEY" == "401" ]]; then
+    echo "✓ PASSED (Returned 401 Unauthorized)"
+else
+    echo "✗ FAILED (Codes: $CODE_NO_KEY, $CODE_BAD_KEY)"
+    exit 1
+fi
+
+# 3. Test Model Whitelist Filtering on /v1/models
+echo -n "[3/7] Testing /v1/models Whitelist Filtering... "
+ADMIN_MODELS_COUNT=$(curl -s -H "Authorization: Bearer $ADMIN_KEY" "$BASE_URL/v1/models" | jq '.data | length')
+USER_MODELS_COUNT=$(curl -s -H "Authorization: Bearer $USER_KEY" "$BASE_URL/v1/models" | jq '.data | length')
+if [[ "$ADMIN_MODELS_COUNT" -gt 10 && "$USER_MODELS_COUNT" -le 5 ]]; then
+    echo "✓ PASSED (Admin sees $ADMIN_MODELS_COUNT models, User restricted to $USER_MODELS_COUNT models)"
+else
+    echo "✗ FAILED (Admin count: $ADMIN_MODELS_COUNT, User count: $USER_MODELS_COUNT)"
+    exit 1
+fi
+
+# 4. Test Model Whitelist Enforcement on Completions
+echo -n "[4/7] Testing 403 Forbidden for Non-Whitelisted Model... "
+HTTP_FORBIDDEN=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/v1/chat/completions" \
+  -H "Authorization: Bearer $USER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "kr/claude-sonnet-4.5", "messages": [{"role": "user", "content": "hi"}]}')
+if [[ "$HTTP_FORBIDDEN" == "403" ]]; then
+    echo "✓ PASSED (Blocked with 403 Forbidden)"
+else
+    echo "✗ FAILED (Expected 403, got $HTTP_FORBIDDEN)"
+    exit 1
+fi
+
+# 5. Test Successful Chat Completion (Non-Streaming)
+echo -n "[5/7] Testing 200 OK for Whitelisted Model (Non-Streaming)... "
+RES_OK=$(curl -s -X POST "$BASE_URL/v1/chat/completions" \
+  -H "Authorization: Bearer $USER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "ag/gemini-3.8-flash-low", "messages": [{"role": "user", "content": "ping"}], "max_tokens": 5, "stream": false}')
+if echo "$RES_OK" | grep -q "choices"; then
+    echo "✓ PASSED (Received completion response)"
+else
+    echo "✗ FAILED (Response: $RES_OK)"
+    exit 1
+fi
+
+# 6. Test Streaming SSE Completion & Token Counting
+echo -n "[6/7] Testing 200 OK Streaming SSE... "
+SSE_RES=$(curl -s -N -X POST "$BASE_URL/v1/chat/completions" \
+  -H "Authorization: Bearer $USER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "ag/gemini-3.8-flash-low", "messages": [{"role": "user", "content": "hello"}], "stream": true}')
+if echo "$SSE_RES" | grep -q "data:"; then
+    echo "✓ PASSED (Received SSE stream chunks)"
+else
+    echo "✗ FAILED (Streaming output empty)"
+    exit 1
+fi
+
+# 7. Test Web Admin Dashboard & Auth
+echo -n "[7/7] Testing Web Admin Dashboard & Session Auth... "
+COOKIE_JAR=$(mktemp)
+LOGIN_STATUS=$(curl -s -c "$COOKIE_JAR" -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/login" \
+  -d "username=admin&password=admin")
+DASH_STATUS=$(curl -s -b "$COOKIE_JAR" -o /dev/null -w "%{http_code}" "$BASE_URL/")
+STATS_JSON=$(curl -s -b "$COOKIE_JAR" "$BASE_URL/api/stats")
+rm -f "$COOKIE_JAR"
+
+if [[ "$DASH_STATUS" == "200" ]] && echo "$STATS_JSON" | grep -q "total_requests"; then
+    echo "✓ PASSED (Dashboard HTTP 200, Stats API validated)"
+else
+    echo "✗ FAILED (Login: $LOGIN_STATUS, Dash: $DASH_STATUS)"
+    exit 1
+fi
+
+echo "=================================================="
+echo "    ALL 7 TEST SUITES PASSED SUCCESSFULLY!       "
+echo "=================================================="

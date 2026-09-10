@@ -1,0 +1,146 @@
+{{ define "title" }}Request Logs - 9router Gateway{{ end }}
+
+{{ define "content" }}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+  <div>
+    <h4 class="fw-bold mb-1"><i class="bi bi-activity me-2 text-info"></i>Request Logs</h4>
+    <p class="text-muted small mb-0">Transparent real-time audit trail of all upstream LLM proxy calls, tokens, and errors.</p>
+  </div>
+  <div>
+    <a href="/logs" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-clockwise"></i> Refresh</a>
+  </div>
+</div>
+
+<!-- Filters Card -->
+<div class="card p-3 mb-4">
+  <form method="GET" action="/logs" class="row g-2 align-items-end">
+    <div class="col-md-3">
+      <label class="form-label small text-muted">Filter by User</label>
+      <select name="user_id" class="form-select form-select-sm">
+        <option value="">All Users</option>
+        {{ range .Users }}
+          <option value="{{ .ID }}" {{ if eq $.FilterUser .ID }}selected{{ end }}>{{ .Name }}</option>
+        {{ end }}
+      </select>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label small text-muted">Filter by Model</label>
+      <input type="text" name="model" class="form-control form-control-sm" placeholder="e.g. gemini, claude" value="{{ .FilterModel }}">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label small text-muted">Status Code</label>
+      <select name="status" class="form-select form-select-sm">
+        <option value="0" {{ if eq $.FilterStatus 0 }}selected{{ end }}>All Statuses</option>
+        <option value="200" {{ if eq $.FilterStatus 200 }}selected{{ end }}>200 OK</option>
+        <option value="403" {{ if eq $.FilterStatus 403 }}selected{{ end }}>403 Forbidden (Blocked Model)</option>
+        <option value="429" {{ if eq $.FilterStatus 429 }}selected{{ end }}>429 Too Many Requests (Quota)</option>
+        <option value="502" {{ if eq $.FilterStatus 502 }}selected{{ end }}>502 Bad Gateway</option>
+      </select>
+    </div>
+    <div class="col-md-3 d-flex gap-2">
+      <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-funnel"></i> Apply Filter</button>
+      <a href="/logs" class="btn btn-outline-secondary btn-sm">Reset</a>
+    </div>
+  </form>
+</div>
+
+<!-- Logs Table -->
+<div class="card p-3 mb-4">
+  <div class="table-responsive">
+    <table class="table table-dark table-hover mb-0">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>User & Key</th>
+          <th>Model</th>
+          <th>Endpoint</th>
+          <th>Type</th>
+          <th>Tokens (Prompt/Comp/Total)</th>
+          <th>Status</th>
+          <th>Duration</th>
+          <th>Client IP</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{ if .Logs }}
+          {{ range .Logs }}
+            <tr>
+              <td class="text-muted font-monospace small">{{ formatDate .CreatedAt }}</td>
+              <td>
+                <div class="fw-bold text-light small">{{ .UserName }}</div>
+                <span class="badge bg-secondary-subtle text-secondary small" style="font-size: 0.7rem;">{{ .KeyName }}</span>
+              </td>
+              <td>
+                {{ if .Model }}
+                  <span class="model-pill">{{ .Model }}</span>
+                {{ else }}
+                  <span class="text-muted small">-</span>
+                {{ end }}
+              </td>
+              <td class="font-monospace small text-muted">
+                <span class="text-info">{{ .Method }}</span> {{ .Path }}
+              </td>
+              <td>
+                {{ if .IsStream }}
+                  <span class="badge bg-info-subtle text-info"><i class="bi bi-lightning-charge"></i> Stream</span>
+                {{ else }}
+                  <span class="badge bg-secondary-subtle text-secondary">JSON</span>
+                {{ end }}
+              </td>
+              <td class="font-monospace small">
+                {{ if gt .TotalTokens 0 }}
+                  <span class="text-muted">{{ .PromptTokens }}</span> / 
+                  <span class="text-muted">{{ .CompletionTokens }}</span> / 
+                  <span class="text-light fw-bold">{{ formatNumber (toInt64 .TotalTokens) }}</span>
+                {{ else }}
+                  <span class="text-muted">0</span>
+                {{ end }}
+              </td>
+              <td>
+                {{ if eq .StatusCode 200 }}
+                  <span class="badge bg-success-subtle text-success">200 OK</span>
+                {{ else if eq .StatusCode 403 }}
+                  <span class="badge bg-warning-subtle text-warning" data-bs-toggle="tooltip" title="{{ .ErrorMessage }}">403 Model Blocked</span>
+                {{ else if eq .StatusCode 429 }}
+                  <span class="badge bg-danger-subtle text-danger" data-bs-toggle="tooltip" title="{{ .ErrorMessage }}">429 Quota Limit</span>
+                {{ else }}
+                  <span class="badge bg-danger-subtle text-danger" data-bs-toggle="tooltip" title="{{ .ErrorMessage }}">{{ .StatusCode }}</span>
+                {{ end }}
+              </td>
+              <td class="text-muted small font-monospace">{{ .DurationMs }}ms</td>
+              <td class="text-muted small font-monospace">{{ .ClientIP }}</td>
+            </tr>
+          {{ end }}
+        {{ else }}
+          <tr>
+            <td colspan="9" class="text-center text-muted py-4">
+              <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+              No logs matched your criteria.
+            </td>
+          </tr>
+        {{ end }}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination Controls -->
+  <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top border-secondary border-opacity-25 small text-muted">
+    <div>
+      Showing {{ len .Logs }} of {{ .TotalCount }} entries
+    </div>
+    <div class="d-flex gap-2">
+      {{ if gt .CurrentPage 1 }}
+        <a href="/logs?page={{ sub .CurrentPage 1 }}&user_id={{ .FilterUser }}&model={{ .FilterModel }}&status={{ .FilterStatus }}" class="btn btn-sm btn-outline-secondary">
+          &larr; Previous
+        </a>
+      {{ end }}
+      <span class="btn btn-sm btn-dark disabled">Page {{ .CurrentPage }}</span>
+      {{ if .HasNextPage }}
+        <a href="/logs?page={{ add .CurrentPage 1 }}&user_id={{ .FilterUser }}&model={{ .FilterModel }}&status={{ .FilterStatus }}" class="btn btn-sm btn-outline-secondary">
+          Next &rarr;
+        </a>
+      {{ end }}
+    </div>
+  </div>
+</div>
+{{ end }}

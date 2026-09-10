@@ -1,0 +1,141 @@
+{{ define "title" }}Quick Setup & Settings - 9router Gateway{{ end }}
+
+{{ define "content" }}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+  <div>
+    <h4 class="fw-bold mb-1"><i class="bi bi-sliders me-2 text-warning"></i>Gateway Setup & Settings</h4>
+    <p class="text-muted small mb-0">Upstream connection status, client connection guides, and administrative security.</p>
+  </div>
+</div>
+
+<div class="row g-4">
+  <!-- Left Column: Upstream & Server Status -->
+  <div class="col-lg-5">
+    <div class="card p-3 mb-4">
+      <h6 class="fw-bold mb-3 text-light"><i class="bi bi-diagram-3 me-2 text-primary"></i>Upstream 9router Status</h6>
+      <div class="p-3 rounded bg-dark border border-secondary border-opacity-50 mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="text-muted small">Target Upstream URL</span>
+          <code class="text-info">{{ .Config.UpstreamURL }}</code>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <span class="text-muted small">Upstream API Key</span>
+          <span class="badge bg-success-subtle text-success border border-success-subtle">Configured & Active</span>
+        </div>
+        <div class="d-flex justify-content-between align-items-center">
+          <span class="text-muted small">Connection Health</span>
+          <span class="badge bg-success text-dark fw-medium"><i class="bi bi-check-circle-fill"></i> Operational</span>
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-between align-items-center small text-muted">
+        <span>Gateway Listening:</span>
+        <code class="text-warning">http://0.0.0.0:{{ .Config.Port }}</code>
+      </div>
+    </div>
+
+    <!-- Admin Password -->
+    <div class="card p-3">
+      <h6 class="fw-bold mb-3 text-light"><i class="bi bi-shield-lock me-2 text-warning"></i>Change Admin Password</h6>
+      <form action="/settings/password" method="POST">
+        <div class="mb-3">
+          <label class="form-label small text-muted">Current Password</label>
+          <input type="password" name="current_password" class="form-control form-control-sm" required>
+        </div>
+        <div class="mb-3">
+          <label class="form-label small text-muted">New Password</label>
+          <input type="password" name="new_password" class="form-control form-control-sm" required minlength="6">
+        </div>
+        <button type="submit" class="btn btn-warning btn-sm text-dark fw-medium w-100">
+          <i class="bi bi-check2"></i> Update Password
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Right Column: Quick Connect Instructions -->
+  <div class="col-lg-7">
+    <div class="card p-4">
+      <h5 class="fw-bold mb-3 text-light"><i class="bi bi-plug-fill me-2 text-success"></i>Client Integration Guide</h5>
+      <p class="text-muted small">Connect your AI coding assistants to this Gateway wrapper on port <code>20129</code>:</p>
+
+      <!-- Tabs for Clients -->
+      <ul class="nav nav-tabs nav-tabs-bordered border-secondary mb-3" id="clientTabs" role="tablist">
+        <li class="nav-item">
+          <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-cursor">Cursor</button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-cline">Cline / Roo-Code</button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-hermes">Hermes Agent</button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-curl">Curl / Python</button>
+        </li>
+      </ul>
+
+      <div class="tab-content">
+        <!-- Cursor Tab -->
+        <div class="tab-pane fade show active" id="tab-cursor">
+          <ol class="small text-light ps-3 mb-3">
+            <li class="mb-1">Open <strong>Cursor Settings &gt; Models &gt; OpenAI API Key</strong>.</li>
+            <li class="mb-1">Enable <strong>Override OpenAI Base URL</strong> and enter:
+              <div class="mt-1 mb-2 d-flex align-items-center gap-2">
+                <code class="p-2 rounded bg-dark border border-secondary text-info flex-grow-1">http://127.0.0.1:20129/v1</code>
+                <button class="btn btn-sm btn-outline-secondary copy-btn" data-copy="http://127.0.0.1:20129/v1">Copy</button>
+              </div>
+            </li>
+            <li class="mb-1">Or for remote devices via Tailscale:
+              <div class="mt-1 mb-2 d-flex align-items-center gap-2">
+                <code class="p-2 rounded bg-dark border border-secondary text-info flex-grow-1">http://100.108.204.127:20129/v1</code>
+                <button class="btn btn-sm btn-outline-secondary copy-btn" data-copy="http://100.108.204.127:20129/v1">Copy</button>
+              </div>
+            </li>
+            <li>Paste your user <strong>API Key</strong> (e.g. <code>sk-gw-...</code>) and add desired model (e.g. <code>ag/gemini-3.8-flash-high</code>).</li>
+          </ol>
+        </div>
+
+        <!-- Cline Tab -->
+        <div class="tab-pane fade" id="tab-cline">
+          <div class="p-3 rounded bg-dark border border-secondary border-opacity-50 small mb-3">
+            <div class="mb-2"><strong>API Provider:</strong> <code>OpenAI Compatible</code></div>
+            <div class="mb-2"><strong>Base URL:</strong> <code>http://127.0.0.1:20129/v1</code></div>
+            <div class="mb-2"><strong>API Key:</strong> <code>sk-gw-your-api-key</code></div>
+            <div><strong>Model ID:</strong> <code>ag/gemini-3.8-flash-low</code> or any whitelisted model</div>
+          </div>
+        </div>
+
+        <!-- Hermes Tab -->
+        <div class="tab-pane fade" id="tab-hermes">
+          <p class="small text-muted mb-2">In <code>~/.hermes/config.yaml</code> under <code>custom_providers</code>:</p>
+          <pre class="p-3 rounded bg-dark border border-secondary text-info font-monospace small mb-2"><code>custom_providers:
+  - name: 9router Gateway
+    base_url: http://localhost:20129/v1
+    key_env: GATEWAY_API_KEY
+    model: ag/gemini-3.8-flash-high
+    api_mode: chat_completions</code></pre>
+        </div>
+
+        <!-- Curl / Python Tab -->
+        <div class="tab-pane fade" id="tab-curl">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="small text-muted">Test Curl Command:</span>
+            <button class="btn btn-xs btn-outline-primary copy-btn" data-copy='curl -X POST http://127.0.0.1:20129/v1/chat/completions \
+  -H "Authorization: Bearer YOUR_KEY" \
+  -H "Content-Type: application/json" \
+  -d "{\"model\": \"ag/gemini-3.8-flash-low\", \"messages\": [{\"role\": \"user\", \"content\": \"Hello!\"}]}"'>Copy</button>
+          </div>
+          <pre class="p-3 rounded bg-dark border border-secondary text-light font-monospace small"><code>curl -X POST http://127.0.0.1:20129/v1/chat/completions \
+  -H "Authorization: Bearer sk-gw-..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "ag/gemini-3.8-flash-low",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'</code></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{{ end }}

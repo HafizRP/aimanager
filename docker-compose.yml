@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  gateway:
+    build: .
+    container_name: 9router_gateway
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - PORT=20129
+      - HOST=0.0.0.0
+      - UPSTREAM_URL=http://127.0.0.1:20128
+      - DB_PATH=/app/data/gateway.db
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data

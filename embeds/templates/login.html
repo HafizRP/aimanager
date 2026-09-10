@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - 9router Gateway</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/static/css/custom.css" rel="stylesheet">
+</head>
+<body class="d-flex align-items-center justify-content-center" style="min-height: 100vh;">
+  <div class="card p-4 shadow-lg border-secondary border-opacity-50" style="max-width: 420px; width: 100%;">
+    <div class="text-center mb-4">
+      <div class="stat-icon-wrapper bg-primary bg-opacity-25 text-primary mx-auto mb-3" style="width: 56px; height: 56px; font-size: 1.8rem;">
+        <i class="bi bi-hdd-network-fill"></i>
+      </div>
+      <h4 class="fw-bold mb-1">9router Gateway</h4>
+      <p class="text-muted small mb-0">Reverse Proxy & API Middleware Manager</p>
+    </div>
+
+    {{ if .ErrorMsg }}
+      <div class="alert alert-danger py-2 small d-flex align-items-center gap-2 mb-3">
+        <i class="bi bi-exclamation-circle-fill"></i> {{ .ErrorMsg }}
+      </div>
+    {{ end }}
+
+    <form method="POST" action="/login">
+      <div class="mb-3">
+        <label class="form-label small text-muted">Admin Username</label>
+        <div class="input-group">
+          <span class="input-group-text bg-dark border-secondary"><i class="bi bi-person text-muted"></i></span>
+          <input type="text" name="username" class="form-control" placeholder="admin" required autofocus value="admin">
+        </div>
+      </div>
+
+      <div class="mb-4">
+        <label class="form-label small text-muted">Admin Password</label>
+        <div class="input-group">
+          <span class="input-group-text bg-dark border-secondary"><i class="bi bi-lock text-muted"></i></span>
+          <input type="password" name="password" class="form-control" placeholder="••••••••" required>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary w-100 py-2 fw-medium d-flex align-items-center justify-content-center gap-2">
+        <i class="bi bi-box-arrow-in-right"></i> Sign In to Dashboard
+      </button>
+    </form>
+
+    <div class="text-center mt-4">
+      <span class="badge bg-dark border border-secondary text-muted small">Port :20129</span>
+    </div>
+  </div>
+</body>
+</html>
