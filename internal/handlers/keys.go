@@ -81,17 +81,34 @@ func (h *Handler) CreateKey(w http.ResponseWriter, r *http.Request) {
 	allowedModelsRaw := strings.TrimSpace(r.FormValue("allowed_models"))
 	rateLimitRPM, _ := strconv.Atoi(r.FormValue("rate_limit_rpm"))
 
+	redirectURL := safeRedirectURL(r.FormValue("redirect"), "/keys")
+
 	if userID == "" {
-		http.Redirect(w, r, "/keys?error=User+must+be+selected", http.StatusSeeOther)
+		http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape("User must be selected"), http.StatusSeeOther)
 		return
 	}
 	if name == "" {
 		name = "API Key"
 	}
+	if len(name) > 64 {
+		name = name[:64]
+	}
+	if rateLimitRPM < 0 {
+		rateLimitRPM = 0
+	}
 
 	finalKey := customKey
 	if finalKey == "" {
 		finalKey = GenerateSecureAPIKey("sk-gw-")
+	} else {
+		if len(finalKey) < 8 || len(finalKey) > 128 {
+			http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape("Custom key must be between 8 and 128 characters"), http.StatusSeeOther)
+			return
+		}
+		if existing, _ := h.repo.GetAPIKeyByKey(ctx, finalKey); existing != nil {
+			http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape("API key already exists"), http.StatusSeeOther)
+			return
+		}
 	}
 
 	allowedModels := ""
@@ -122,11 +139,6 @@ func (h *Handler) CreateKey(w http.ResponseWriter, r *http.Request) {
 		IsActive:      true,
 	}
 
-	redirectURL := r.FormValue("redirect")
-	if redirectURL == "" {
-		redirectURL = "/keys"
-	}
-
 	if err := h.repo.CreateAPIKey(ctx, apiKey); err != nil {
 		http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
@@ -142,7 +154,7 @@ func (h *Handler) CreateKey(w http.ResponseWriter, r *http.Request) {
 		_ = h.syncer.SyncKey(apiKey, uName)
 	}
 
-	http.Redirect(w, r, redirectURL+"?msg=Key+created+successfully!+Token:+"+finalKey, http.StatusSeeOther)
+	http.Redirect(w, r, redirectURL+"?msg="+url.QueryEscape("Key created successfully! Token: "+finalKey), http.StatusSeeOther)
 }
 
 func (h *Handler) ToggleKeyStatus(w http.ResponseWriter, r *http.Request) {
@@ -150,12 +162,9 @@ func (h *Handler) ToggleKeyStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	currentUser := GetUserFromContext(ctx)
 
-	redirectURL := r.URL.Query().Get("redirect")
+	redirectURL := safeRedirectURL(r.URL.Query().Get("redirect"), "")
 	if redirectURL == "" {
-		redirectURL = r.FormValue("redirect")
-	}
-	if redirectURL == "" {
-		redirectURL = "/keys"
+		redirectURL = safeRedirectURL(r.FormValue("redirect"), "/keys")
 	}
 
 	// Find key to toggle
@@ -207,12 +216,9 @@ func (h *Handler) DeleteKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	currentUser := GetUserFromContext(ctx)
 
-	redirectURL := r.URL.Query().Get("redirect")
+	redirectURL := safeRedirectURL(r.URL.Query().Get("redirect"), "")
 	if redirectURL == "" {
-		redirectURL = r.FormValue("redirect")
-	}
-	if redirectURL == "" {
-		redirectURL = "/keys"
+		redirectURL = safeRedirectURL(r.FormValue("redirect"), "/keys")
 	}
 
 	keys, err := h.repo.GetAllAPIKeys(ctx)

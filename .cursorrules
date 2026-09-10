@@ -1,0 +1,36 @@
+# Cursor Rules for AI Manager (9router-gateway)
+
+## Project Overview
+AI Manager is a high-performance Go reverse proxy, authentication gateway, and admin dashboard positioned in front of 9router Core (127.0.0.1:20128).
+
+## Go Standards
+- Target Go 1.22+ conventions.
+- Always run `go fmt ./...` and `go vet ./...` clean.
+- Use `zerolog` (`github.com/rs/zerolog/log`) for structured logging. Avoid `log.Println` or bare `fmt.Println` in production code.
+- Always wrap errors with `%w`: `fmt.Errorf("action failed: %w", err)`.
+- Always pass `r.Context()` to repository methods, database queries, and outbound HTTP requests.
+
+## SQLite & Repository
+- SQLite driver is `modernc.org/sqlite` (pure Go).
+- Always use WAL mode and busy timeout pragma:
+  `_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)`.
+- ALWAYS use parameterized queries with `?`. Never format user input directly into SQL strings.
+- Add new schema changes to `migrate()` in `internal/database/db.go`.
+
+## Reverse Proxy & SSE Streaming
+- Do not set a write timeout on `http.Server` (must be `WriteTimeout: 0`) to avoid terminating long-running SSE LLM completions.
+- In SSE streaming proxy logic, flush chunks immediately via `http.Flusher`.
+- Intercept token usage from SSE stream lines (`data: {"usage": ...}`) or calculate heuristic token approximations on completion.
+- Exact match cache uses SHA-256 hash of model + messages + temperature with 15m TTL.
+
+## Auth & Security
+- Never expose port 20128 (9router Core) to the public network; only bind to 127.0.0.1.
+- API keys must be generated using `handlers.GenerateSecureAPIKey("sk-gw-...")`.
+- Password hashes use `bcrypt` with cost 12.
+- Session tokens are 64-character random hex strings stored server-side in the SQLite `sessions` table.
+- Enforce role boundaries: `admin` vs `user`.
+
+## Templates & Web UI
+- HTML templates live in `web/templates/` and inherit from `base.html`.
+- Render with `h.render(w, r, "page.html", "base.html", data)`.
+- Static files live in `web/static/` and are embedded via `embed.FS` in `web/web.go`.

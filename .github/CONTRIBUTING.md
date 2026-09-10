@@ -7,19 +7,32 @@ This repository follows AI-ready conventions for seamless integration with codin
 ```
 aimanager/
 ├── README.md                 # Comprehensive documentation
+├── Makefile                  # Developer task automation
+├── cmd/
+│   └── gateway/
+│       └── main.go          # Application entry point
 ├── docs/
 │   ├── API.md               # API reference
+│   ├── ARCHITECTURE.md      # Architecture documentation
 │   └── SETUP.md             # Deployment guide
 ├── internal/                 # Go internal packages
+│   ├── alerts/              # Notification integrations
+│   ├── billing/             # Payment processing (Midtrans)
+│   ├── config/              # Configuration loader
+│   ├── database/            # SQLite initialization & migrations
 │   ├── handlers/            # HTTP handlers
-│   ├── models/              # Data models
-│   ├── proxy/               # Reverse proxy engine
+│   ├── models/              # Data models & domain logic
+│   ├── proxy/               # Reverse proxy engine, cache, ratelimit
 │   ├── repository/          # SQLite data layer
 │   ├── syncer/              # Background key sync
 │   ├── upstream/            # 9router Core client
 │   └── worker/              # Background daemons
-├── embeds/templates/        # HTML templates (Go embed)
-├── main.go                  # Application entry point
+├── web/                     # Web application assets (standard web layout)
+│   ├── web.go               # Go embed FS definition
+│   ├── static/              # CSS, JS static assets
+│   └── templates/           # HTML templates
+├── scripts/
+│   └── verify.sh            # Verification test suite
 ├── docker-compose.yml       # Unified stack definition
 ├── Dockerfile               # Gateway container build
 ├── .env.example             # Configuration template
@@ -63,16 +76,23 @@ custom_providers:
 
 ```bash
 # Build binary
-go build -ldflags="-w -s" -o 9router-gateway .
+go build -ldflags="-w -s" -o bin/9router-gateway ./cmd/gateway
+# Or with make
+make build
 
 # Run locally
-./9router-gateway
+go run ./cmd/gateway
+# Or with binary
+./bin/9router-gateway
 
 # Docker deployment
 docker compose up -d --build
 
 # Run tests
 go test ./...
+
+# Run verification suite
+./scripts/verify.sh
 
 # Database inspection
 sqlite3 data/gateway.db ".schema"

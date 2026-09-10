@@ -1,4 +1,42 @@
 function initApp() {
+  // CSRF Protection Handler: Attach CSRF token to same-origin non-GET fetch requests and forms
+  const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+  const csrfToken = csrfMeta ? csrfMeta.getAttribute('content') : '';
+  if (csrfToken) {
+    const originalFetch = window.fetch;
+    window.fetch = function (url, options = {}) {
+      const method = (options.method || 'GET').toUpperCase();
+      if (method !== 'GET' && method !== 'HEAD') {
+        const isSameOrigin = typeof url === 'string' && (url.startsWith('/') || url.startsWith(window.location.origin));
+        if (isSameOrigin) {
+          if (!options.headers) {
+            options.headers = {};
+          }
+          if (options.headers instanceof Headers) {
+            if (!options.headers.has('X-CSRF-Token')) {
+              options.headers.set('X-CSRF-Token', csrfToken);
+            }
+          } else if (Array.isArray(options.headers)) {
+            options.headers.push(['X-CSRF-Token', csrfToken]);
+          } else {
+            options.headers['X-CSRF-Token'] = options.headers['X-CSRF-Token'] || csrfToken;
+          }
+        }
+      }
+      return originalFetch(url, options);
+    };
+
+    document.querySelectorAll('form').forEach(form => {
+      if ((form.method || '').toUpperCase() === 'POST' && !form.querySelector('input[name="csrf_token"]')) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'csrf_token';
+        input.value = csrfToken;
+        form.appendChild(input);
+      }
+    });
+  }
+
   // Initialize Bootstrap Tooltips
   if (typeof bootstrap !== 'undefined') {
     const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));

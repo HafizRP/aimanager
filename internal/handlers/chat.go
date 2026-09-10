@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"9router-gateway/internal/models"
 	"net/http"
 )
 
@@ -15,7 +16,7 @@ func (h *Handler) ChatPage(w http.ResponseWriter, r *http.Request) {
 	// Filter models by whitelist if standard user
 	var availableModels []UpstreamModelItem
 	if currentUser != nil && !currentUser.IsAdmin() {
-		allowed := parseAllowedModels(currentUser.AllowedModels)
+		allowed := models.ParseAllowedModels(currentUser.AllowedModels)
 		isWildcard := len(allowed) == 1 && allowed[0] == "*"
 		for _, m := range allModels {
 			match := isWildcard
@@ -55,10 +56,10 @@ func (h *Handler) ChatPage(w http.ResponseWriter, r *http.Request) {
 	currentBaseURL := h.deriveCurrentBaseURL(r)
 
 	h.render(w, r, "chat.html", "base.html", map[string]interface{}{
-		"ActivePage":      "chat",
-		"Models":          availableModels,
-		"Combos":          combos,
-		"UserKey":         userKey,
-		"CurrentBaseURL":  currentBaseURL,
+		"ActivePage":     "chat",
+		"Models":         availableModels,
+		"Combos":         combos,
+		"UserKey":        userKey,
+		"CurrentBaseURL": currentBaseURL,
 	})
 }

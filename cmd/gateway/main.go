@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io/fs"
-	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -18,8 +17,9 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 
-	"9router-gateway/embeds"
 	"9router-gateway/internal/config"
 	"9router-gateway/internal/database"
 	"9router-gateway/internal/handlers"
@@ -29,45 +29,62 @@ import (
 	"9router-gateway/internal/syncer"
 	"9router-gateway/internal/upstream"
 	"9router-gateway/internal/worker"
+	"9router-gateway/web"
 )
 
 func main() {
-	// 1. Logger
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
-	slog.SetDefault(logger)
+	// 1. Logger Setup (Zerolog)
+	zerolog.TimeFieldFormat = time.RFC3339
+	if os.Getenv("LOG_FORMAT") != "json" {
+		log.Logger = log.Output(zerolog.ConsoleWriter{
+			Out:        os.Stdout,
+			TimeFormat: "2006-01-02 15:04:05",
+		})
+	}
 
-	slog.Info("Starting AI Manager Gateway Middleware...")
+	log.Info().Msg("Starting AI Manager Gateway Middleware...")
 
 	// 2. Load Config
 	cfg := config.LoadConfig()
-	slog.Info("Configuration loaded",
-		"port", cfg.Port,
-		"upstream_url", cfg.UpstreamURL,
-		"db_path", cfg.DBPath,
-	)
+	log.Info().
+		Int("port", cfg.Port).
+		Str("upstream_url", cfg.UpstreamURL).
+		Str("db_path", cfg.DBPath).
+		Msg("Configuration loaded")
 
 	// 3. Init Database
 	db, err := database.InitDB(cfg.DBPath)
 	if err != nil {
-		slog.Error("Failed to initialize database", "err", err)
+		log.Error().Err(err).Msg("Failed to initialize database")
 		os.Exit(1)
 	}
 	defer db.Close()
-	slog.Info("SQLite database initialized successfully")
+	log.Info().Msg("SQLite database initialized successfully")
 
 	repo := repository.NewSQLiteRepo(db)
 
-	// Load runtime settings from database if configured
-	if uURL, err := repo.GetSetting(context.Background(), "upstream_url"); err == nil && uURL != "" {
-		cfg.UpstreamURL = uURL
+	// Load Upstream 9router Core settings directly from database
+	if uURL, err := repo.GetSetting(context.Background(), "upstream_url"); err == nil && strings.TrimSpace(uURL) != "" {
+		cfg.SetUpstreamURL(uURL)
+		log.Info().Str("upstream_url", cfg.GetUpstreamURL()).Msg("Loaded upstream URL from database")
+	} else {
+		cfg.SetUpstreamURL("http://127.0.0.1:20128")
+		_ = repo.SaveSetting(context.Background(), "upstream_url", cfg.GetUpstreamURL())
 	}
-	if uKey, err := repo.GetSetting(context.Background(), "upstream_api_key"); err == nil && uKey != "" {
-		cfg.UpstreamAPIKey = uKey
+
+	if uKey, err := repo.GetSetting(context.Background(), "upstream_api_key"); err == nil {
+		cfg.SetUpstreamAPIKey(uKey)
 	}
-	if nrDB, err := repo.GetSetting(context.Background(), "ninerouter_db_path"); err == nil && nrDB != "" {
-		cfg.NineRouterDBPath = nrDB
+
+	if nrDB, err := repo.GetSetting(context.Background(), "ninerouter_db_path"); err == nil && strings.TrimSpace(nrDB) != "" {
+		cfg.SetNineRouterDBPath(nrDB)
+	} else {
+		cfg.SetNineRouterDBPath("./data/core/db/data.sqlite")
+		_ = repo.SaveSetting(context.Background(), "ninerouter_db_path", cfg.GetNineRouterDBPath())
+	}
+
+	if nrDataDir, err := repo.GetSetting(context.Background(), "ninerouter_data_dir"); err == nil && nrDataDir != "" {
+		cfg.NineRouterDataDir = nrDataDir
 	}
 	if mServer, err := repo.GetSetting(context.Background(), "midtrans_server_key"); err == nil && mServer != "" {
 		cfg.MidtransServerKey = mServer
@@ -82,10 +99,23 @@ func main() {
 		cfg.MidtransIsProduction = (mProd == "true")
 	}
 
-	keySyncer := syncer.NewSyncer(cfg.NineRouterDBPath)
+	// Ensure strong, persistent session secret
+	if cfg.SessionSecret == "" || cfg.SessionSecret == "9router-secret-token-key-change-me" {
+		if storedSecret, err := repo.GetSetting(context.Background(), "session_secret"); err == nil && storedSecret != "" {
+			cfg.SessionSecret = storedSecret
+		} else {
+			secretBytes := make([]byte, 32)
+			_, _ = rand.Read(secretBytes)
+			cfg.SessionSecret = hex.EncodeToString(secretBytes)
+			_ = repo.SaveSetting(context.Background(), "session_secret", cfg.SessionSecret)
+			log.Info().Msg("Generated and persisted secure random session secret")
+		}
+	}
+
+	keySyncer := syncer.NewSyncer(cfg.GetNineRouterDBPath())
 
 	// 4. Seed initial user and API key if table is empty
-	seedInitialData(repo, keySyncer)
+	seedInitialData(repo, keySyncer, cfg)
 
 	// Reconcile username and password hashes for existing users
 	reconcileExistingUsers(repo, cfg)
@@ -93,9 +123,9 @@ func main() {
 	// 5. Backfill/Sync all keys to 9router Core
 	if existingKeys, err := repo.GetAllAPIKeys(context.Background()); err == nil && len(existingKeys) > 0 {
 		if err := keySyncer.BackfillAll(existingKeys); err != nil {
-			slog.Warn("Failed to backfill keys to 9router", "err", err)
+			log.Warn().Err(err).Msg("Failed to backfill keys to 9router")
 		} else {
-			slog.Info("Successfully synchronized API keys with 9router core", "count", len(existingKeys))
+			log.Info().Int("count", len(existingKeys)).Msg("Successfully synchronized API keys with 9router core")
 		}
 	}
 
@@ -103,7 +133,7 @@ func main() {
 	quotaMgr := upstream.NewQuotaManager(cfg)
 	h, err := handlers.NewHandler(cfg, repo, keySyncer, quotaMgr)
 	if err != nil {
-		slog.Error("Failed to initialize web handlers", "err", err)
+		log.Error().Err(err).Msg("Failed to initialize web handlers")
 		os.Exit(1)
 	}
 
@@ -115,7 +145,34 @@ func main() {
 	// Middlewares
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
-	r.Use(middleware.Logger)
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+			t1 := time.Now()
+			defer func() {
+				// Don't clutter logs with frequent health probes unless verbose
+				if r.URL.Path == "/healthz" || r.URL.Path == "/readyz" {
+					return
+				}
+				status := ww.Status()
+				event := log.Info()
+				if status >= 500 {
+					event = log.Error()
+				} else if status >= 400 {
+					event = log.Warn()
+				}
+				event.
+					Str("method", r.Method).
+					Str("path", r.URL.Path).
+					Int("status", status).
+					Int("bytes", ww.BytesWritten()).
+					Dur("latency", time.Since(t1)).
+					Str("ip", r.RemoteAddr).
+					Msg("HTTP Request")
+			}()
+			next.ServeHTTP(ww, r)
+		})
+	})
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.GetHead)
 
@@ -156,7 +213,7 @@ func main() {
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "x-api-key"},
-		AllowCredentials: true,
+		AllowCredentials: false,
 		MaxAge:           300,
 	}))
 
@@ -174,8 +231,8 @@ func main() {
 		w.Write([]byte("READY"))
 	})
 
-	// Static Assets from embeds
-	staticFS, err := fs.Sub(embeds.FS, "static")
+	// Static Assets from web/static
+	staticFS, err := fs.Sub(web.FS, "static")
 	if err == nil {
 		r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
 	}
@@ -193,6 +250,7 @@ func main() {
 	// 9. Protected Web Dashboard Routes (Accessible by Authenticated Users)
 	r.Group(func(authRouter chi.Router) {
 		authRouter.Use(h.RequireAuth)
+		authRouter.Use(h.ValidateCSRF)
 
 		// Shared: Dashboard, Keys (self-scoped for user), Logs (self-scoped for user), Models (whitelist-scoped for user)
 		authRouter.Get("/", h.DashboardPage)
@@ -283,6 +341,18 @@ func main() {
 	keeper := worker.NewProviderKeeper(cfg, coreClient, quotaMgr)
 	go keeper.Start()
 
+	// 9.6 Background Cleanup Daemon (expired sessions and old login attempts)
+	go func() {
+		ticker := time.NewTicker(15 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			cleanCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			_ = repo.CleanExpiredSessions(cleanCtx)
+			_ = repo.CleanOldLoginAttempts(cleanCtx)
+			cancel()
+		}
+	}()
+
 	// 10. Start Server with Graceful Shutdown
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	server := &http.Server{
@@ -294,9 +364,9 @@ func main() {
 	}
 
 	go func() {
-		slog.Info("AI Manager Gateway listening", "address", "http://"+addr)
+		log.Info().Str("address", "http://"+addr).Msg("AI Manager Gateway listening")
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("HTTP server failed", "err", err)
+			log.Error().Err(err).Msg("HTTP server failed")
 			os.Exit(1)
 		}
 	}()
@@ -306,31 +376,46 @@ func main() {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
 
-	slog.Info("Shutting down server gracefully...")
+	log.Info().Msg("Shutting down server gracefully...")
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := server.Shutdown(shutdownCtx); err != nil {
-		slog.Error("Server forced to shutdown", "err", err)
+		log.Error().Err(err).Msg("Server forced to shutdown")
 	}
 
-	slog.Info("9router Gateway exited cleanly")
+	log.Info().Msg("9router Gateway exited cleanly")
 }
 
-func seedInitialData(repo repository.Repository, sync *syncer.Syncer) {
+func seedInitialData(repo repository.Repository, sync *syncer.Syncer, cfg *config.Config) {
 	ctx := context.Background()
 	users, err := repo.GetAllUsers(ctx)
 	if err != nil || len(users) > 0 {
 		return
 	}
 
-	slog.Info("No users found. Creating default admin and demo user...")
+	log.Info().Msg("No users found. Creating default admin and demo user...")
+
+	adminUsername := strings.TrimSpace(cfg.AdminUsername)
+	if adminUsername == "" {
+		adminUsername = "admin"
+	}
+	adminPassword := strings.TrimSpace(cfg.AdminPassword)
+	if adminPassword == "" {
+		adminPassword = "admin123"
+	}
+	adminHash, err := handlers.HashPassword(adminPassword)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to hash admin password during seed")
+	}
 
 	// 1. Default Admin User
 	adminID := uuid.New().String()
 	adminUser := &models.User{
 		ID:            adminID,
+		Username:      adminUsername,
 		Name:          "Default Admin",
+		PasswordHash:  adminHash,
 		Role:          "admin",
 		TokenQuota:    0, // Unlimited
 		TokensUsed:    0,
@@ -353,10 +438,13 @@ func seedInitialData(repo repository.Repository, sync *syncer.Syncer) {
 	}
 
 	// 2. Demo User with quota & whitelist
+	demoHash, _ := handlers.HashPassword("user123")
 	demoID := uuid.New().String()
 	demoUser := &models.User{
 		ID:            demoID,
+		Username:      "user",
 		Name:          "Standard User",
+		PasswordHash:  demoHash,
 		Role:          "user",
 		TokenQuota:    1000000, // 1M tokens
 		TokensUsed:    0,
@@ -378,7 +466,11 @@ func seedInitialData(repo repository.Repository, sync *syncer.Syncer) {
 		_ = sync.SyncKey(demoAPIKey, "Standard User")
 	}
 
-	slog.Info("Initial data seeded", "admin_key", adminKey, "demo_key", demoKey)
+	log.Info().
+		Str("admin_username", adminUsername).
+		Str("admin_key", adminKey).
+		Str("demo_key", demoKey).
+		Msg("Initial data seeded successfully")
 }
 
 func reconcileExistingUsers(repo repository.Repository, cfg *config.Config) {
@@ -395,23 +487,18 @@ func reconcileExistingUsers(repo repository.Repository, cfg *config.Config) {
 			updated = true
 		}
 		if u.PasswordHash == "" {
-			passBytes := make([]byte, 12)
-			_, _ = rand.Read(passBytes)
-			pass := hex.EncodeToString(passBytes)
+			var pass string
+			if u.Username == cfg.AdminUsername || u.Role == "admin" {
+				pass = cfg.AdminPassword
+			} else {
+				pass = "user123"
+			}
 			hash, err := handlers.HashPassword(pass)
 			if err == nil {
 				u.PasswordHash = hash
 				_ = repo.UpdateUserPassword(ctx, u.ID, hash)
+				log.Info().Str("username", u.Username).Msg("Set password hash for user during migration")
 			}
-		}
-		// Security hardening: Force replacement of default admin:admin or weak passwords
-		if u.Username == "admin" && (handlers.CheckPasswordHash("admin", u.PasswordHash) || handlers.CheckPasswordHash("admin123", u.PasswordHash)) {
-			adminPassBytes := make([]byte, 16)
-			_, _ = rand.Read(adminPassBytes)
-			newAdminPass := hex.EncodeToString(adminPassBytes)
-			newHash, _ := handlers.HashPassword(newAdminPass)
-			_ = repo.UpdateUserPassword(ctx, u.ID, newHash)
-			slog.Warn("SECURITY HARDENING: Default admin password was rotated to secure random key", "username", "admin", "new_secure_password", newAdminPass)
 		}
 		if updated {
 			_ = repo.UpdateUser(ctx, &u)

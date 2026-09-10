@@ -84,21 +84,21 @@ func (h *Handler) APILogs(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type logRow struct {
-		ID               int64   `json:"id"`
-		UserName         string  `json:"user_name"`
-		KeyName          string  `json:"key_name"`
-		Model            string  `json:"model"`
-		Method           string  `json:"method"`
-		Path             string  `json:"path"`
-		IsStream         bool    `json:"is_stream"`
-		PromptTokens     int     `json:"prompt_tokens"`
-		CompletionTokens int     `json:"completion_tokens"`
-		TotalTokens      int     `json:"total_tokens"`
-		StatusCode       int     `json:"status_code"`
-		DurationMs       int64   `json:"duration_ms"`
-		ClientIP         string  `json:"client_ip"`
-		ErrorMessage     string  `json:"error_message"`
-		CreatedAt        string  `json:"created_at"`
+		ID               int64  `json:"id"`
+		UserName         string `json:"user_name"`
+		KeyName          string `json:"key_name"`
+		Model            string `json:"model"`
+		Method           string `json:"method"`
+		Path             string `json:"path"`
+		IsStream         bool   `json:"is_stream"`
+		PromptTokens     int    `json:"prompt_tokens"`
+		CompletionTokens int    `json:"completion_tokens"`
+		TotalTokens      int    `json:"total_tokens"`
+		StatusCode       int    `json:"status_code"`
+		DurationMs       int64  `json:"duration_ms"`
+		ClientIP         string `json:"client_ip"`
+		ErrorMessage     string `json:"error_message"`
+		CreatedAt        string `json:"created_at"`
 	}
 
 	rows := make([]logRow, 0, len(logs))

@@ -10,12 +10,12 @@ import (
 )
 
 type cachedResponse struct {
-	Body         []byte
-	StatusCode   int
-	ContentType  string
-	TotalTokens  int
-	ExpiresAt    time.Time
-	Model        string
+	Body        []byte
+	StatusCode  int
+	ContentType string
+	TotalTokens int
+	ExpiresAt   time.Time
+	Model       string
 }
 
 type ResponseCache struct {
@@ -77,12 +77,35 @@ func (rc *ResponseCache) Get(key string) (*cachedResponse, bool) {
 	return item, true
 }
 
+const maxCacheEntries = 2000
+
 func (rc *ResponseCache) Set(key string, body []byte, statusCode int, contentType string, tokens int, model string, ttl time.Duration) {
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 
 	if !rc.enabled {
 		return
+	}
+
+	// Evict if cache exceeds maximum capacity
+	if len(rc.items) >= maxCacheEntries {
+		now := time.Now()
+		for k, v := range rc.items {
+			if now.After(v.ExpiresAt) {
+				delete(rc.items, k)
+			}
+		}
+		// If still full, prune oldest
+		if len(rc.items) >= maxCacheEntries {
+			count := 0
+			for k := range rc.items {
+				delete(rc.items, k)
+				count++
+				if count >= maxCacheEntries/10 {
+					break
+				}
+			}
+		}
 	}
 
 	rc.items[key] = &cachedResponse{

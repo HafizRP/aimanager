@@ -2,7 +2,9 @@
 set -euo pipefail
 
 BASE_URL="http://127.0.0.1:20129"
-DB_PATH="/home/b14/9router-gateway/data/gateway.db"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+DB_PATH="${DB_PATH:-$REPO_ROOT/data/gateway.db}"
 
 echo "=================================================="
 echo "    Running 9router Gateway Verification Suite    "
@@ -22,7 +24,7 @@ fi
 # Setup temporary test users for verification
 TEST_UID="test-suite-user-$(date +%s)"
 TEST_KEY="sk-gw-test-verifier-$(date +%s)"
-sqlite3 "$DB_PATH" "INSERT INTO users (id, name, role, token_quota, tokens_used, allowed_models, is_active, created_at, updated_at) VALUES ('$TEST_UID', 'Test Verifier', 'user', 1000000, 0, '[\"ag/gemini-3.8-flash-low\"]', 1, datetime('now'), datetime('now'));"
+sqlite3 "$DB_PATH" "INSERT INTO users (id, username, name, role, token_quota, tokens_used, allowed_models, is_active, created_at, updated_at) VALUES ('$TEST_UID', '$TEST_UID', 'Test Verifier', 'user', 1000000, 0, '[\"ag/gemini-3.8-flash-low\"]', 1, datetime('now'), datetime('now'));"
 sqlite3 "$DB_PATH" "INSERT INTO api_keys (id, user_id, key, name, is_active, created_at) VALUES ('k-$TEST_UID', '$TEST_UID', '$TEST_KEY', 'Verify Key', 1, datetime('now'));"
 
 # Find any admin or wildcard key
@@ -30,7 +32,7 @@ ADMIN_KEY=$(sqlite3 "$DB_PATH" "SELECT k.key FROM api_keys k JOIN users u ON k.u
 if [[ -z "$ADMIN_KEY" ]]; then
     ADMIN_UID="test-admin-$(date +%s)"
     ADMIN_KEY="sk-gw-test-admin-$(date +%s)"
-    sqlite3 "$DB_PATH" "INSERT INTO users (id, name, role, token_quota, tokens_used, allowed_models, is_active, created_at, updated_at) VALUES ('$ADMIN_UID', 'Admin Verifier', 'admin', 0, 0, '[\"*\"]', 1, datetime('now'), datetime('now'));"
+    sqlite3 "$DB_PATH" "INSERT INTO users (id, username, name, role, token_quota, tokens_used, allowed_models, is_active, created_at, updated_at) VALUES ('$ADMIN_UID', '$ADMIN_UID', 'Admin Verifier', 'admin', 0, 0, '[\"*\"]', 1, datetime('now'), datetime('now'));"
     sqlite3 "$DB_PATH" "INSERT INTO api_keys (id, user_id, key, name, is_active, created_at) VALUES ('k-$ADMIN_UID', '$ADMIN_UID', '$ADMIN_KEY', 'Admin Verify Key', 1, datetime('now'));"
 fi
 
@@ -108,8 +110,10 @@ fi
 # 7. Test Web Admin Dashboard & Auth
 echo -n "[7/7] Testing Web Admin Dashboard & Session Auth... "
 COOKIE_JAR=$(mktemp)
+ADMIN_USER="${ADMIN_USERNAME:-admin}"
+ADMIN_PASS="${ADMIN_PASSWORD:-admin123}"
 LOGIN_STATUS=$(curl -s -c "$COOKIE_JAR" -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/login" \
-  -d "username=admin&password=admin")
+  -d "username=$ADMIN_USER&password=$ADMIN_PASS")
 DASH_STATUS=$(curl -s -b "$COOKIE_JAR" -o /dev/null -w "%{http_code}" "$BASE_URL/")
 STATS_JSON=$(curl -s -b "$COOKIE_JAR" "$BASE_URL/api/stats")
 rm -f "$COOKIE_JAR"

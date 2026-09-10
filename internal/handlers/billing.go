@@ -4,13 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 
 	"9router-gateway/internal/billing"
 	"9router-gateway/internal/models"
@@ -89,21 +90,21 @@ func (h *Handler) CheckoutSnap(w http.ResponseWriter, r *http.Request) {
 	midtransClient := billing.NewMidtransClient(h.cfg)
 	snapResp, err := midtransClient.CreateSnapTransaction(orderID, pkg.PriceIDR, pkg.Name, pkg.ID, currentUser.Name)
 	if err != nil {
-		slog.Error("Midtrans Snap transaction failed", "err", err)
+		log.Error().Err(err).Msg("Midtrans Snap transaction failed")
 		http.Error(w, fmt.Sprintf(`{"error":"Midtrans error: %s"}`, err.Error()), http.StatusInternalServerError)
 		return
 	}
 
 	// Create Pending Transaction in Database
 	tx := &models.Transaction{
-		ID:          orderID,
-		UserID:      currentUser.ID,
-		PackageID:   pkg.ID,
-		Tokens:      pkg.Tokens,
-		AmountIDR:   pkg.PriceIDR,
-		Status:      "pending",
-		SnapToken:   snapResp.Token,
-		SnapURL:     snapResp.RedirectURL,
+		ID:        orderID,
+		UserID:    currentUser.ID,
+		PackageID: pkg.ID,
+		Tokens:    pkg.Tokens,
+		AmountIDR: pkg.PriceIDR,
+		Status:    "pending",
+		SnapToken: snapResp.Token,
+		SnapURL:   snapResp.RedirectURL,
 	}
 	_ = h.repo.CreateTransaction(ctx, tx)
 
@@ -129,16 +130,15 @@ func (h *Handler) MidtransWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slog.Info("Received Midtrans Webhook",
-		"order_id", payload.OrderID,
-		"status", payload.TransactionStatus,
-		"amount", payload.GrossAmount,
-	)
+	log.Info().
+		Str("order_id", payload.OrderID).
+		Str("status", payload.TransactionStatus).
+		Str("amount", payload.GrossAmount).
+		Msg("Received Midtrans Webhook")
 
 	midtransClient := billing.NewMidtransClient(h.cfg)
-	// If server key is configured with real key, verify signature
-	if !strings.Contains(h.cfg.MidtransServerKey, "demo") && !midtransClient.VerifySignature(&payload) {
-		slog.Warn("Midtrans webhook signature invalid", "order_id", payload.OrderID)
+	if h.cfg.MidtransServerKey != "" && !midtransClient.VerifySignature(&payload) {
+		log.Warn().Str("order_id", payload.OrderID).Msg("Midtrans webhook signature invalid")
 		http.Error(w, "Invalid signature", http.StatusUnauthorized)
 		return
 	}
@@ -146,7 +146,7 @@ func (h *Handler) MidtransWebhook(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	tx, err := h.repo.GetTransactionByID(ctx, payload.OrderID)
 	if err != nil || tx == nil {
-		slog.Warn("Midtrans webhook: transaction not found", "order_id", payload.OrderID)
+		log.Warn().Str("order_id", payload.OrderID).Msg("Midtrans webhook: transaction not found")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"ignored_unknown_order"}`))
 		return
@@ -168,11 +168,11 @@ func (h *Handler) MidtransWebhook(w http.ResponseWriter, r *http.Request) {
 		if tx.Status != "settlement" && tx.Status != "paid" {
 			_ = h.repo.CreditUserTokens(ctx, tx.UserID, tx.Tokens)
 			_ = h.repo.UpdateTransactionStatus(ctx, tx.ID, "settlement", payload.PaymentType, payload.TransactionID)
-			slog.Info("Successfully credited tokens from Midtrans payment!",
-				"user_id", tx.UserID,
-				"tokens", tx.Tokens,
-				"order_id", tx.ID,
-			)
+			log.Info().
+				Str("user_id", tx.UserID).
+				Int64("tokens", tx.Tokens).
+				Str("order_id", tx.ID).
+				Msg("Successfully credited tokens from Midtrans payment!")
 		}
 	} else if status == "expire" || status == "cancel" || status == "deny" {
 		_ = h.repo.UpdateTransactionStatus(ctx, tx.ID, status, payload.PaymentType, payload.TransactionID)
@@ -191,7 +191,7 @@ func (h *Handler) ManualCreditTokens(w http.ResponseWriter, r *http.Request) {
 	tokensStr := strings.TrimSpace(r.FormValue("tokens"))
 	tokens, _ := strconv.ParseInt(tokensStr, 10, 64)
 
-	if userID == "" || tokens <= 0 {
+	if userID == "" || tokens <= 0 || tokens > 1000000000000 {
 		http.Redirect(w, r, "/billing?error=Invalid+user+or+token+amount", http.StatusSeeOther)
 		return
 	}
@@ -219,5 +219,5 @@ func (h *Handler) ManualCreditTokens(w http.ResponseWriter, r *http.Request) {
 	_ = h.repo.CreateTransaction(ctx, manualTx)
 
 	msg := fmt.Sprintf("Successfully credited %d tokens to %s!", tokens, user.Name)
-	http.Redirect(w, r, "/billing?msg="+msg, http.StatusSeeOther)
+	http.Redirect(w, r, "/billing?msg="+url.QueryEscape(msg), http.StatusSeeOther)
 }

@@ -6,24 +6,26 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	"golang.org/x/crypto/bcrypt"
 
-	"9router-gateway/embeds"
 	"9router-gateway/internal/config"
 	"9router-gateway/internal/models"
+	"9router-gateway/internal/proxy"
 	"9router-gateway/internal/repository"
 	"9router-gateway/internal/syncer"
 	"9router-gateway/internal/upstream"
+	"9router-gateway/web"
 )
 
 type contextKey string
@@ -49,6 +51,7 @@ type Handler struct {
 	quotaManager *upstream.QuotaManager
 	coreClient   *upstream.CoreClient
 	templates    map[string]*template.Template
+	httpClient   *http.Client
 }
 
 func NewHandler(cfg *config.Config, repo repository.Repository, sync *syncer.Syncer, quotaMgr *upstream.QuotaManager) (*Handler, error) {
@@ -59,6 +62,9 @@ func NewHandler(cfg *config.Config, repo repository.Repository, sync *syncer.Syn
 		quotaManager: quotaMgr,
 		coreClient:   upstream.NewCoreClient(cfg),
 		templates:    make(map[string]*template.Template),
+		httpClient: &http.Client{
+			Timeout: 10 * time.Second,
+		},
 	}
 
 	funcMap := template.FuncMap{
@@ -192,19 +198,15 @@ func NewHandler(cfg *config.Config, repo repository.Repository, sync *syncer.Syn
 		"chat.html", "cli_tools.html", "proxy_pools.html", "benchmark.html",
 	}
 	for _, page := range pages {
-		tmpl, err := template.New("").Funcs(funcMap).ParseFS(embeds.FS, "templates/base.html", "templates/"+page)
+		tmpl, err := template.New("").Funcs(funcMap).ParseFS(web.FS, "templates/base.html", "templates/"+page)
 		if err != nil {
-			// Profile might be optional if merged into settings/users
-			if page != "profile.html" {
-				return nil, fmt.Errorf("failed to parse template %s: %w", page, err)
-			}
-			continue
+			return nil, fmt.Errorf("failed to parse template %s: %w", page, err)
 		}
 		h.templates[page] = tmpl
 	}
 
 	// Login template (standalone)
-	loginTmpl, err := template.New("login.html").Funcs(funcMap).ParseFS(embeds.FS, "templates/login.html")
+	loginTmpl, err := template.New("login.html").Funcs(funcMap).ParseFS(web.FS, "templates/login.html")
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse login template: %w", err)
 	}
@@ -220,9 +222,10 @@ func (h *Handler) render(w http.ResponseWriter, r *http.Request, tmplName, layou
 		return
 	}
 
-	// Inject CurrentUser into data
+	// Inject CurrentUser and CSRF token into data
 	currentUser := GetUserFromContext(r.Context())
 	data["CurrentUser"] = currentUser
+	data["CSRFToken"] = h.getCSRFToken(r)
 	if currentUser != nil {
 		data["IsAdmin"] = currentUser.IsAdmin()
 		data["LoggedIn"] = true
@@ -240,7 +243,7 @@ func (h *Handler) render(w http.ResponseWriter, r *http.Request, tmplName, layou
 	}
 
 	if err != nil {
-		slog.Error("Template execution failed", "tmpl", tmplName, "err", err)
+		log.Error().Str("tmpl", tmplName).Err(err).Msg("Template execution failed")
 		http.Error(w, "Internal rendering error", http.StatusInternalServerError)
 		return
 	}
@@ -256,7 +259,7 @@ const sessionCookieName = "gw_session"
 func (h *Handler) setSessionCookie(w http.ResponseWriter, r *http.Request, user *models.User) {
 	tokenBytes := make([]byte, 32)
 	if _, err := rand.Read(tokenBytes); err != nil {
-		slog.Error("Failed to generate session token", "err", err)
+		log.Error().Err(err).Msg("Failed to generate session token")
 		return
 	}
 	token := hex.EncodeToString(tokenBytes)
@@ -264,7 +267,7 @@ func (h *Handler) setSessionCookie(w http.ResponseWriter, r *http.Request, user 
 	expiresAt := time.Now().Add(7 * 24 * time.Hour)
 	ctx := r.Context()
 	if err := h.repo.CreateSession(ctx, token, user.ID, expiresAt); err != nil {
-		slog.Error("Failed to store session in database", "err", err)
+		log.Error().Err(err).Msg("Failed to store session in database")
 		return
 	}
 
@@ -314,6 +317,43 @@ func (h *Handler) signSession(data string) string {
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
+func (h *Handler) getCSRFToken(r *http.Request) string {
+	cookie, err := r.Cookie(sessionCookieName)
+	if err != nil || cookie.Value == "" {
+		return ""
+	}
+	return h.signSession("csrf:" + cookie.Value)
+}
+
+// ValidateCSRF Middleware enforces CSRF validation on mutating HTTP methods for authenticated sessions
+func (h *Handler) ValidateCSRF(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost || r.Method == http.MethodPut || r.Method == http.MethodDelete || r.Method == http.MethodPatch {
+			expectedToken := h.getCSRFToken(r)
+			if expectedToken != "" {
+				receivedToken := r.Header.Get("X-CSRF-Token")
+				if receivedToken == "" {
+					receivedToken = r.FormValue("csrf_token")
+				}
+				if receivedToken == "" || subtle.ConstantTimeCompare([]byte(expectedToken), []byte(receivedToken)) != 1 {
+					log.Warn().Str("path", r.URL.Path).Str("method", r.Method).Msg("CSRF token validation failed")
+					http.Error(w, "Invalid or missing CSRF token", http.StatusForbidden)
+					return
+				}
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func safeRedirectURL(raw, fallback string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || !strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, "//") || strings.Contains(raw, `\`) {
+		return fallback
+	}
+	return raw
+}
+
 // RequireAuth Middleware
 func (h *Handler) RequireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -357,13 +397,7 @@ func (h *Handler) LoginPost(w http.ResponseWriter, r *http.Request) {
 	username := strings.TrimSpace(r.FormValue("username"))
 	password := strings.TrimSpace(r.FormValue("password"))
 
-	clientIP := r.RemoteAddr
-	if cfIP := r.Header.Get("CF-Connecting-IP"); cfIP != "" {
-		clientIP = cfIP
-	} else if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		clientIP = strings.Split(xff, ",")[0]
-	}
-	clientIP = strings.TrimSpace(strings.Split(clientIP, ":")[0])
+	clientIP := proxy.GetClientIP(r)
 
 	ctx := r.Context()
 
@@ -412,28 +446,12 @@ func (h *Handler) LogoutPost(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) FetchUpstreamModels(ctx context.Context) []string {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, h.cfg.UpstreamURL+"/v1/models", nil)
+	items, err := h.fetchUpstreamModels(ctx)
 	if err != nil {
 		return nil
 	}
-	req.Header.Set("Authorization", "Bearer "+h.cfg.UpstreamAPIKey)
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil
-	}
-	defer resp.Body.Close()
-
-	var res struct {
-		Data []struct {
-			ID string `json:"id"`
-		} `json:"data"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-		return nil
-	}
-
 	var modelIDs []string
-	for _, m := range res.Data {
+	for _, m := range items {
 		modelIDs = append(modelIDs, m.ID)
 	}
 	return modelIDs
@@ -467,21 +485,23 @@ func (h *Handler) deriveCurrentBaseURL(r *http.Request) string {
 		scheme = "https"
 	}
 	host := r.Host
-	if xfh := r.Header.Get("X-Forwarded-Host"); xfh != "" {
-		host = xfh
+	if xfh := strings.TrimSpace(r.Header.Get("X-Forwarded-Host")); xfh != "" {
+		if parts := strings.Split(xfh, ","); len(parts) > 0 {
+			host = strings.TrimSpace(parts[0])
+		}
 	}
 	return fmt.Sprintf("%s://%s/v1", scheme, host)
 }
 
 func (h *Handler) fetchUpstreamModels(ctx context.Context) ([]UpstreamModelItem, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, h.cfg.UpstreamURL+"/v1/models", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, h.cfg.GetUpstreamURL()+"/v1/models", nil)
 	if err != nil {
 		return nil, err
 	}
-	if h.cfg.UpstreamAPIKey != "" {
-		req.Header.Set("Authorization", "Bearer "+h.cfg.UpstreamAPIKey)
+	if apiKey := h.cfg.GetUpstreamAPIKey(); apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := h.httpClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

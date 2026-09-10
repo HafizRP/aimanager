@@ -141,11 +141,17 @@ For production Linux servers running without Docker overhead:
 
 ### 1. Build Gateway Binary
 ```bash
-go build -ldflags="-w -s" -o 9router-gateway .
+go build -ldflags="-w -s" -o bin/9router-gateway ./cmd/gateway
+# Or using Makefile
+make build
 ```
 
 ### 2. Configure Service Unit
-Create `/etc/systemd/system/9router-gateway.service`:
+Use the provided service unit template in `init/systemd/9router-gateway.service`:
+```bash
+sudo cp init/systemd/9router-gateway.service /etc/systemd/system/
+```
+Or create `/etc/systemd/system/9router-gateway.service`:
 ```ini
 [Unit]
 Description=AI Manager Gateway & Reverse Proxy
@@ -157,7 +163,7 @@ Type=simple
 User=b14
 Group=b14
 WorkingDirectory=/home/b14/9router-gateway
-ExecStart=/home/b14/9router-gateway/9router-gateway
+ExecStart=/home/b14/9router-gateway/bin/9router-gateway
 Restart=always
 RestartSec=3
 EnvironmentFile=/home/b14/9router-gateway/.env
@@ -182,15 +188,16 @@ sudo systemctl status 9router-gateway
 |---|---|---|
 | `PORT` | `20129` | HTTP port for AI Manager Gateway |
 | `HOST` | `0.0.0.0` | Bind address |
-| `UPSTREAM_URL` | `http://127.0.0.1:20128` | Internal URL to 9router Core engine |
-| `DB_PATH` | `/home/b14/9router-gateway/data/gateway.db` | Path to gateway SQLite database |
-| `NINEROUTER_DB_PATH` | `/home/b14/9router-gateway/data/core/db/data.sqlite` | Path to 9router Core SQLite database |
+| `DB_PATH` | `./data/gateway.db` | Path to gateway SQLite database |
+| `NINEROUTER_DATA_DIR` | (auto-derived) | Optional path to 9router Core data directory |
 | `ADMIN_USERNAME` | `admin` | Default admin username |
 | `ADMIN_PASSWORD` | `admin123` | Default admin password |
 | `SESSION_SECRET` | `change_me` | Secret key used for signing session cookies |
 | `MIDTRANS_SERVER_KEY` | - | Midtrans Server Key for payment handling |
 | `MIDTRANS_CLIENT_KEY` | - | Midtrans Client Key for Snap UI popup |
 | `MIDTRANS_IS_PRODUCTION`| `false` | Set to `true` for live payments |
+
+> **Note**: Upstream 9router Core settings (Upstream URL, API Key, and Core DB Path) are configured and stored directly in the SQLite database via the Admin Settings UI.
 
 ---
 
@@ -272,6 +279,12 @@ custom_providers:
 
 ---
 
-## 📄 License
+## � Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for detailed release notes, version history, and architectural milestones.
+
+---
+
+## �📄 License
 
 This project is licensed under the **MIT License**.
