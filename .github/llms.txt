@@ -1,0 +1,152 @@
+# AI Manager - GitHub Repository Context
+
+> Structured metadata for AI coding agents and automation tools.
+
+## Repository Identity
+
+- **Name**: AI Manager (`aimanager`)
+- **Type**: Go web application (reverse proxy, API gateway)
+- **Purpose**: Multi-tenant LLM gateway with authentication, quota management, and admin dashboard
+- **Primary Language**: Go 1.22+
+- **License**: MIT
+
+## Quick Start for AI Agents
+
+```bash
+# Clone
+git clone https://github.com/HafizRP/aimanager.git
+cd aimanager
+
+# Configure
+cp .env.example .env
+# Edit .env with SESSION_SECRET and ADMIN_PASSWORD
+
+# Run
+go run main.go
+
+# Or Docker
+docker compose up -d
+```
+
+## Architecture Summary
+
+```
+Client Request → AI Manager (Port 20129) → 9router Core (Port 20128) → Upstream LLMs
+                     │
+                     ├── Auth & Session Middleware
+                     ├── Rate Limiter (RPM/TPM)
+                     ├── Response Cache (15m TTL)
+                     ├── Quota Tracker
+                     └── Audit Logger
+```
+
+## Key Directories
+
+| Directory | Contents |
+|-----------|----------|
+| `internal/handlers/` | HTTP handlers for pages and API |
+| `internal/proxy/` | Reverse proxy engine, rate limiting, caching |
+| `internal/repository/` | SQLite data access layer |
+| `internal/models/` | Data structures |
+| `embeds/templates/` | HTML templates (embedded) |
+| `docs/` | API and setup documentation |
+
+## Critical Files for Understanding
+
+1. `main.go` - Entry point, routing, middleware setup
+2. `internal/proxy/proxy.go` - Core proxy logic
+3. `internal/repository/repo.go` - Database operations
+4. `internal/config/config.go` - Configuration management
+
+## Configuration
+
+All config via environment variables (see `.env.example`):
+- `PORT`, `HOST` - Server binding
+- `UPSTREAM_URL` - 9router Core URL
+- `DB_PATH` - SQLite database path
+- `SESSION_SECRET` - Session signing key (required)
+- `ADMIN_USERNAME`, `ADMIN_PASSWORD` - Default admin credentials
+
+## Database Schema
+
+SQLite tables (see `internal/database/db.go`):
+- `users` - User accounts with role, quota, model whitelist
+- `api_keys` - API keys with scoped models and rate limits
+- `sessions` - Server-side session tokens
+- `request_logs` - Audit trail for all LLM requests
+
+## API Surface
+
+### LLM Endpoints (OpenAI-compatible)
+- `POST /v1/chat/completions`
+- `GET /v1/models`
+
+### Dashboard & Admin
+- `GET /`, `/login`, `/logout`
+- `GET /api/stats`, `/api/logs`, `/api/logs/export`
+- `POST /api/benchmark/run`
+
+## Development Commands
+
+```bash
+# Build
+go build -o 9router-gateway .
+
+# Test
+go test ./...
+
+# Format
+go fmt ./...
+
+# Database query
+sqlite3 data/gateway.db "SELECT * FROM users LIMIT 5"
+```
+
+## Security Constraints
+
+1. Port `20128` (9router Core) must NOT be exposed publicly
+2. All external traffic must go through port `20129` (AI Manager)
+3. API keys use `aim_` prefix
+4. Sessions are server-side, 64-char hex tokens
+5. Passwords are bcrypt-hashed
+
+## Integration Points
+
+### For Claude Code CLI
+```bash
+export ANTHROPIC_BASE_URL="http://localhost:20129/v1"
+export ANTHROPIC_API_KEY="aim_..."
+```
+
+### For Cursor IDE
+- Base URL: `http://localhost:20129/v1`
+- API Key: `aim_...`
+
+### For Custom Clients
+Standard OpenAI-compatible API with Bearer token authentication.
+
+## Common Modification Patterns
+
+### Add new admin page
+1. Create handler in `internal/handlers/`
+2. Add template in `embeds/templates/`
+3. Register route in `main.go` under `adminOnly` group
+4. Add to template parser in `handlers.go`
+
+### Add new API endpoint
+1. Create handler function returning JSON
+2. Register route in `main.go`
+3. Add authentication middleware if needed
+
+### Modify quota behavior
+Edit `internal/proxy/proxy.go` in `HandleProxy()` method, specifically the quota check logic before forwarding requests.
+
+## Testing Checklist
+
+- [ ] `go build` succeeds
+- [ ] `go test ./...` passes
+- [ ] `curl http://localhost:20129/healthz` returns 200
+- [ ] Login with admin credentials works
+- [ ] Chat completion request with valid API key returns response
+- [ ] Invalid API key returns 401
+- [ ] Quota exhaustion returns 429
