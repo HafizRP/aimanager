@@ -15,139 +15,174 @@
   <!-- Bootstrap Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <!-- Custom Modern Design System -->
-  <link href="/static/css/custom.css?v=3" rel="stylesheet">
+  <link href="/static/css/custom.css?v=4" rel="stylesheet">
 </head>
 <body>
-  <!-- Modern Glassmorphism Navigation Bar -->
-  <nav class="navbar navbar-expand-lg navbar-dark navbar-glass sticky-top py-2">
-    <div class="container-fluid px-4">
-      <a class="navbar-brand d-flex align-items-center gap-2 fw-bold text-light" href="/">
-        <div class="brand-glow">
-          <i class="bi bi-cpu-fill fs-5"></i>
-        </div>
-        <div class="d-flex flex-column">
-          <div class="d-flex align-items-center gap-2">
-            <span class="fs-6 fw-bold tracking-tight">AI Manager</span>
-            <span class="badge-modern badge-indigo" style="font-size:0.68rem; padding: 0.15rem 0.45rem;">GATEWAY</span>
+  <div class="app-wrapper">
+    <!-- Mobile Backdrop -->
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+    <!-- Left Modern Sidebar -->
+    <aside class="app-sidebar" id="appSidebar">
+      <!-- Sidebar Header / Brand -->
+      <div class="sidebar-header">
+        <a class="d-flex align-items-center gap-2 text-decoration-none text-light" href="/">
+          <div class="brand-glow" style="width:34px; height:34px; font-size:1.1rem;">
+            <i class="bi bi-cpu-fill"></i>
           </div>
-          <span class="text-dim" style="font-size: 0.68rem; font-weight: 500;">LLM Reverse Proxy & Middleware</span>
+          <div class="d-flex flex-column">
+            <div class="d-flex align-items-center gap-2">
+              <span class="fw-bold text-light tracking-tight fs-6">AI Manager</span>
+              <span class="badge-modern badge-indigo" style="font-size:0.65rem; padding:0.1rem 0.35rem;">GW</span>
+            </div>
+            <span class="text-dim" style="font-size:0.65rem;">LLM Gateway & Proxy</span>
+          </div>
+        </a>
+        <button type="button" class="btn-modern-ghost d-lg-none py-1 px-2 border-0 text-muted" id="btnCloseSidebar">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+
+      <!-- Navigation Content -->
+      <div class="sidebar-content">
+        <!-- Main Navigation Group -->
+        <div class="sidebar-nav-group">
+          <span class="sidebar-group-title">Menu</span>
+          <a class="sidebar-link {{ if eq .ActivePage "dashboard" }}active{{ end }}" href="/">
+            <i class="bi bi-speedometer2"></i>
+            <span>Dashboard</span>
+          </a>
+          <a class="sidebar-link {{ if eq .ActivePage "billing" }}active{{ end }}" href="/billing">
+            <i class="bi bi-wallet2 text-emerald"></i>
+            <span>Buy Tokens</span>
+            <span class="badge-modern badge-emerald ms-auto" style="font-size:0.65rem; padding:0.1rem 0.4rem;">Top Up</span>
+          </a>
+          <a class="sidebar-link {{ if eq .ActivePage "keys" }}active{{ end }}" href="/keys">
+            <i class="bi bi-key text-warning"></i>
+            <span>API Keys</span>
+          </a>
+          <a class="sidebar-link {{ if eq .ActivePage "logs" }}active{{ end }}" href="/logs">
+            <i class="bi bi-activity text-info"></i>
+            <span>Request Logs</span>
+          </a>
+          <a class="sidebar-link {{ if eq .ActivePage "models" }}active{{ end }}" href="/models">
+            <i class="bi bi-cpu text-primary"></i>
+            <span>Models Catalog</span>
+          </a>
         </div>
-      </a>
 
-      <button class="navbar-toggler border-0 p-1" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent">
-        <i class="bi bi-list fs-4 text-light"></i>
-      </button>
+        <!-- Administration Group (Admin Only) -->
+        {{ if .IsAdmin }}
+          <div class="sidebar-nav-group">
+            <span class="sidebar-group-title">Administration</span>
+            <a class="sidebar-link {{ if eq .ActivePage "users" }}active{{ end }}" href="/users">
+              <i class="bi bi-people-fill text-primary"></i>
+              <span>Users & Quotas</span>
+            </a>
+            <a class="sidebar-link {{ if eq .ActivePage "settings" }}active{{ end }}" href="/settings">
+              <i class="bi bi-sliders text-warning"></i>
+              <span>Quick Setup & Config</span>
+            </a>
+          </div>
+        {{ else }}
+          <!-- Account Settings (Standard User) -->
+          <div class="sidebar-nav-group">
+            <span class="sidebar-group-title">Preferences</span>
+            <a class="sidebar-link {{ if eq .ActivePage "settings" }}active{{ end }}" href="/settings">
+              <i class="bi bi-sliders text-warning"></i>
+              <span>Setup & Password</span>
+            </a>
+          </div>
+        {{ end }}
+      </div>
 
-      <div class="collapse navbar-collapse" id="navbarContent">
-        <ul class="navbar-nav nav-pills-modern me-auto mb-2 mb-lg-0 ms-lg-4">
-          <li class="nav-item">
-            <a class="nav-link {{ if eq .ActivePage "dashboard" }}active{{ end }}" href="/">
-              <i class="bi bi-speedometer2"></i> Dashboard
-            </a>
-          </li>
-          {{ if .IsAdmin }}
-            <li class="nav-item">
-              <a class="nav-link {{ if eq .ActivePage "users" }}active{{ end }}" href="/users">
-                <i class="bi bi-people"></i> Users & Quotas
-              </a>
-            </li>
-          {{ end }}
-          <li class="nav-item">
-            <a class="nav-link {{ if eq .ActivePage "billing" }}active{{ end }}" href="/billing">
-              <i class="bi bi-wallet2 text-emerald"></i> Buy Tokens
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ if eq .ActivePage "keys" }}active{{ end }}" href="/keys">
-              <i class="bi bi-key"></i> API Keys
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ if eq .ActivePage "logs" }}active{{ end }}" href="/logs">
-              <i class="bi bi-activity"></i> Request Logs
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ if eq .ActivePage "models" }}active{{ end }}" href="/models">
-              <i class="bi bi-cpu"></i> Models
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ if eq .ActivePage "settings" }}active{{ end }}" href="/settings">
-              <i class="bi bi-sliders"></i> {{ if .IsAdmin }}Quick Setup{{ else }}Setup & Password{{ end }}
-            </a>
-          </li>
-        </ul>
-
-        <div class="d-flex align-items-center gap-3">
-          {{ if .CurrentUser }}
-            <div class="d-flex align-items-center gap-2 px-2 py-1 rounded-3" style="background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-subtle);">
-              <div class="kpi-icon kpi-icon-indigo" style="width: 26px; height: 26px; font-size: 0.8rem; border-radius: 6px;">
-                <i class="bi bi-person-fill"></i>
+      <!-- Sidebar Footer -->
+      <div class="sidebar-footer">
+        {{ if .CurrentUser }}
+          <div class="d-flex align-items-center justify-content-between p-2 rounded-3" style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-subtle);">
+            <div class="d-flex align-items-center gap-2 overflow-hidden">
+              <div class="kpi-icon {{ if .IsAdmin }}kpi-icon-indigo{{ else }}kpi-icon-cyan{{ end }}" style="width: 32px; height: 32px; font-size: 0.85rem; border-radius: 8px; flex-shrink: 0;">
+                <i class="bi {{ if .IsAdmin }}bi-shield-shaded{{ else }}bi-person-fill{{ end }}"></i>
               </div>
-              <div class="d-flex flex-column" style="line-height: 1.1;">
-                <span class="text-light fw-medium small">{{ .CurrentUser.Name }}</span>
-                <span class="text-dim" style="font-size: 0.65rem;">@{{ .CurrentUser.Username }} ({{ .CurrentUser.Role }})</span>
+              <div class="d-flex flex-column text-truncate">
+                <span class="text-light fw-medium small text-truncate">{{ .CurrentUser.Name }}</span>
+                <span class="text-dim font-monospace" style="font-size: 0.7rem;">@{{ .CurrentUser.Username }}</span>
               </div>
             </div>
-          {{ end }}
+            <form action="/logout" method="POST" class="m-0">
+              <button type="submit" class="btn btn-link p-1 text-muted text-decoration-none" title="Logout">
+                <i class="bi bi-box-arrow-right fs-6"></i>
+              </button>
+            </form>
+          </div>
+        {{ end }}
 
-          <!-- Client Timezone Badge -->
-          <div class="badge-modern badge-gray d-none d-lg-inline-flex align-items-center gap-1" style="font-size: 0.72rem;">
+        <div class="d-flex align-items-center justify-content-between" style="font-size: 0.72rem;">
+          <div class="status-pill-live" style="font-size:0.68rem; padding: 0.2rem 0.5rem;">
+            <span class="pulse-dot"></span>
+            <span>Upstream Online</span>
+          </div>
+          <span class="text-dim d-flex align-items-center gap-1">
             <i class="bi bi-globe text-cyan"></i>
             <span id="userTimezoneBadge">Local Time</span>
-          </div>
-
-          <!-- Upstream Status Indicator -->
-          <div class="status-pill-live d-none d-md-inline-flex">
-            <span class="pulse-dot"></span>
-            <span>Upstream: 127.0.0.1:20128</span>
-          </div>
-
-          <form action="/logout" method="POST" class="m-0">
-            <button type="submit" class="btn-modern-ghost d-flex align-items-center gap-2 py-1 px-3" style="font-size: 0.82rem;">
-              <i class="bi bi-box-arrow-right text-muted"></i>
-              <span>Logout</span>
-            </button>
-          </form>
+          </span>
         </div>
       </div>
+    </aside>
+
+    <!-- Main Viewport Area -->
+    <div class="main-viewport">
+      <!-- Mobile Topbar -->
+      <header class="mobile-topbar">
+        <button type="button" class="btn-modern-ghost py-1 px-2" id="btnToggleSidebar">
+          <i class="bi bi-list fs-5"></i>
+        </button>
+        <div class="d-flex align-items-center gap-2">
+          <div class="brand-glow" style="width:28px; height:28px; font-size:0.9rem;">
+            <i class="bi bi-cpu-fill"></i>
+          </div>
+          <span class="fw-bold text-light fs-6">AI Manager</span>
+        </div>
+        <form action="/logout" method="POST" class="m-0">
+          <button type="submit" class="btn-modern-ghost py-1 px-2 text-muted" title="Logout">
+            <i class="bi bi-box-arrow-right"></i>
+          </button>
+        </form>
+      </header>
+
+      <!-- Flash Messages -->
+      <div class="container-fluid px-4 mt-3">
+        {{ if .SuccessMsg }}
+          <div class="alert card-modern border-success border-opacity-50 p-3 mb-3 d-flex align-items-center justify-content-between text-light alert-dismissible fade show" role="alert">
+            <div class="d-flex align-items-center gap-2">
+              <i class="bi bi-check-circle-fill text-success fs-5"></i>
+              <span class="small fw-medium">{{ .SuccessMsg }}</span>
+            </div>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
+          </div>
+        {{ end }}
+        {{ if .ErrorMsg }}
+          <div class="alert card-modern border-danger border-opacity-50 p-3 mb-3 d-flex align-items-center justify-content-between text-light alert-dismissible fade show" role="alert">
+            <div class="d-flex align-items-center gap-2">
+              <i class="bi bi-exclamation-triangle-fill text-danger fs-5"></i>
+              <span class="small fw-medium">{{ .ErrorMsg }}</span>
+            </div>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
+          </div>
+        {{ end }}
+      </div>
+
+      <!-- Main Body Content -->
+      <main class="container-fluid px-4 py-3 flex-grow-1">
+        {{ template "content" . }}
+      </main>
     </div>
-  </nav>
-
-  <!-- Flash Messages -->
-  <div class="container-fluid px-4 mt-3">
-    {{ if .SuccessMsg }}
-      <div class="alert card-modern border-success border-opacity-50 p-3 mb-3 d-flex align-items-center justify-content-between text-light alert-dismissible fade show" role="alert">
-        <div class="d-flex align-items-center gap-2">
-          <i class="bi bi-check-circle-fill text-success fs-5"></i>
-          <span class="small fw-medium">{{ .SuccessMsg }}</span>
-        </div>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
-      </div>
-    {{ end }}
-    {{ if .ErrorMsg }}
-      <div class="alert card-modern border-danger border-opacity-50 p-3 mb-3 d-flex align-items-center justify-content-between text-light alert-dismissible fade show" role="alert">
-        <div class="d-flex align-items-center gap-2">
-          <i class="bi bi-exclamation-triangle-fill text-danger fs-5"></i>
-          <span class="small fw-medium">{{ .ErrorMsg }}</span>
-        </div>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
-      </div>
-    {{ end }}
   </div>
 
-  <!-- Main Body Content -->
-  <main class="container-fluid px-4 py-3">
-    {{ template "content" . }}
-  </main>
-
-  <!-- Bootstrap 5.3 JS -->
+  <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <!-- App JS -->
-  <script src="/static/js/app.js?v=3"></script>
+  <script src="/static/js/app.js?v=4"></script>
   {{ block "scripts" . }}{{ end }}
 </body>
 </html>

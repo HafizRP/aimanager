@@ -123,6 +123,26 @@ function initApp() {
     el.textContent = browserBaseURL;
   });
 
+  // Sidebar Toggle for Mobile & Responsive Devices
+  const sidebar = document.getElementById("appSidebar");
+  const backdrop = document.getElementById("sidebarBackdrop");
+  const btnToggle = document.getElementById("btnToggleSidebar");
+  const btnClose = document.getElementById("btnCloseSidebar");
+
+  function openSidebar() {
+    if (sidebar) sidebar.classList.add("show");
+    if (backdrop) backdrop.classList.add("show");
+  }
+
+  function closeSidebar() {
+    if (sidebar) sidebar.classList.remove("show");
+    if (backdrop) backdrop.classList.remove("show");
+  }
+
+  if (btnToggle) btnToggle.addEventListener("click", openSidebar);
+  if (btnClose) btnClose.addEventListener("click", closeSidebar);
+  if (backdrop) backdrop.addEventListener("click", closeSidebar);
+
   // Automatic Local Timezone Conversion for all .local-time elements
   function updateAllLocalTimes() {
     document.querySelectorAll(".local-time").forEach(el => {
