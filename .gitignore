@@ -1,3 +1,19 @@
+# Binaries
 9router-gateway
-data/core/
-data/*.db*
+*.exe
+*.test
+
+# Environment & credentials
+.env
+*.env.local
+
+# Databases & runtime data
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Temporary & logs
+*.log
+/tmp/
+.DS_Store
