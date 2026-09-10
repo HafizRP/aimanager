@@ -13,9 +13,13 @@ import (
 type Repository interface {
 	// Users
 	GetUserByID(ctx context.Context, id string) (*models.User, error)
+	GetUserByUsername(ctx context.Context, username string) (*models.User, error)
 	GetAllUsers(ctx context.Context) ([]models.User, error)
 	CreateUser(ctx context.Context, u *models.User) error
 	UpdateUser(ctx context.Context, u *models.User) error
+	UpdateUserPassword(ctx context.Context, id, passwordHash string) error
+	ResetUserUsage(ctx context.Context, id string) error
+	UpdateUserLastLogin(ctx context.Context, id string) error
 	ToggleUserStatus(ctx context.Context, id string, isActive bool) error
 	DeleteUser(ctx context.Context, id string) error
 	DeductTokens(ctx context.Context, userID string, tokens int) error
@@ -35,6 +39,7 @@ type Repository interface {
 
 	// Stats
 	GetDashboardStats(ctx context.Context) (*models.DashboardStats, error)
+	GetUserDashboardStats(ctx context.Context, userID string) (*models.DashboardStats, error)
 }
 
 type SQLiteRepo struct {
@@ -69,24 +74,54 @@ func parseTimeFlexible(s string) time.Time {
 // User methods
 
 func (r *SQLiteRepo) GetUserByID(ctx context.Context, id string) (*models.User, error) {
-	query := `SELECT id, name, role, token_quota, tokens_used, allowed_models, is_active, created_at, updated_at 
+	query := `SELECT id, COALESCE(username, ''), name, COALESCE(password_hash, ''), role, token_quota, tokens_used, allowed_models, is_active, created_at, updated_at, last_login_at 
 	          FROM users WHERE id = ?`
 	var u models.User
 	var createdAt, updatedAt string
+	var lastLogin sql.NullString
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
-		&u.ID, &u.Name, &u.Role, &u.TokenQuota, &u.TokensUsed, &u.AllowedModels, &u.IsActive, &createdAt, &updatedAt,
+		&u.ID, &u.Username, &u.Name, &u.PasswordHash, &u.Role, &u.TokenQuota, &u.TokensUsed, &u.AllowedModels, &u.IsActive, &createdAt, &updatedAt, &lastLogin,
 	)
 	if err != nil {
 		return nil, err
 	}
 	u.CreatedAt = parseTimeFlexible(createdAt)
 	u.UpdatedAt = parseTimeFlexible(updatedAt)
+	if lastLogin.Valid {
+		t := parseTimeFlexible(lastLogin.String)
+		if !t.IsZero() {
+			u.LastLoginAt = &t
+		}
+	}
+	return &u, nil
+}
+
+func (r *SQLiteRepo) GetUserByUsername(ctx context.Context, username string) (*models.User, error) {
+	query := `SELECT id, COALESCE(username, ''), name, COALESCE(password_hash, ''), role, token_quota, tokens_used, allowed_models, is_active, created_at, updated_at, last_login_at 
+	          FROM users WHERE LOWER(username) = LOWER(?) OR LOWER(name) = LOWER(?) LIMIT 1`
+	var u models.User
+	var createdAt, updatedAt string
+	var lastLogin sql.NullString
+	err := r.db.QueryRowContext(ctx, query, username, username).Scan(
+		&u.ID, &u.Username, &u.Name, &u.PasswordHash, &u.Role, &u.TokenQuota, &u.TokensUsed, &u.AllowedModels, &u.IsActive, &createdAt, &updatedAt, &lastLogin,
+	)
+	if err != nil {
+		return nil, err
+	}
+	u.CreatedAt = parseTimeFlexible(createdAt)
+	u.UpdatedAt = parseTimeFlexible(updatedAt)
+	if lastLogin.Valid {
+		t := parseTimeFlexible(lastLogin.String)
+		if !t.IsZero() {
+			u.LastLoginAt = &t
+		}
+	}
 	return &u, nil
 }
 
 func (r *SQLiteRepo) GetAllUsers(ctx context.Context) ([]models.User, error) {
 	query := `
-		SELECT u.id, u.name, u.role, u.token_quota, u.tokens_used, u.allowed_models, u.is_active, u.created_at, u.updated_at,
+		SELECT u.id, COALESCE(u.username, ''), u.name, COALESCE(u.password_hash, ''), u.role, u.token_quota, u.tokens_used, u.allowed_models, u.is_active, u.created_at, u.updated_at, u.last_login_at,
 		       (SELECT COUNT(*) FROM api_keys WHERE user_id = u.id) as key_count
 		FROM users u
 		ORDER BY u.created_at DESC`
@@ -101,28 +136,53 @@ func (r *SQLiteRepo) GetAllUsers(ctx context.Context) ([]models.User, error) {
 	for rows.Next() {
 		var u models.User
 		var createdAt, updatedAt string
-		if err := rows.Scan(&u.ID, &u.Name, &u.Role, &u.TokenQuota, &u.TokensUsed, &u.AllowedModels, &u.IsActive, &createdAt, &updatedAt, &u.KeyCount); err != nil {
+		var lastLogin sql.NullString
+		if err := rows.Scan(&u.ID, &u.Username, &u.Name, &u.PasswordHash, &u.Role, &u.TokenQuota, &u.TokensUsed, &u.AllowedModels, &u.IsActive, &createdAt, &updatedAt, &lastLogin, &u.KeyCount); err != nil {
 			return nil, err
 		}
 		u.CreatedAt = parseTimeFlexible(createdAt)
 		u.UpdatedAt = parseTimeFlexible(updatedAt)
+		if lastLogin.Valid {
+			t := parseTimeFlexible(lastLogin.String)
+			if !t.IsZero() {
+				u.LastLoginAt = &t
+			}
+		}
 		users = append(users, u)
 	}
 	return users, nil
 }
 
 func (r *SQLiteRepo) CreateUser(ctx context.Context, u *models.User) error {
-	query := `INSERT INTO users (id, name, role, token_quota, tokens_used, allowed_models, is_active, created_at, updated_at) 
-	          VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
-	_, err := r.db.ExecContext(ctx, query, u.ID, u.Name, u.Role, u.TokenQuota, u.TokensUsed, u.AllowedModels, u.IsActive)
+	query := `INSERT INTO users (id, username, name, password_hash, role, token_quota, tokens_used, allowed_models, is_active, created_at, updated_at) 
+	          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
+	_, err := r.db.ExecContext(ctx, query, u.ID, u.Username, u.Name, u.PasswordHash, u.Role, u.TokenQuota, u.TokensUsed, u.AllowedModels, u.IsActive)
 	return err
 }
 
 func (r *SQLiteRepo) UpdateUser(ctx context.Context, u *models.User) error {
 	query := `UPDATE users 
-	          SET name = ?, token_quota = ?, allowed_models = ?, is_active = ?, updated_at = datetime('now')
+	          SET username = ?, name = ?, role = ?, token_quota = ?, allowed_models = ?, is_active = ?, updated_at = datetime('now')
 	          WHERE id = ?`
-	_, err := r.db.ExecContext(ctx, query, u.Name, u.TokenQuota, u.AllowedModels, u.IsActive, u.ID)
+	_, err := r.db.ExecContext(ctx, query, u.Username, u.Name, u.Role, u.TokenQuota, u.AllowedModels, u.IsActive, u.ID)
+	return err
+}
+
+func (r *SQLiteRepo) UpdateUserPassword(ctx context.Context, id, passwordHash string) error {
+	query := `UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?`
+	_, err := r.db.ExecContext(ctx, query, passwordHash, id)
+	return err
+}
+
+func (r *SQLiteRepo) ResetUserUsage(ctx context.Context, id string) error {
+	query := `UPDATE users SET tokens_used = 0, updated_at = datetime('now') WHERE id = ?`
+	_, err := r.db.ExecContext(ctx, query, id)
+	return err
+}
+
+func (r *SQLiteRepo) UpdateUserLastLogin(ctx context.Context, id string) error {
+	query := `UPDATE users SET last_login_at = datetime('now') WHERE id = ?`
+	_, err := r.db.ExecContext(ctx, query, id)
 	return err
 }
 
@@ -434,6 +494,59 @@ func (r *SQLiteRepo) GetDashboardStats(ctx context.Context) (*models.DashboardSt
 
 	// Recent 10 logs
 	recentLogs, _, _ := r.GetRequestLogs(ctx, 10, 0, "", "", 0)
+	stats.RecentLogs = recentLogs
+
+	return stats, nil
+}
+
+func (r *SQLiteRepo) GetUserDashboardStats(ctx context.Context, userID string) (*models.DashboardStats, error) {
+	stats := &models.DashboardStats{}
+
+	// User-specific Totals
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*), COALESCE(SUM(total_tokens), 0) FROM request_logs WHERE user_id = ?", userID).Scan(&stats.TotalRequests, &stats.TotalTokens)
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM api_keys WHERE user_id = ? AND is_active = 1", userID).Scan(&stats.ActiveKeys)
+
+	// User Daily Usage (last 14 days)
+	dailyQuery := `
+		SELECT strftime('%Y-%m-%d', created_at) as log_date, 
+		       COALESCE(SUM(total_tokens), 0) as tokens, 
+		       COUNT(*) as reqs
+		FROM request_logs
+		WHERE user_id = ? AND created_at >= datetime('now', '-14 days')
+		GROUP BY log_date
+		ORDER BY log_date ASC`
+	dailyRows, err := r.db.QueryContext(ctx, dailyQuery, userID)
+	if err == nil {
+		defer dailyRows.Close()
+		for dailyRows.Next() {
+			var du models.DailyUsage
+			if err := dailyRows.Scan(&du.Date, &du.TotalTokens, &du.Requests); err == nil {
+				stats.DailyUsage = append(stats.DailyUsage, du)
+			}
+		}
+	}
+
+	// User Top Models
+	topModelsQuery := `
+		SELECT model, COUNT(*) as req_count, COALESCE(SUM(total_tokens), 0) as total_tok
+		FROM request_logs
+		WHERE user_id = ? AND model != ''
+		GROUP BY model
+		ORDER BY req_count DESC
+		LIMIT 5`
+	tmRows, err := r.db.QueryContext(ctx, topModelsQuery, userID)
+	if err == nil {
+		defer tmRows.Close()
+		for tmRows.Next() {
+			var tm models.TopModelStat
+			if err := tmRows.Scan(&tm.Model, &tm.Requests, &tm.TotalTokens); err == nil {
+				stats.TopModels = append(stats.TopModels, tm)
+			}
+		}
+	}
+
+	// User Recent 10 logs
+	recentLogs, _, _ := r.GetRequestLogs(ctx, 10, 0, userID, "", 0)
 	stats.RecentLogs = recentLogs
 
 	return stats, nil

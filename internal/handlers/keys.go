@@ -12,28 +12,45 @@ import (
 
 func (h *Handler) KeysPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	keys, err := h.repo.GetAllAPIKeys(ctx)
+	currentUser := GetUserFromContext(ctx)
+
+	var keys []models.APIKey
+	var err error
+
+	if currentUser != nil && currentUser.IsAdmin() {
+		keys, err = h.repo.GetAllAPIKeys(ctx)
+		filterUserID := r.URL.Query().Get("user_id")
+		if filterUserID != "" {
+			filtered := []models.APIKey{}
+			for _, k := range keys {
+				if k.UserID == filterUserID {
+					filtered = append(filtered, k)
+				}
+			}
+			keys = filtered
+		}
+	} else if currentUser != nil {
+		keys, err = h.repo.GetAPIKeysByUserID(ctx, currentUser.ID)
+		for i := range keys {
+			keys[i].UserName = currentUser.Name
+		}
+	}
+
 	if err != nil {
 		keys = []models.APIKey{}
 	}
 
-	filterUserID := r.URL.Query().Get("user_id")
-	if filterUserID != "" {
-		filtered := []models.APIKey{}
-		for _, k := range keys {
-			if k.UserID == filterUserID {
-				filtered = append(filtered, k)
-			}
-		}
-		keys = filtered
+	var users []models.User
+	if currentUser != nil && currentUser.IsAdmin() {
+		users, _ = h.repo.GetAllUsers(ctx)
+	} else if currentUser != nil {
+		users = []models.User{*currentUser}
 	}
-
-	users, _ := h.repo.GetAllUsers(ctx)
 
 	successMsg := r.URL.Query().Get("msg")
 	errorMsg := r.URL.Query().Get("error")
 
-	h.render(w, "keys.html", "base.html", map[string]interface{}{
+	h.render(w, r, "keys.html", "base.html", map[string]interface{}{
 		"ActivePage": "keys",
 		"Keys":       keys,
 		"Users":      users,
@@ -44,7 +61,15 @@ func (h *Handler) KeysPage(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) CreateKey(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
+	ctx := r.Context()
+	currentUser := GetUserFromContext(ctx)
+
 	userID := strings.TrimSpace(r.FormValue("user_id"))
+	// Enforce self-only key creation for non-admin
+	if currentUser != nil && !currentUser.IsAdmin() {
+		userID = currentUser.ID
+	}
+
 	name := strings.TrimSpace(r.FormValue("name"))
 	customKey := strings.TrimSpace(r.FormValue("custom_key"))
 
@@ -69,7 +94,6 @@ func (h *Handler) CreateKey(w http.ResponseWriter, r *http.Request) {
 		IsActive: true,
 	}
 
-	ctx := r.Context()
 	if err := h.repo.CreateAPIKey(ctx, apiKey); err != nil {
 		http.Redirect(w, r, "/keys?error="+err.Error(), http.StatusSeeOther)
 		return
@@ -91,6 +115,7 @@ func (h *Handler) CreateKey(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ToggleKeyStatus(w http.ResponseWriter, r *http.Request) {
 	keyID := chi.URLParam(r, "id")
 	ctx := r.Context()
+	currentUser := GetUserFromContext(ctx)
 
 	// Find key to toggle
 	keys, err := h.repo.GetAllAPIKeys(ctx)
@@ -109,6 +134,12 @@ func (h *Handler) ToggleKeyStatus(w http.ResponseWriter, r *http.Request) {
 
 	if targetKey == nil {
 		http.Redirect(w, r, "/keys?error=Key+not+found", http.StatusSeeOther)
+		return
+	}
+
+	// Non-admin can only toggle their own keys
+	if currentUser != nil && !currentUser.IsAdmin() && targetKey.UserID != currentUser.ID {
+		http.Redirect(w, r, "/keys?error=Permission+denied", http.StatusSeeOther)
 		return
 	}
 
@@ -133,6 +164,33 @@ func (h *Handler) ToggleKeyStatus(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DeleteKey(w http.ResponseWriter, r *http.Request) {
 	keyID := chi.URLParam(r, "id")
 	ctx := r.Context()
+	currentUser := GetUserFromContext(ctx)
+
+	keys, err := h.repo.GetAllAPIKeys(ctx)
+	if err != nil {
+		http.Redirect(w, r, "/keys?error=Key+not+found", http.StatusSeeOther)
+		return
+	}
+
+	var targetKey *models.APIKey
+	for _, k := range keys {
+		if k.ID == keyID {
+			targetKey = &k
+			break
+		}
+	}
+
+	if targetKey == nil {
+		http.Redirect(w, r, "/keys?error=Key+not+found", http.StatusSeeOther)
+		return
+	}
+
+	// Non-admin can only delete their own keys
+	if currentUser != nil && !currentUser.IsAdmin() && targetKey.UserID != currentUser.ID {
+		http.Redirect(w, r, "/keys?error=Permission+denied", http.StatusSeeOther)
+		return
+	}
+
 	if err := h.repo.DeleteAPIKey(ctx, keyID); err != nil {
 		http.Redirect(w, r, "/keys?error="+err.Error(), http.StatusSeeOther)
 		return

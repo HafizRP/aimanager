@@ -1,8 +1,12 @@
 package handlers
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -24,7 +28,7 @@ func (h *Handler) UsersPage(w http.ResponseWriter, r *http.Request) {
 	successMsg := r.URL.Query().Get("msg")
 	errorMsg := r.URL.Query().Get("error")
 
-	h.render(w, "users.html", "base.html", map[string]interface{}{
+	h.render(w, r, "users.html", "base.html", map[string]interface{}{
 		"ActivePage":      "users",
 		"Users":           users,
 		"AvailableModels": availableModels,
@@ -39,6 +43,39 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		http.Redirect(w, r, "/users?error=User+name+cannot+be+empty", http.StatusSeeOther)
 		return
+	}
+
+	username := strings.ToLower(strings.TrimSpace(r.FormValue("username")))
+	if username == "" {
+		// Clean up name for username
+		reg := regexp.MustCompile("[^a-z0-9]+")
+		username = reg.ReplaceAllString(strings.ToLower(name), "")
+		if username == "" {
+			username = "user" + GenerateRandomPassword(4)
+		}
+	}
+
+	// Check if username already exists
+	ctx := r.Context()
+	if existing, _ := h.repo.GetUserByUsername(ctx, username); existing != nil {
+		http.Redirect(w, r, "/users?error=Username+'"+username+"'+is+already+taken", http.StatusSeeOther)
+		return
+	}
+
+	password := strings.TrimSpace(r.FormValue("password"))
+	if password == "" {
+		password = GenerateRandomPassword(8)
+	}
+
+	passwordHash, err := HashPassword(password)
+	if err != nil {
+		http.Redirect(w, r, "/users?error=Failed+to+hash+password", http.StatusSeeOther)
+		return
+	}
+
+	role := strings.TrimSpace(r.FormValue("role"))
+	if role != "admin" {
+		role = "user"
 	}
 
 	quotaStr := r.FormValue("token_quota")
@@ -60,15 +97,16 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	userID := uuid.New().String()
 	user := &models.User{
 		ID:            userID,
+		Username:      username,
 		Name:          name,
-		Role:          "user",
+		PasswordHash:  passwordHash,
+		Role:          role,
 		TokenQuota:    quota,
 		TokensUsed:    0,
 		AllowedModels: allowedModelsJSON,
 		IsActive:      true,
 	}
 
-	ctx := r.Context()
 	if err := h.repo.CreateUser(ctx, user); err != nil {
 		http.Redirect(w, r, "/users?error="+err.Error(), http.StatusSeeOther)
 		return
@@ -88,11 +126,13 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		if h.syncer != nil {
 			_ = h.syncer.SyncKey(apiKey, user.Name)
 		}
-		http.Redirect(w, r, "/users?msg=User+and+API+key+created+successfully!+Key:+"+generatedKey, http.StatusSeeOther)
+		msg := fmt.Sprintf("User '%s' created! Password: %s | Key: %s", username, password, generatedKey)
+		http.Redirect(w, r, "/users?msg="+msg, http.StatusSeeOther)
 		return
 	}
 
-	http.Redirect(w, r, "/users?msg=User+created+successfully", http.StatusSeeOther)
+	msg := fmt.Sprintf("User '%s' created successfully! Login Password: %s", username, password)
+	http.Redirect(w, r, "/users?msg="+msg, http.StatusSeeOther)
 }
 
 func (h *Handler) EditUser(w http.ResponseWriter, r *http.Request) {
@@ -112,6 +152,21 @@ func (h *Handler) EditUser(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(r.FormValue("name"))
 	if name != "" {
 		user.Name = name
+	}
+
+	username := strings.ToLower(strings.TrimSpace(r.FormValue("username")))
+	if username != "" && username != user.Username {
+		// Check uniqueness
+		if existing, _ := h.repo.GetUserByUsername(ctx, username); existing != nil && existing.ID != user.ID {
+			http.Redirect(w, r, "/users?error=Username+'"+username+"'+is+already+taken", http.StatusSeeOther)
+			return
+		}
+		user.Username = username
+	}
+
+	role := strings.TrimSpace(r.FormValue("role"))
+	if role == "admin" || role == "user" {
+		user.Role = role
 	}
 
 	quotaStr := r.FormValue("token_quota")
@@ -138,6 +193,49 @@ func (h *Handler) EditUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, "/users?msg=User+updated+successfully", http.StatusSeeOther)
+}
+
+func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	userID := chi.URLParam(r, "id")
+	ctx := r.Context()
+
+	user, err := h.repo.GetUserByID(ctx, userID)
+	if err != nil {
+		http.Redirect(w, r, "/users?error=User+not+found", http.StatusSeeOther)
+		return
+	}
+
+	newPassword := strings.TrimSpace(r.FormValue("new_password"))
+	if newPassword == "" {
+		newPassword = GenerateRandomPassword(8)
+	}
+
+	hash, err := HashPassword(newPassword)
+	if err != nil {
+		http.Redirect(w, r, "/users?error=Failed+to+hash+password", http.StatusSeeOther)
+		return
+	}
+
+	if err := h.repo.UpdateUserPassword(ctx, userID, hash); err != nil {
+		http.Redirect(w, r, "/users?error="+err.Error(), http.StatusSeeOther)
+		return
+	}
+
+	msg := fmt.Sprintf("Password for '%s' reset to: %s", user.Username, newPassword)
+	http.Redirect(w, r, "/users?msg="+msg, http.StatusSeeOther)
+}
+
+func (h *Handler) ResetUsage(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "id")
+	ctx := r.Context()
+
+	if err := h.repo.ResetUserUsage(ctx, userID); err != nil {
+		http.Redirect(w, r, "/users?error="+err.Error(), http.StatusSeeOther)
+		return
+	}
+
+	http.Redirect(w, r, "/users?msg=Token+usage+counter+reset+to+0", http.StatusSeeOther)
 }
 
 func (h *Handler) ToggleUserStatus(w http.ResponseWriter, r *http.Request) {
@@ -189,4 +287,14 @@ func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, "/users?msg=User+and+keys+deleted+successfully", http.StatusSeeOther)
+}
+
+func GenerateRandomPassword(length int) string {
+	b := make([]byte, length/2+1)
+	_, _ = rand.Read(b)
+	str := hex.EncodeToString(b)
+	if len(str) > length {
+		return str[:length]
+	}
+	return str
 }

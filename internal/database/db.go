@@ -36,14 +36,17 @@ func migrate(db *sql.DB) error {
 	schema := `
 	CREATE TABLE IF NOT EXISTS users (
 		id TEXT PRIMARY KEY,
+		username TEXT UNIQUE,
 		name TEXT NOT NULL,
+		password_hash TEXT,
 		role TEXT NOT NULL DEFAULT 'user',
 		token_quota INTEGER NOT NULL DEFAULT 0,
 		tokens_used INTEGER NOT NULL DEFAULT 0,
 		allowed_models TEXT NOT NULL DEFAULT '["*"]',
 		is_active INTEGER NOT NULL DEFAULT 1,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		last_login_at DATETIME
 	);
 
 	CREATE TABLE IF NOT EXISTS api_keys (
@@ -89,6 +92,15 @@ func migrate(db *sql.DB) error {
 	);
 	`
 
-	_, err := db.Exec(schema)
-	return err
+	if _, err := db.Exec(schema); err != nil {
+		return err
+	}
+
+	// Idempotent column additions for existing tables
+	_, _ = db.Exec(`ALTER TABLE users ADD COLUMN username TEXT;`)
+	_, _ = db.Exec(`ALTER TABLE users ADD COLUMN password_hash TEXT;`)
+	_, _ = db.Exec(`ALTER TABLE users ADD COLUMN last_login_at DATETIME;`)
+	_, _ = db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username);`)
+
+	return nil
 }

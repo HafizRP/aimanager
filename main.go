@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -57,6 +58,9 @@ func main() {
 
 	// 4. Seed initial user and API key if table is empty
 	seedInitialData(repo, keySyncer)
+
+	// Reconcile username and password hashes for existing users
+	reconcileExistingUsers(repo, cfg)
 
 	// 5. Backfill/Sync all keys to 9router Core
 	if existingKeys, err := repo.GetAllAPIKeys(context.Background()); err == nil && len(existingKeys) > 0 {
@@ -121,31 +125,38 @@ func main() {
 	r.Post("/login", h.LoginPost)
 	r.Post("/logout", h.LogoutPost)
 
-	// 9. Protected Web Admin Dashboard Routes
-	r.Group(func(admin chi.Router) {
-		admin.Use(h.RequireAuth)
+	// 9. Protected Web Dashboard Routes (Accessible by Authenticated Users)
+	r.Group(func(authRouter chi.Router) {
+		authRouter.Use(h.RequireAuth)
 
-		admin.Get("/", h.DashboardPage)
-		admin.Get("/api/stats", h.APIStats)
+		// Shared: Dashboard, Keys (self-scoped for user), Logs (self-scoped for user), Models (whitelist-scoped for user)
+		authRouter.Get("/", h.DashboardPage)
+		authRouter.Get("/api/stats", h.APIStats)
 
-		// Users
-		admin.Get("/users", h.UsersPage)
-		admin.Post("/users", h.CreateUser)
-		admin.Post("/users/{id}/edit", h.EditUser)
-		admin.Post("/users/{id}/toggle", h.ToggleUserStatus)
-		admin.Post("/users/{id}/delete", h.DeleteUser)
-
-		// Keys
-		admin.Get("/keys", h.KeysPage)
-		admin.Post("/keys", h.CreateKey)
-		admin.Post("/keys/{id}/toggle", h.ToggleKeyStatus)
-		admin.Post("/keys/{id}/delete", h.DeleteKey)
+		// Keys (Scoped: Admin can manage all, Standard users manage their own)
+		authRouter.Get("/keys", h.KeysPage)
+		authRouter.Post("/keys", h.CreateKey)
+		authRouter.Post("/keys/{id}/toggle", h.ToggleKeyStatus)
+		authRouter.Post("/keys/{id}/delete", h.DeleteKey)
 
 		// Logs, Models, Settings
-		admin.Get("/logs", h.LogsPage)
-		admin.Get("/models", h.ModelsPage)
-		admin.Get("/settings", h.SettingsPage)
-		admin.Post("/settings/password", h.UpdatePasswordPost)
+		authRouter.Get("/logs", h.LogsPage)
+		authRouter.Get("/models", h.ModelsPage)
+		authRouter.Get("/settings", h.SettingsPage)
+		authRouter.Post("/settings/password", h.UpdatePasswordPost)
+
+		// Admin-Only Routes (User Management & Administrative Overrides)
+		authRouter.Group(func(adminOnly chi.Router) {
+			adminOnly.Use(h.RequireAdmin)
+
+			adminOnly.Get("/users", h.UsersPage)
+			adminOnly.Post("/users", h.CreateUser)
+			adminOnly.Post("/users/{id}/edit", h.EditUser)
+			adminOnly.Post("/users/{id}/password", h.ResetPassword)
+			adminOnly.Post("/users/{id}/reset-usage", h.ResetUsage)
+			adminOnly.Post("/users/{id}/toggle", h.ToggleUserStatus)
+			adminOnly.Post("/users/{id}/delete", h.DeleteUser)
+		})
 	})
 
 	// 10. Start Server with Graceful Shutdown
@@ -244,4 +255,34 @@ func seedInitialData(repo repository.Repository, sync *syncer.Syncer) {
 	}
 
 	slog.Info("Initial data seeded", "admin_key", adminKey, "demo_key", demoKey)
+}
+
+func reconcileExistingUsers(repo repository.Repository, cfg *config.Config) {
+	ctx := context.Background()
+	users, err := repo.GetAllUsers(ctx)
+	if err != nil {
+		return
+	}
+
+	for _, u := range users {
+		updated := false
+		if u.Username == "" {
+			u.Username = strings.ToLower(strings.ReplaceAll(u.Name, " ", ""))
+			updated = true
+		}
+		if u.PasswordHash == "" {
+			pass := "password123"
+			if u.Username == "admin" || u.Role == "admin" {
+				pass = cfg.AdminPassword
+			}
+			hash, err := handlers.HashPassword(pass)
+			if err == nil {
+				u.PasswordHash = hash
+				_ = repo.UpdateUserPassword(ctx, u.ID, hash)
+			}
+		}
+		if updated {
+			_ = repo.UpdateUser(ctx, &u)
+		}
+	}
 }

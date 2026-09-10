@@ -3,11 +3,23 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+
+	"9router-gateway/internal/models"
 )
 
 func (h *Handler) DashboardPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	stats, err := h.repo.GetDashboardStats(ctx)
+	user := GetUserFromContext(ctx)
+
+	var stats *models.DashboardStats
+	var err error
+
+	if user != nil && user.IsAdmin() {
+		stats, err = h.repo.GetDashboardStats(ctx)
+	} else if user != nil {
+		stats, err = h.repo.GetUserDashboardStats(ctx, user.ID)
+	}
+
 	if err != nil {
 		stats = nil
 	}
@@ -15,7 +27,7 @@ func (h *Handler) DashboardPage(w http.ResponseWriter, r *http.Request) {
 	successMsg := r.URL.Query().Get("msg")
 	errorMsg := r.URL.Query().Get("error")
 
-	h.render(w, "dashboard.html", "base.html", map[string]interface{}{
+	h.render(w, r, "dashboard.html", "base.html", map[string]interface{}{
 		"ActivePage": "dashboard",
 		"Stats":      stats,
 		"SuccessMsg": successMsg,
@@ -25,7 +37,17 @@ func (h *Handler) DashboardPage(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) APIStats(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	stats, err := h.repo.GetDashboardStats(ctx)
+	user := GetUserFromContext(ctx)
+
+	var stats *models.DashboardStats
+	var err error
+
+	if user != nil && user.IsAdmin() {
+		stats, err = h.repo.GetDashboardStats(ctx)
+	} else if user != nil {
+		stats, err = h.repo.GetUserDashboardStats(ctx, user.ID)
+	}
+
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

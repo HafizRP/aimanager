@@ -1,6 +1,19 @@
 {{ define "title" }}Dashboard - AI Manager{{ end }}
 
 {{ define "content" }}
+{{ if not .IsAdmin }}
+  <!-- Standard User Banner -->
+  <div class="mb-4 d-flex flex-column flex-md-row align-items-md-center justify-content-between p-3 card-modern" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(16, 185, 129, 0.05));">
+    <div>
+      <h5 class="fw-bold mb-1 text-light">Welcome back, {{ .CurrentUser.Name }}! 👋</h5>
+      <p class="text-dim small mb-0">Here is your personal LLM API usage, active keys, and remaining token balance.</p>
+    </div>
+    <div class="mt-2 mt-md-0">
+      <a href="/keys" class="btn-modern-primary btn-sm"><i class="bi bi-key me-1"></i> Manage My Keys</a>
+    </div>
+  </div>
+{{ end }}
+
 <!-- Top KPI Metric Cards -->
 <div class="row g-3 mb-4">
   <!-- KPI 1: Total Requests -->
@@ -8,7 +21,7 @@
     <div class="card-modern card-interactive p-3 h-100">
       <div class="d-flex align-items-center justify-content-between">
         <div>
-          <span class="kpi-title">Total Requests</span>
+          <span class="kpi-title">{{ if .IsAdmin }}Total Requests{{ else }}My Requests{{ end }}</span>
           <div class="kpi-value mt-1">{{ formatNumber .Stats.TotalRequests }}</div>
         </div>
         <div class="kpi-icon kpi-icon-indigo">
@@ -29,7 +42,7 @@
     <div class="card-modern card-interactive p-3 h-100">
       <div class="d-flex align-items-center justify-content-between">
         <div>
-          <span class="kpi-title">Total Tokens Used</span>
+          <span class="kpi-title">{{ if .IsAdmin }}Total Tokens Used{{ else }}My Tokens Used{{ end }}</span>
           <div class="kpi-value mt-1 text-light">{{ formatNumber .Stats.TotalTokens }}</div>
         </div>
         <div class="kpi-icon kpi-icon-cyan">
@@ -45,25 +58,46 @@
     </div>
   </div>
 
-  <!-- KPI 3: Users -->
+  <!-- KPI 3: Users (Admin) or Token Balance (User) -->
   <div class="col-sm-6 col-xl-3">
     <div class="card-modern card-interactive p-3 h-100">
       <div class="d-flex align-items-center justify-content-between">
         <div>
-          <span class="kpi-title">Active Users</span>
+          <span class="kpi-title">{{ if .IsAdmin }}Active Users{{ else }}Token Balance{{ end }}</span>
           <div class="kpi-value mt-1">
-            {{ .Stats.ActiveUsers }} <span class="fs-6 fw-normal text-dim">/ {{ .Stats.TotalUsers }}</span>
+            {{ if .IsAdmin }}
+              {{ .Stats.ActiveUsers }} <span class="fs-6 fw-normal text-dim">/ {{ .Stats.TotalUsers }}</span>
+            {{ else }}
+              {{ if eq .CurrentUser.TokenQuota 0 }}
+                <span class="text-emerald fs-4">Unlimited</span>
+              {{ else }}
+                {{ $used := .CurrentUser.TokensUsed }}
+                {{ $quota := .CurrentUser.TokenQuota }}
+                {{ if ge $used $quota }}
+                  <span class="text-danger fs-4">0</span>
+                {{ else }}
+                  {{ formatNumber (sub $quota $used) }}
+                {{ end }}
+              {{ end }}
+            {{ end }}
           </div>
         </div>
         <div class="kpi-icon kpi-icon-emerald">
-          <i class="bi bi-people-fill"></i>
+          <i class="bi {{ if .IsAdmin }}bi-people-fill{{ else }}bi-wallet2{{ end }}"></i>
         </div>
       </div>
       <div class="mt-3 pt-2 border-top border-secondary border-opacity-10 d-flex align-items-center justify-content-between text-dim small">
-        <a href="/users" class="text-decoration-none text-emerald d-flex align-items-center gap-1 fw-medium">
-          Manage quotas <i class="bi bi-arrow-right"></i>
-        </a>
-        <span class="text-dim small">Quotas Active</span>
+        {{ if .IsAdmin }}
+          <a href="/users" class="text-decoration-none text-emerald d-flex align-items-center gap-1 fw-medium">
+            Manage quotas <i class="bi bi-arrow-right"></i>
+          </a>
+          <span class="text-dim small">Quotas Active</span>
+        {{ else }}
+          <span class="text-dim">
+            Quota: {{ if eq .CurrentUser.TokenQuota 0 }}Unlimited{{ else }}{{ formatNumber .CurrentUser.TokenQuota }}{{ end }}
+          </span>
+          <span class="badge-modern badge-emerald" style="font-size: 0.68rem;">Active</span>
+        {{ end }}
       </div>
     </div>
   </div>
@@ -73,7 +107,7 @@
     <div class="card-modern card-interactive p-3 h-100">
       <div class="d-flex align-items-center justify-content-between">
         <div>
-          <span class="kpi-title">Active API Keys</span>
+          <span class="kpi-title">{{ if .IsAdmin }}Active API Keys{{ else }}My API Keys{{ end }}</span>
           <div class="kpi-value mt-1">{{ .Stats.ActiveKeys }}</div>
         </div>
         <div class="kpi-icon kpi-icon-amber">
@@ -147,39 +181,80 @@
   </div>
 </div>
 
-<!-- Bottom Section: Top Users & Recent Requests -->
+<!-- Bottom Section: Top Users (Admin) / Quota (User) & Recent Requests -->
 <div class="row g-3">
-  <!-- Top Users -->
+  <!-- Left Column: Top Users (if Admin) or Quota Card (if User) -->
   <div class="col-lg-4">
     <div class="card-modern p-4 h-100">
-      <div class="d-flex align-items-center justify-content-between mb-3">
-        <h6 class="fw-bold mb-0 text-light d-flex align-items-center gap-2">
-          <i class="bi bi-trophy text-warning"></i> Top Users
-        </h6>
-        <a href="/users" class="text-dim small text-decoration-none">All users &rarr;</a>
-      </div>
-
-      {{ if .Stats.TopUsers }}
-        <div class="d-flex flex-column gap-3">
-          {{ range .Stats.TopUsers }}
-            <div>
-              <div class="d-flex justify-content-between align-items-center small mb-1">
-                <span class="fw-medium text-light">{{ .UserName }}</span>
-                <span class="text-dim font-monospace">{{ formatNumber .TokensUsed }} tok</span>
-              </div>
-              <div class="progress-modern">
-                <div class="progress-bar" role="progressbar" style="width: 100%;"></div>
-              </div>
-              <div class="text-dim small mt-1 text-end" style="font-size: 0.72rem;">
-                {{ .Requests }} requests logged
-              </div>
-            </div>
-          {{ end }}
+      {{ if .IsAdmin }}
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <h6 class="fw-bold mb-0 text-light d-flex align-items-center gap-2">
+            <i class="bi bi-trophy text-warning"></i> Top Users
+          </h6>
+          <a href="/users" class="text-dim small text-decoration-none">All users &rarr;</a>
         </div>
+
+        {{ if .Stats.TopUsers }}
+          <div class="d-flex flex-column gap-3">
+            {{ range .Stats.TopUsers }}
+              <div>
+                <div class="d-flex justify-content-between align-items-center small mb-1">
+                  <span class="fw-medium text-light">{{ .UserName }}</span>
+                  <span class="text-dim font-monospace">{{ formatNumber .TokensUsed }} tok</span>
+                </div>
+                <div class="progress-modern">
+                  <div class="progress-bar" role="progressbar" style="width: 100%;"></div>
+                </div>
+                <div class="text-dim small mt-1 text-end" style="font-size: 0.72rem;">
+                  {{ .Requests }} requests logged
+                </div>
+              </div>
+            {{ end }}
+          </div>
+        {{ else }}
+          <div class="text-center text-dim py-5 small">
+            <i class="bi bi-people fs-3 d-block mb-2 opacity-50"></i>
+            No users data recorded
+          </div>
+        {{ end }}
       {{ else }}
-        <div class="text-center text-dim py-5 small">
-          <i class="bi bi-people fs-3 d-block mb-2 opacity-50"></i>
-          No users data recorded
+        <!-- User Quota Card -->
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <h6 class="fw-bold mb-0 text-light d-flex align-items-center gap-2">
+            <i class="bi bi-pie-chart text-primary"></i> Quota Status
+          </h6>
+          <span class="badge-modern badge-indigo" style="font-size: 0.68rem;">Personal</span>
+        </div>
+
+        <div class="mb-4">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="text-dim small">Used:</span>
+            <span class="font-monospace text-light fw-bold">{{ formatNumber .CurrentUser.TokensUsed }} tokens</span>
+          </div>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="text-dim small">Limit:</span>
+            <span class="font-monospace text-dim">{{ if eq .CurrentUser.TokenQuota 0 }}Unlimited{{ else }}{{ formatNumber .CurrentUser.TokenQuota }}{{ end }}</span>
+          </div>
+          {{ $p := .CurrentUser.QuotaPercent }}
+          <div class="progress-modern mt-2">
+            <div class="progress-bar {{ if gt $p 90.0 }}progress-bar-danger{{ else if gt $p 75.0 }}progress-bar-warning{{ end }}" 
+                 role="progressbar" style="width: {{ $p }}%;"></div>
+          </div>
+          <div class="text-dim small mt-1 text-end font-monospace" style="font-size: 0.75rem;">
+            {{ printf "%.1f" $p }}% consumed
+          </div>
+        </div>
+
+        <div class="pt-3 border-top border-secondary border-opacity-10">
+          <div class="text-dim small mb-2"><strong>Whitelisted Models:</strong></div>
+          <div style="max-height: 120px; overflow-y: auto;">
+            {{ if containsWildcard .CurrentUser.AllowedModels }}
+              <span class="badge-modern badge-emerald"><i class="bi bi-asterisk"></i> All Models Allowed</span>
+            {{ else }}
+              <span class="badge-modern badge-indigo mb-1">{{ countAllowed .CurrentUser.AllowedModels }} Models Active</span>
+              <div class="font-monospace text-dim small" style="font-size: 0.75rem;">{{ .CurrentUser.AllowedModels }}</div>
+            {{ end }}
+          </div>
         </div>
       {{ end }}
     </div>
@@ -227,9 +302,9 @@
                     {{ if eq .StatusCode 200 }}
                       <span class="badge-modern badge-emerald">200 OK</span>
                     {{ else if eq .StatusCode 403 }}
-                      <span class="badge-modern badge-amber">403 Blocked</span>
+                      <span class="badge-modern badge-amber" data-bs-toggle="tooltip" title="{{ .ErrorMessage }}">403 Blocked</span>
                     {{ else if eq .StatusCode 429 }}
-                      <span class="badge-modern badge-rose">429 Quota</span>
+                      <span class="badge-modern badge-rose" data-bs-toggle="tooltip" title="{{ .ErrorMessage }}">429 Quota</span>
                     {{ else }}
                       <span class="badge-modern badge-rose">{{ .StatusCode }}</span>
                     {{ end }}
@@ -240,7 +315,7 @@
             {{ else }}
               <tr>
                 <td colspan="7" class="text-center text-dim py-4 small">
-                  No requests proxied yet. Connect your client to <code>http://100.108.204.127:20129/v1</code>
+                  No requests recorded yet.
                 </td>
               </tr>
             {{ end }}

@@ -45,11 +45,13 @@
               <i class="bi bi-speedometer2"></i> Dashboard
             </a>
           </li>
-          <li class="nav-item">
-            <a class="nav-link {{ if eq .ActivePage "users" }}active{{ end }}" href="/users">
-              <i class="bi bi-people"></i> Users & Quotas
-            </a>
-          </li>
+          {{ if .IsAdmin }}
+            <li class="nav-item">
+              <a class="nav-link {{ if eq .ActivePage "users" }}active{{ end }}" href="/users">
+                <i class="bi bi-people"></i> Users & Quotas
+              </a>
+            </li>
+          {{ end }}
           <li class="nav-item">
             <a class="nav-link {{ if eq .ActivePage "keys" }}active{{ end }}" href="/keys">
               <i class="bi bi-key"></i> API Keys
@@ -67,12 +69,24 @@
           </li>
           <li class="nav-item">
             <a class="nav-link {{ if eq .ActivePage "settings" }}active{{ end }}" href="/settings">
-              <i class="bi bi-sliders"></i> Quick Setup
+              <i class="bi bi-sliders"></i> {{ if .IsAdmin }}Quick Setup{{ else }}Setup & Password{{ end }}
             </a>
           </li>
         </ul>
 
         <div class="d-flex align-items-center gap-3">
+          {{ if .CurrentUser }}
+            <div class="d-flex align-items-center gap-2 px-2 py-1 rounded-3" style="background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-subtle);">
+              <div class="kpi-icon kpi-icon-indigo" style="width: 26px; height: 26px; font-size: 0.8rem; border-radius: 6px;">
+                <i class="bi bi-person-fill"></i>
+              </div>
+              <div class="d-flex flex-column" style="line-height: 1.1;">
+                <span class="text-light fw-medium small">{{ .CurrentUser.Name }}</span>
+                <span class="text-dim" style="font-size: 0.65rem;">@{{ .CurrentUser.Username }} ({{ .CurrentUser.Role }})</span>
+              </div>
+            </div>
+          {{ end }}
+
           <!-- Upstream Status Indicator -->
           <div class="status-pill-live d-none d-md-inline-flex">
             <span class="pulse-dot"></span>

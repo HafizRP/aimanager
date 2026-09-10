@@ -4,9 +4,9 @@
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
   <div>
     <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
-      <i class="bi bi-people text-primary"></i> Users & Quotas
+      <i class="bi bi-people text-primary"></i> User Management & Quotas
     </h4>
-    <p class="text-dim small mb-0">Manage client accounts, token budgets, and per-user model access permissions.</p>
+    <p class="text-dim small mb-0">Manage client accounts, credentials, role permissions, and token budgets.</p>
   </div>
   <div>
     <button class="btn-modern-primary d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#createUserModal">
@@ -20,7 +20,8 @@
     <table class="table table-modern mb-0">
       <thead>
         <tr>
-          <th>User</th>
+          <th>User Account</th>
+          <th>Role</th>
           <th>Token Usage & Quota</th>
           <th>Allowed Models</th>
           <th>API Keys</th>
@@ -35,14 +36,21 @@
             <tr>
               <td>
                 <div class="d-flex align-items-center gap-2">
-                  <div class="kpi-icon kpi-icon-indigo" style="width: 34px; height: 34px; font-size: 0.95rem;">
-                    <i class="bi bi-person-fill"></i>
+                  <div class="kpi-icon {{ if .IsAdmin }}kpi-icon-indigo{{ else }}kpi-icon-cyan{{ end }}" style="width: 36px; height: 36px; font-size: 1rem;">
+                    <i class="bi {{ if .IsAdmin }}bi-shield-shaded{{ else }}bi-person-fill{{ end }}"></i>
                   </div>
                   <div>
                     <div class="fw-bold text-light">{{ .Name }}</div>
-                    <span class="badge-modern badge-gray" style="font-size: 0.68rem; padding: 0.1rem 0.4rem;">{{ .Role }}</span>
+                    <span class="text-dim font-monospace small" style="font-size: 0.75rem;">@{{ .Username }}</span>
                   </div>
                 </div>
+              </td>
+              <td>
+                {{ if .IsAdmin }}
+                  <span class="badge-modern badge-indigo"><i class="bi bi-shield-check"></i> Admin</span>
+                {{ else }}
+                  <span class="badge-modern badge-gray"><i class="bi bi-person"></i> User</span>
+                {{ end }}
               </td>
               <td style="min-width: 240px;">
                 <div class="d-flex justify-content-between align-items-center small mb-1">
@@ -66,7 +74,7 @@
                   </div>
                 {{ end }}
               </td>
-              <td style="max-width: 260px;">
+              <td style="max-width: 240px;">
                 {{ if containsWildcard .AllowedModels }}
                   <span class="badge-modern badge-emerald"><i class="bi bi-asterisk"></i> All Models Allowed</span>
                 {{ else }}
@@ -99,10 +107,23 @@
 
                   <!-- Edit Button -->
                   <button class="btn-modern-ghost py-1 px-2 btn-edit-user" 
-                          data-id="{{ .ID }}" data-name="{{ .Name }}" data-quota="{{ .TokenQuota }}" 
-                          data-models="{{ .AllowedModels }}" data-active="{{ .IsActive }}" title="Edit User">
+                          data-id="{{ .ID }}" data-name="{{ .Name }}" data-username="{{ .Username }}" data-role="{{ .Role }}"
+                          data-quota="{{ .TokenQuota }}" data-models="{{ .AllowedModels }}" data-active="{{ .IsActive }}" title="Edit User">
                     <i class="bi bi-pencil"></i>
                   </button>
+
+                  <!-- Password Reset Button -->
+                  <button class="btn-modern-ghost py-1 px-2 text-warning btn-password-user" 
+                          data-id="{{ .ID }}" data-username="{{ .Username }}" title="Reset Password">
+                    <i class="bi bi-key-fill"></i>
+                  </button>
+
+                  <!-- Reset Usage Button -->
+                  <form action="/users/{{ .ID }}/reset-usage" method="POST" class="d-inline m-0" onsubmit="return confirm('Reset token usage counter to 0 for {{ .Name }}?');">
+                    <button type="submit" class="btn-modern-ghost py-1 px-2 text-info" title="Reset Token Usage to 0">
+                      <i class="bi bi-arrow-counterclockwise"></i>
+                    </button>
+                  </form>
 
                   <!-- Toggle Status Form -->
                   <form action="/users/{{ .ID }}/toggle" method="POST" class="d-inline m-0">
@@ -124,7 +145,7 @@
           {{ end }}
         {{ else }}
           <tr>
-            <td colspan="7" class="text-center text-dim py-5">
+            <td colspan="8" class="text-center text-dim py-5">
               <i class="bi bi-people fs-2 d-block mb-2 opacity-50"></i>
               No users found. Click <strong>Add User</strong> to create your first client.
             </td>
@@ -142,30 +163,52 @@
       <form action="/users" method="POST">
         <div class="modal-header modal-header-modern">
           <h5 class="modal-title fw-bold text-light d-flex align-items-center gap-2">
-            <i class="bi bi-person-plus text-primary"></i> Create User & Assign Quota
+            <i class="bi bi-person-plus text-primary"></i> Create User & Credentials
           </h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body p-4">
-          <div class="row g-3 mb-4">
+          <div class="row g-3 mb-3">
             <div class="col-md-6">
-              <label class="form-label small text-muted">User / Client Label</label>
-              <input type="text" name="name" class="form-control form-control-modern" placeholder="e.g. Cursor Pro, Client A, John" required>
+              <label class="form-label small text-muted">Display Name</label>
+              <input type="text" name="name" class="form-control form-control-modern" placeholder="e.g. Client Alpha, John Doe" required>
             </div>
             <div class="col-md-6">
-              <label class="form-label small text-muted">Token Quota (0 for Unlimited)</label>
+              <label class="form-label small text-muted">Login Username</label>
+              <input type="text" name="username" class="form-control form-control-modern font-monospace" placeholder="e.g. clientalpha" required>
+            </div>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label small text-muted">Login Password</label>
               <div class="input-group">
-                <input type="number" name="token_quota" id="createQuotaInput" class="form-control form-control-modern" value="1000000" min="0" step="10000">
-                <button type="button" class="btn btn-modern-ghost dropdown-toggle" data-bs-toggle="dropdown">Presets</button>
-                <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end shadow">
-                  <li><a class="dropdown-item preset-quota" data-target="createQuotaInput" data-val="100000">100,000 (100k)</a></li>
-                  <li><a class="dropdown-item preset-quota" data-target="createQuotaInput" data-val="500000">500,000 (500k)</a></li>
-                  <li><a class="dropdown-item preset-quota" data-target="createQuotaInput" data-val="1000000">1,000,000 (1M)</a></li>
-                  <li><a class="dropdown-item preset-quota" data-target="createQuotaInput" data-val="5000000">5,000,000 (5M)</a></li>
-                  <li><hr class="dropdown-divider"></li>
-                  <li><a class="dropdown-item preset-quota" data-target="createQuotaInput" data-val="0">0 (Unlimited)</a></li>
-                </ul>
+                <input type="text" name="password" id="createPasswordInput" class="form-control form-control-modern font-monospace" placeholder="e.g. pass1234">
+                <button type="button" class="btn btn-modern-ghost" id="btnGenPassword"><i class="bi bi-magic"></i> Auto</button>
               </div>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small text-muted">Account Role</label>
+              <select name="role" class="form-select form-select-modern">
+                <option value="user" selected>Standard User (Client Portal)</option>
+                <option value="admin">Administrator (Full Access)</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small text-muted">Token Quota (0 for Unlimited)</label>
+            <div class="input-group">
+              <input type="number" name="token_quota" id="createQuotaInput" class="form-control form-control-modern font-monospace" value="1000000" min="0" step="10000">
+              <button type="button" class="btn btn-modern-ghost dropdown-toggle" data-bs-toggle="dropdown">Presets</button>
+              <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end shadow">
+                <li><a class="dropdown-item preset-quota" data-target="createQuotaInput" data-val="100000">100,000 (100k)</a></li>
+                <li><a class="dropdown-item preset-quota" data-target="createQuotaInput" data-val="500000">500,000 (500k)</a></li>
+                <li><a class="dropdown-item preset-quota" data-target="createQuotaInput" data-val="1000000">1,000,000 (1M)</a></li>
+                <li><a class="dropdown-item preset-quota" data-target="createQuotaInput" data-val="5000000">5,000,000 (5M)</a></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><a class="dropdown-item preset-quota" data-target="createQuotaInput" data-val="0">0 (Unlimited)</a></li>
+              </ul>
             </div>
           </div>
 
@@ -188,7 +231,7 @@
               <div class="text-dim small ps-4">User can invoke any model registered in 9router Core.</div>
             </div>
 
-            <div id="createModelsChecklistContainer" class="p-3 rounded-3" style="background: #0b0d14; border: 1px solid var(--border-subtle); max-height: 240px; overflow-y: auto; display: none;">
+            <div id="createModelsChecklistContainer" class="p-3 rounded-3" style="background: #0b0d14; border: 1px solid var(--border-subtle); max-height: 200px; overflow-y: auto; display: none;">
               <input type="text" class="form-control form-control-modern form-control-sm mb-2" id="createModelSearchInput" placeholder="Filter models...">
               <div id="createModelsChecklist" class="row g-2">
                 {{ range .AvailableModels }}
@@ -227,19 +270,33 @@
         <input type="hidden" name="id" id="editUserId">
         <div class="modal-header modal-header-modern">
           <h5 class="modal-title fw-bold text-light d-flex align-items-center gap-2">
-            <i class="bi bi-pencil-square text-primary"></i> Edit User & Whitelist
+            <i class="bi bi-pencil-square text-primary"></i> Edit User & Permissions
           </h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body p-4">
-          <div class="row g-3 mb-4">
+          <div class="row g-3 mb-3">
             <div class="col-md-6">
-              <label class="form-label small text-muted">User Name</label>
+              <label class="form-label small text-muted">Display Name</label>
               <input type="text" name="name" id="editUserName" class="form-control form-control-modern" required>
             </div>
             <div class="col-md-6">
+              <label class="form-label small text-muted">Login Username</label>
+              <input type="text" name="username" id="editUserUsername" class="form-control form-control-modern font-monospace" required>
+            </div>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label small text-muted">Account Role</label>
+              <select name="role" id="editUserRole" class="form-select form-select-modern">
+                <option value="user">Standard User (Client Portal)</option>
+                <option value="admin">Administrator (Full Access)</option>
+              </select>
+            </div>
+            <div class="col-md-6">
               <label class="form-label small text-muted">Token Quota (0 for Unlimited)</label>
-              <input type="number" name="token_quota" id="editUserQuota" class="form-control form-control-modern" min="0" step="10000">
+              <input type="number" name="token_quota" id="editUserQuota" class="form-control form-control-modern font-monospace" min="0" step="10000">
             </div>
           </div>
 
@@ -251,7 +308,7 @@
               </label>
             </div>
 
-            <div id="editModelsChecklistContainer" class="p-3 rounded-3" style="background: #0b0d14; border: 1px solid var(--border-subtle); max-height: 240px; overflow-y: auto;">
+            <div id="editModelsChecklistContainer" class="p-3 rounded-3" style="background: #0b0d14; border: 1px solid var(--border-subtle); max-height: 200px; overflow-y: auto;">
               <input type="text" class="form-control form-control-modern form-control-sm mb-2" id="editModelSearchInput" placeholder="Filter models...">
               <div id="editModelsChecklist" class="row g-2">
                 {{ range .AvailableModels }}
@@ -274,6 +331,36 @@
         <div class="modal-footer modal-footer-modern">
           <button type="button" class="btn-modern-ghost" data-bs-dismiss="modal">Cancel</button>
           <button type="submit" class="btn-modern-primary"><i class="bi bi-check2"></i> Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Reset Password -->
+<div class="modal fade" id="resetPasswordModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content modal-content-modern">
+      <form id="resetPasswordForm" action="/users/password" method="POST">
+        <div class="modal-header modal-header-modern">
+          <h5 class="modal-title fw-bold text-light d-flex align-items-center gap-2">
+            <i class="bi bi-key text-warning"></i> Reset User Password
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4">
+          <p class="text-dim small mb-3">Set a new login password for user <strong id="resetPassUsername" class="text-light"></strong>:</p>
+          <div class="mb-3">
+            <label class="form-label small text-muted">New Password</label>
+            <div class="input-group">
+              <input type="text" name="new_password" id="resetNewPassInput" class="form-control form-control-modern font-monospace" placeholder="Enter or generate..." required>
+              <button type="button" class="btn btn-modern-ghost" id="btnGenResetPassword"><i class="bi bi-magic"></i> Generate</button>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer modal-footer-modern">
+          <button type="button" class="btn-modern-ghost" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn-modern-primary"><i class="bi bi-check2"></i> Update Password</button>
         </div>
       </form>
     </div>
@@ -319,6 +406,21 @@
 
 {{ define "scripts" }}
 <script>
+  function randomStr(len) {
+    const chars = "abcdefghjkmnpqrstuvwxyz23456789";
+    let s = "";
+    for (let i = 0; i < len; i++) s += chars.charAt(Math.floor(Math.random() * chars.length));
+    return s;
+  }
+
+  document.getElementById("btnGenPassword")?.addEventListener("click", () => {
+    document.getElementById("createPasswordInput").value = randomStr(10);
+  });
+
+  document.getElementById("btnGenResetPassword")?.addEventListener("click", () => {
+    document.getElementById("resetNewPassInput").value = randomStr(10);
+  });
+
   // Quota preset click
   document.querySelectorAll(".preset-quota").forEach(el => {
     el.addEventListener("click", function(e) {
@@ -375,6 +477,8 @@
     btn.addEventListener("click", function() {
       const id = this.getAttribute("data-id");
       const name = this.getAttribute("data-name");
+      const username = this.getAttribute("data-username");
+      const role = this.getAttribute("data-role");
       const quota = this.getAttribute("data-quota");
       const modelsRaw = this.getAttribute("data-models");
       const isActive = this.getAttribute("data-active") === "true";
@@ -382,6 +486,8 @@
       document.getElementById("editUserId").value = id;
       document.getElementById("editUserForm").action = "/users/" + id + "/edit";
       document.getElementById("editUserName").value = name;
+      document.getElementById("editUserUsername").value = username;
+      document.getElementById("editUserRole").value = role || "user";
       document.getElementById("editUserQuota").value = quota;
       document.getElementById("editUserActive").checked = isActive;
 
@@ -399,6 +505,19 @@
       });
 
       editModal.show();
+    });
+  });
+
+  // Reset Password Modal Handling
+  const resetPassModal = new bootstrap.Modal(document.getElementById('resetPasswordModal'));
+  document.querySelectorAll(".btn-password-user").forEach(btn => {
+    btn.addEventListener("click", function() {
+      const id = this.getAttribute("data-id");
+      const username = this.getAttribute("data-username");
+      document.getElementById("resetPassUsername").textContent = username;
+      document.getElementById("resetPasswordForm").action = "/users/" + id + "/password";
+      document.getElementById("resetNewPassInput").value = randomStr(10);
+      resetPassModal.show();
     });
   });
 

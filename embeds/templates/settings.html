@@ -11,39 +11,41 @@
 </div>
 
 <div class="row g-4">
-  <!-- Left Column: Upstream & Server Status -->
+  <!-- Left Column: Upstream & Server Status (if Admin) and Password Change -->
   <div class="col-lg-5">
-    <div class="card-modern p-4 mb-4">
-      <h6 class="fw-bold mb-3 text-light d-flex align-items-center gap-2">
-        <i class="bi bi-diagram-3 text-primary"></i> Upstream 9router Core
-      </h6>
-      <div class="p-3 rounded-3 mb-3" style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-subtle);">
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <span class="text-dim small">Upstream Address</span>
-          <code class="text-info font-monospace">{{ .Config.UpstreamURL }}</code>
+    {{ if .IsAdmin }}
+      <div class="card-modern p-4 mb-4">
+        <h6 class="fw-bold mb-3 text-light d-flex align-items-center gap-2">
+          <i class="bi bi-diagram-3 text-primary"></i> Upstream 9router Core
+        </h6>
+        <div class="p-3 rounded-3 mb-3" style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-subtle);">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="text-dim small">Upstream Address</span>
+            <code class="text-info font-monospace">{{ .Config.UpstreamURL }}</code>
+          </div>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span class="text-dim small">Database Sync</span>
+            <span class="badge-modern badge-emerald"><i class="bi bi-check-circle-fill"></i> Auto-Synced</span>
+          </div>
+          <div class="d-flex justify-content-between align-items-center">
+            <span class="text-dim small">Local Core Health</span>
+            <span class="status-pill-live">
+              <span class="pulse-dot"></span> Operational
+            </span>
+          </div>
         </div>
-        <div class="d-flex justify-content-between align-items-center mb-2">
-          <span class="text-dim small">Database Sync</span>
-          <span class="badge-modern badge-emerald"><i class="bi bi-check-circle-fill"></i> Auto-Synced</span>
-        </div>
-        <div class="d-flex justify-content-between align-items-center">
-          <span class="text-dim small">Local Core Health</span>
-          <span class="status-pill-live">
-            <span class="pulse-dot"></span> Operational
-          </span>
+
+        <div class="d-flex justify-content-between align-items-center small text-dim pt-2 border-top border-secondary border-opacity-10">
+          <span>Gateway Listener:</span>
+          <code class="text-warning font-monospace">http://0.0.0.0:{{ .Config.Port }}</code>
         </div>
       </div>
+    {{ end }}
 
-      <div class="d-flex justify-content-between align-items-center small text-dim pt-2 border-top border-secondary border-opacity-10">
-        <span>Gateway Listener:</span>
-        <code class="text-warning font-monospace">http://0.0.0.0:{{ .Config.Port }}</code>
-      </div>
-    </div>
-
-    <!-- Admin Password -->
+    <!-- Password Change Card -->
     <div class="card-modern p-4">
       <h6 class="fw-bold mb-3 text-light d-flex align-items-center gap-2">
-        <i class="bi bi-shield-lock text-warning"></i> Admin Security
+        <i class="bi bi-shield-lock text-warning"></i> {{ if .IsAdmin }}Change Admin Password{{ else }}Change My Password{{ end }}
       </h6>
       <form action="/settings/password" method="POST">
         <div class="mb-3">

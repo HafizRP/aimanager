@@ -110,15 +110,19 @@
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body p-4">
-          <div class="mb-3">
-            <label class="form-label small text-muted">Assign to User Account</label>
-            <select name="user_id" class="form-select form-select-modern" required>
-              <option value="" disabled selected>-- Select a User --</option>
-              {{ range .Users }}
-                <option value="{{ .ID }}">{{ .Name }} (Quota: {{ if eq .TokenQuota 0 }}Unlimited{{ else }}{{ formatNumber .TokenQuota }}{{ end }})</option>
-              {{ end }}
-            </select>
-          </div>
+          {{ if .IsAdmin }}
+            <div class="mb-3">
+              <label class="form-label small text-muted">Assign to User Account</label>
+              <select name="user_id" class="form-select form-select-modern" required>
+                <option value="" disabled selected>-- Select a User --</option>
+                {{ range .Users }}
+                  <option value="{{ .ID }}">{{ .Name }} (@{{ .Username }})</option>
+                {{ end }}
+              </select>
+            </div>
+          {{ else }}
+            <input type="hidden" name="user_id" value="{{ .CurrentUser.ID }}">
+          {{ end }}
           <div class="mb-3">
             <label class="form-label small text-muted">Key Identifier / Purpose</label>
             <input type="text" name="name" class="form-control form-control-modern" placeholder="e.g. Cursor Pro, Hermes local, Cline CLI" required>

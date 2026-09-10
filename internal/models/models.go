@@ -5,18 +5,25 @@ import (
 )
 
 type User struct {
-	ID            string    `json:"id"`
-	Name          string    `json:"name"`
-	Role          string    `json:"role"`
-	TokenQuota    int64     `json:"token_quota"` // 0 = unlimited
-	TokensUsed    int64     `json:"tokens_used"`
-	AllowedModels string    `json:"allowed_models"` // JSON array string e.g. ["*"] or ["ag/gemini-3.8-flash-low"]
-	IsActive      bool      `json:"is_active"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID            string     `json:"id"`
+	Username      string     `json:"username"`
+	Name          string     `json:"name"`
+	PasswordHash  string     `json:"-"`
+	Role          string     `json:"role"` // "admin" or "user"
+	TokenQuota    int64      `json:"token_quota"` // 0 = unlimited
+	TokensUsed    int64      `json:"tokens_used"`
+	AllowedModels string     `json:"allowed_models"` // JSON array string e.g. ["*"] or ["ag/gemini-3.8-flash-low"]
+	IsActive      bool       `json:"is_active"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+	LastLoginAt   *time.Time `json:"last_login_at,omitempty"`
 
 	// Virtual fields for UI
 	KeyCount int `json:"key_count,omitempty"`
+}
+
+func (u *User) IsAdmin() bool {
+	return u.Role == "admin" || u.Role == "superadmin"
 }
 
 func (u *User) QuotaPercent() float64 {
