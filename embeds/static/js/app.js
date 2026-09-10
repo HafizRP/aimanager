@@ -125,6 +125,44 @@ document.addEventListener("DOMContentLoaded", function () {
     el.textContent = browserBaseURL;
   });
 
+  // Automatic Local Timezone Conversion for all .local-time elements
+  function updateAllLocalTimes() {
+    document.querySelectorAll(".local-time").forEach(el => {
+      const utcStr = el.getAttribute("data-utc");
+      if (!utcStr) return;
+
+      let date;
+      if (!utcStr.includes("Z") && !utcStr.includes("+")) {
+        date = new Date(utcStr.replace(" ", "T") + "Z");
+      } else {
+        date = new Date(utcStr);
+      }
+
+      if (isNaN(date.getTime())) return;
+
+      const yyyy = date.getFullYear();
+      const mm = String(date.getMonth() + 1).padStart(2, '0');
+      const dd = String(date.getDate()).padStart(2, '0');
+      const hh = String(date.getHours()).padStart(2, '0');
+      const min = String(date.getMinutes()).padStart(2, '0');
+      const ss = String(date.getSeconds()).padStart(2, '0');
+
+      el.textContent = `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`;
+      el.title = `UTC: ${utcStr}`;
+    });
+  }
+  updateAllLocalTimes();
+
+  // Show user's detected timezone in navbar badge
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const tzBadge = document.getElementById("userTimezoneBadge");
+    if (tzBadge) {
+      tzBadge.textContent = tz;
+      tzBadge.title = `Browser timezone: ${tz}`;
+    }
+  } catch (e) {}
+
   // Direct Click on Key Display
   document.addEventListener("click", function(e) {
     const keyDisplay = e.target.closest(".key-display");

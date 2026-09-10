@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/google/uuid"
+
 	"9router-gateway/internal/models"
 )
 
@@ -60,6 +62,9 @@ func (h *Handler) ModelsPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) SettingsPage(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	currentUser := GetUserFromContext(ctx)
+
 	successMsg := r.URL.Query().Get("msg")
 	errorMsg := r.URL.Query().Get("error")
 
@@ -73,10 +78,59 @@ func (h *Handler) SettingsPage(w http.ResponseWriter, r *http.Request) {
 	}
 	currentBaseURL := fmt.Sprintf("%s://%s/v1", scheme, host)
 
+	var userKey string
+	if currentUser != nil {
+		keys, err := h.repo.GetAPIKeysByUserID(ctx, currentUser.ID)
+		if err == nil && len(keys) > 0 {
+			for _, k := range keys {
+				if k.IsActive {
+					userKey = k.Key
+					break
+				}
+			}
+			if userKey == "" {
+				userKey = keys[0].Key
+			}
+		}
+		// If user has no key, create one automatically
+		if userKey == "" {
+			prefix := "sk-gw-"
+			if currentUser.IsAdmin() {
+				prefix = "sk-gw-admin-"
+			}
+			newKey := GenerateSecureAPIKey(prefix)
+			apiKey := &models.APIKey{
+				ID:       uuid.New().String(),
+				UserID:   currentUser.ID,
+				Key:      newKey,
+				Name:     "Default Key",
+				IsActive: true,
+			}
+			_ = h.repo.CreateAPIKey(ctx, apiKey)
+			if h.syncer != nil {
+				_ = h.syncer.SyncKey(apiKey, currentUser.Name)
+			}
+			userKey = newKey
+		}
+	}
+	if userKey == "" {
+		userKey = "sk-gw-your-api-key"
+	}
+
+	userModel := "ag/gemini-3.8-flash-high"
+	if currentUser != nil {
+		allowed := parseAllowedModels(currentUser.AllowedModels)
+		if len(allowed) > 0 && allowed[0] != "*" {
+			userModel = allowed[0]
+		}
+	}
+
 	h.render(w, r, "settings.html", "base.html", map[string]interface{}{
 		"ActivePage":     "settings",
 		"Config":         h.cfg,
 		"CurrentBaseURL": currentBaseURL,
+		"UserKey":        userKey,
+		"UserModel":      userModel,
 		"SuccessMsg":     successMsg,
 		"ErrorMsg":       errorMsg,
 	})

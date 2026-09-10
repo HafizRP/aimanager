@@ -98,8 +98,13 @@
                 <button class="btn-modern-ghost btn-sm copy-btn" data-copy="{{ .CurrentBaseURL }}">Copy</button>
               </div>
             </li>
-            <li>Paste your user <strong>API Key</strong> (<code>sk-gw-...</code>) created from the Users/Keys menu.</li>
-            <li>Add your whitelisted model ID (e.g. <code>ag/gemini-3.8-flash-high</code>).</li>
+            <li>Paste your <strong>API Key</strong>:
+              <div class="mt-1 mb-2 d-flex align-items-center gap-2">
+                <code class="p-2 rounded-2 flex-grow-1 font-monospace text-warning" style="background: #0b0d14; border: 1px solid var(--border-subtle);">{{ .UserKey }}</code>
+                <button class="btn-modern-ghost btn-sm copy-btn" data-copy="{{ .UserKey }}">Copy Key</button>
+              </div>
+            </li>
+            <li>Select or type whitelisted model ID: <code class="text-info font-monospace">{{ .UserModel }}</code></li>
           </ol>
         </div>
 
@@ -111,36 +116,52 @@
               <div>Base URL: <strong class="text-info font-monospace current-base-url-text">{{ .CurrentBaseURL }}</strong></div>
               <button class="btn-modern-ghost btn-sm py-0 px-2 copy-btn" data-copy="{{ .CurrentBaseURL }}">Copy</button>
             </div>
-            <div class="mb-2 text-dim">API Key: <strong class="text-warning font-monospace">sk-gw-your-api-key</strong></div>
-            <div class="text-dim">Model ID: <strong class="text-light font-monospace">ag/gemini-3.8-flash-high</strong></div>
+            <div class="mb-2 text-dim d-flex align-items-center justify-content-between">
+              <div>API Key: <strong class="text-warning font-monospace">{{ .UserKey }}</strong></div>
+              <button class="btn-modern-ghost btn-sm py-0 px-2 copy-btn" data-copy="{{ .UserKey }}">Copy</button>
+            </div>
+            <div class="text-dim d-flex align-items-center justify-content-between">
+              <div>Model ID: <strong class="text-light font-monospace">{{ .UserModel }}</strong></div>
+              <button class="btn-modern-ghost btn-sm py-0 px-2 copy-btn" data-copy="{{ .UserModel }}">Copy</button>
+            </div>
           </div>
         </div>
 
         <!-- Hermes Tab -->
         <div class="tab-pane fade" id="tab-hermes">
-          <div class="d-flex justify-content-between align-items-center mb-1">
-            <span class="small text-dim">In <code>~/.hermes/config.yaml</code> under <code>custom_providers</code>:</span>
-            <button class="btn-modern-ghost btn-sm py-0 px-2 copy-btn" data-target="#hermesYamlCode">Copy YAML</button>
+          <div class="mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <span class="small text-dim">1. Add to <code>~/.hermes/.env</code>:</span>
+              <button class="btn-modern-ghost btn-sm py-0 px-2 copy-btn" data-copy="GATEWAY_API_KEY={{ .UserKey }}">Copy Env</button>
+            </div>
+            <pre class="code-box-modern mb-2"><code>GATEWAY_API_KEY={{ .UserKey }}</code></pre>
           </div>
-          <pre class="code-box-modern mb-2"><code id="hermesYamlCode">custom_providers:
+
+          <div>
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <span class="small text-dim">2. Add to <code>~/.hermes/config.yaml</code> under <code>custom_providers</code>:</span>
+              <button class="btn-modern-ghost btn-sm py-0 px-2 copy-btn" data-target="#hermesYamlCode">Copy YAML</button>
+            </div>
+            <pre class="code-box-modern mb-2"><code id="hermesYamlCode">custom_providers:
   - name: AI Manager
     base_url: {{ .CurrentBaseURL }}
     key_env: GATEWAY_API_KEY
-    model: ag/gemini-3.8-flash-high
+    model: {{ .UserModel }}
     api_mode: chat_completions</code></pre>
+          </div>
         </div>
 
         <!-- Curl / Python Tab -->
         <div class="tab-pane fade" id="tab-curl">
           <div class="d-flex justify-content-between align-items-center mb-1">
             <span class="small text-dim">Test Curl Command:</span>
-            <button class="btn-modern-ghost btn-sm py-1 px-2 copy-btn" data-target="#curlCodeBlock">Copy</button>
+            <button class="btn-modern-ghost btn-sm py-1 px-2 copy-btn" data-target="#curlCodeBlock">Copy Command</button>
           </div>
           <pre class="code-box-modern"><code id="curlCodeBlock">curl -X POST {{ .CurrentBaseURL }}/chat/completions \
-  -H "Authorization: Bearer sk-gw-..." \
+  -H "Authorization: Bearer {{ .UserKey }}" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "ag/gemini-3.8-flash-high",
+    "model": "{{ .UserModel }}",
     "messages": [{"role": "user", "content": "Hello!"}],
     "stream": true
   }'</code></pre>

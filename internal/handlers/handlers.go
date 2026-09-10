@@ -75,23 +75,28 @@ func NewHandler(cfg *config.Config, repo repository.Repository, sync *syncer.Syn
 			}
 			return strconv.FormatInt(n, 10)
 		},
-		"formatDate": func(v interface{}) string {
+		"formatDate": func(v interface{}) template.HTML {
 			if v == nil {
-				return "Never"
+				return template.HTML(`<span class="text-secondary opacity-60">Never</span>`)
 			}
-			switch t := v.(type) {
+			var t time.Time
+			switch val := v.(type) {
 			case time.Time:
-				if t.IsZero() {
-					return "-"
-				}
-				return t.Format("2006-01-02 15:04:05")
+				t = val
 			case *time.Time:
-				if t == nil || t.IsZero() {
-					return "Never"
+				if val == nil || val.IsZero() {
+					return template.HTML(`<span class="text-secondary opacity-60">Never</span>`)
 				}
-				return t.Format("2006-01-02 15:04:05")
+				t = *val
+			default:
+				return template.HTML("-")
 			}
-			return "-"
+			if t.IsZero() {
+				return template.HTML("-")
+			}
+			utcStr := t.UTC().Format(time.RFC3339)
+			fallbackStr := t.Format("2006-01-02 15:04:05")
+			return template.HTML(fmt.Sprintf(`<span class="local-time" data-utc="%s">%s</span>`, utcStr, fallbackStr))
 		},
 		"maskKey": func(k string) string {
 			if len(k) <= 12 {
