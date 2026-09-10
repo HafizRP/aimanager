@@ -1,6 +1,8 @@
 package models
 
 import (
+	"encoding/json"
+	"strings"
 	"time"
 )
 
@@ -9,7 +11,7 @@ type User struct {
 	Username      string     `json:"username"`
 	Name          string     `json:"name"`
 	PasswordHash  string     `json:"-"`
-	Role          string     `json:"role"` // "admin" or "user"
+	Role          string     `json:"role"`        // "admin" or "user"
 	TokenQuota    int64      `json:"token_quota"` // 0 = unlimited
 	TokensUsed    int64      `json:"tokens_used"`
 	AllowedModels string     `json:"allowed_models"` // JSON array string e.g. ["*"] or ["ag/gemini-3.8-flash-low"]
@@ -39,6 +41,14 @@ func (u *User) QuotaPercent() float64 {
 	return p
 }
 
+func (u *User) GetAllowedModels() []string {
+	return ParseAllowedModels(u.AllowedModels)
+}
+
+func (u *User) HasModelAccess(model string) bool {
+	return IsModelAllowed(model, u.GetAllowedModels())
+}
+
 type APIKey struct {
 	ID            string     `json:"id"`
 	UserID        string     `json:"user_id"`
@@ -52,6 +62,21 @@ type APIKey struct {
 
 	// Virtual field for UI
 	UserName string `json:"user_name,omitempty"`
+}
+
+func (k *APIKey) GetAllowedModels() []string {
+	if strings.TrimSpace(k.AllowedModels) == "" {
+		return nil
+	}
+	return ParseAllowedModels(k.AllowedModels)
+}
+
+func (k *APIKey) HasModelAccess(model string) bool {
+	allowed := k.GetAllowedModels()
+	if len(allowed) == 0 {
+		return true
+	}
+	return IsModelAllowed(model, allowed)
 }
 
 type RequestLog struct {
@@ -151,4 +176,46 @@ type Transaction struct {
 
 	// Virtual UI fields
 	UserName string `json:"user_name,omitempty"`
+}
+
+// ParseAllowedModels parses a JSON array or comma-separated string of allowed models.
+func ParseAllowedModels(raw string) []string {
+	var list []string
+	if strings.TrimSpace(raw) == "" {
+		return []string{"*"}
+	}
+	if err := json.Unmarshal([]byte(raw), &list); err == nil {
+		return list
+	}
+	parts := strings.Split(raw, ",")
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			list = append(list, p)
+		}
+	}
+	if len(list) == 0 {
+		return []string{"*"}
+	}
+	return list
+}
+
+// HasWildcard returns true if the list of allowed models contains "*".
+func HasWildcard(list []string) bool {
+	for _, m := range list {
+		if strings.TrimSpace(m) == "*" {
+			return true
+		}
+	}
+	return false
+}
+
+// IsModelAllowed checks whether a requested model matches the allowed models list.
+func IsModelAllowed(requested string, allowedList []string) bool {
+	for _, a := range allowedList {
+		if a == "*" || strings.EqualFold(a, requested) {
+			return true
+		}
+	}
+	return false
 }

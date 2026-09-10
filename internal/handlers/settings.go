@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 
 	"9router-gateway/internal/models"
 	"9router-gateway/internal/upstream"
@@ -23,26 +25,13 @@ func (h *Handler) ModelsPage(w http.ResponseWriter, r *http.Request) {
 	currentUser := GetUserFromContext(ctx)
 
 	// Fetch detailed models from 9router
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, h.cfg.UpstreamURL+"/v1/models", nil)
-	var allModels []UpstreamModelItem
-	if err == nil {
-		req.Header.Set("Authorization", "Bearer "+h.cfg.UpstreamAPIKey)
-		resp, err := http.DefaultClient.Do(req)
-		if err == nil {
-			defer resp.Body.Close()
-			var res struct {
-				Data []UpstreamModelItem `json:"data"`
-			}
-			_ = json.NewDecoder(resp.Body).Decode(&res)
-			allModels = res.Data
-		}
-	}
+	allModels, _ := h.fetchUpstreamModels(ctx)
 
 	// Filter for non-admin user
 	displayModels := allModels
 	if currentUser != nil && !currentUser.IsAdmin() {
-		allowedList := parseAllowedModels(currentUser.AllowedModels)
-		if !hasWildcard(allowedList) {
+		allowedList := models.ParseAllowedModels(currentUser.AllowedModels)
+		if !models.HasWildcard(allowedList) {
 			allowedMap := make(map[string]bool)
 			for _, m := range allowedList {
 				allowedMap[strings.TrimSpace(m)] = true
@@ -86,6 +75,7 @@ func (h *Handler) ModelsPage(w http.ResponseWriter, r *http.Request) {
 		"Users":       users,
 		"QuotaReport": quotaReport,
 		"Aliases":     aliases,
+		"UpstreamURL": h.cfg.GetUpstreamURL(),
 	})
 }
 
@@ -147,7 +137,7 @@ func (h *Handler) SettingsPage(w http.ResponseWriter, r *http.Request) {
 
 	userModel := "ag/gemini-3.8-flash-high"
 	if currentUser != nil {
-		allowed := parseAllowedModels(currentUser.AllowedModels)
+		allowed := models.ParseAllowedModels(currentUser.AllowedModels)
 		if len(allowed) > 0 && allowed[0] != "*" {
 			userModel = allowed[0]
 		}
@@ -251,17 +241,30 @@ func (h *Handler) UpdateUpstreamPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	upstreamURL := strings.TrimRight(strings.TrimSpace(r.FormValue("upstream_url")), "/")
+	upstreamURL := strings.TrimSpace(r.FormValue("upstream_url"))
 	dbPath := strings.TrimSpace(r.FormValue("ninerouter_db_path"))
 	apiKey := strings.TrimSpace(r.FormValue("upstream_api_key"))
 
-	if upstreamURL != "" {
-		h.cfg.UpstreamURL = upstreamURL
-		_ = h.repo.SaveSetting(ctx, "upstream_url", upstreamURL)
+	if upstreamURL == "" {
+		http.Redirect(w, r, "/settings?error=Upstream+URL+cannot+be+empty", http.StatusSeeOther)
+		return
 	}
+	if !strings.HasPrefix(upstreamURL, "http://") && !strings.HasPrefix(upstreamURL, "https://") {
+		http.Redirect(w, r, "/settings?error=Invalid+upstream+URL+(must+start+with+http://+or+https://)", http.StatusSeeOther)
+		return
+	}
+	upstreamURL = strings.TrimRight(upstreamURL, "/")
+
+	h.cfg.SetUpstreamURL(upstreamURL)
+	if err := h.repo.SaveSetting(ctx, "upstream_url", upstreamURL); err != nil {
+		log.Error().Err(err).Msg("Failed to save upstream_url setting")
+	}
+
 	if dbPath != "" {
-		h.cfg.NineRouterDBPath = dbPath
-		_ = h.repo.SaveSetting(ctx, "ninerouter_db_path", dbPath)
+		h.cfg.SetNineRouterDBPath(dbPath)
+		if err := h.repo.SaveSetting(ctx, "ninerouter_db_path", dbPath); err != nil {
+			log.Error().Err(err).Msg("Failed to save ninerouter_db_path setting")
+		}
 		if h.syncer != nil {
 			h.syncer.UpdateDBPath(dbPath)
 			// Trigger re-sync of all active keys
@@ -270,31 +273,57 @@ func (h *Handler) UpdateUpstreamPost(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	h.cfg.UpstreamAPIKey = apiKey
-	_ = h.repo.SaveSetting(ctx, "upstream_api_key", apiKey)
+
+	h.cfg.SetUpstreamAPIKey(apiKey)
+	if err := h.repo.SaveSetting(ctx, "upstream_api_key", apiKey); err != nil {
+		log.Error().Err(err).Msg("Failed to save upstream_api_key setting")
+	}
+
+	if h.coreClient != nil {
+		h.coreClient.ResetCLIToken()
+	}
+
+	log.Info().
+		Str("upstream_url", upstreamURL).
+		Str("db_path", dbPath).
+		Msg("Updated upstream 9router Core settings in database and runtime config")
 
 	http.Redirect(w, r, "/settings?msg=Upstream+9router+Core+configuration+updated+successfully", http.StatusSeeOther)
 }
 
 func (h *Handler) TestUpstreamConnection(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+	defer cancel()
+
 	currentUser := GetUserFromContext(ctx)
 	if currentUser == nil || !currentUser.IsAdmin() {
 		http.Error(w, `{"error":"Unauthorized"}`, http.StatusUnauthorized)
 		return
 	}
 
-	targetURL := strings.TrimRight(strings.TrimSpace(r.URL.Query().Get("url")), "/")
-	if targetURL == "" {
-		targetURL = h.cfg.UpstreamURL
+	// Test provided candidate URL or fallback to configured UpstreamURL
+	targetURL := h.cfg.GetUpstreamURL()
+	if candidate := strings.TrimSpace(r.URL.Query().Get("url")); candidate != "" {
+		if strings.HasPrefix(candidate, "http://") || strings.HasPrefix(candidate, "https://") {
+			targetURL = strings.TrimRight(candidate, "/")
+		}
 	}
 
-	client := &http.Client{Timeout: 4 * time.Second}
+	if !strings.HasPrefix(targetURL, "http://") && !strings.HasPrefix(targetURL, "https://") {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   "Invalid target URL scheme (must be http or https)",
+			"target":  targetURL,
+		})
+		return
+	}
+
 	start := time.Now()
 
-	// Test connection: Try root "/" (307/200 on 9router) or "/v1/models"
-	checkURL := targetURL + "/"
-	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, checkURL, nil)
+	// Test connection directly to /v1/models endpoint
+	checkURL := targetURL + "/v1/models"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, checkURL, nil)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
@@ -305,31 +334,9 @@ func (h *Handler) TestUpstreamConnection(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	resp, err := client.Do(req)
+	resp, err := h.httpClient.Do(req)
 	latency := time.Since(start).Milliseconds()
-
 	if err != nil {
-		// Fallback to /v1/models
-		checkURL = targetURL + "/v1/models"
-		req2, err2 := http.NewRequestWithContext(r.Context(), http.MethodGet, checkURL, nil)
-		if err2 == nil {
-			start = time.Now()
-			resp2, err3 := client.Do(req2)
-			if err3 == nil {
-				defer resp2.Body.Close()
-				latency = time.Since(start).Milliseconds()
-				w.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(w).Encode(map[string]interface{}{
-					"success":     resp2.StatusCode < 500,
-					"status_code": resp2.StatusCode,
-					"latency_ms":  latency,
-					"endpoint":    checkURL,
-					"target":      targetURL,
-				})
-				return
-			}
-		}
-
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"success": false,
@@ -348,34 +355,4 @@ func (h *Handler) TestUpstreamConnection(w http.ResponseWriter, r *http.Request)
 		"endpoint":    checkURL,
 		"target":      targetURL,
 	})
-}
-
-func parseAllowedModels(raw string) []string {
-	var list []string
-	if strings.TrimSpace(raw) == "" {
-		return []string{"*"}
-	}
-	if err := json.Unmarshal([]byte(raw), &list); err == nil {
-		return list
-	}
-	parts := strings.Split(raw, ",")
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			list = append(list, p)
-		}
-	}
-	if len(list) == 0 {
-		return []string{"*"}
-	}
-	return list
-}
-
-func hasWildcard(list []string) bool {
-	for _, m := range list {
-		if strings.TrimSpace(m) == "*" {
-			return true
-		}
-	}
-	return false
 }

@@ -1,0 +1,26 @@
+# AI Manager
+
+> High-performance reverse proxy, multi-tenant LLM gateway, FinOps cost analytics, and web administration dashboard deployed in front of 9router Core.
+
+AI Manager sits in front of 9router Core (port 20128) to provide OpenAI-compatible endpoints (`/v1/chat/completions`, `/v1/models`), multi-tenant role-based access control, cryptographic server-side sessions, API key scoping and rate limiting, token usage interception, exact-match caching, and an administrative web dashboard.
+
+## Core Documentation
+
+- [Project README](README.md): High-level system architecture, features, and quickstart guide.
+- [API Reference](docs/API.md): Comprehensive reference for OpenAI-compatible endpoints, dashboard metrics, and admin APIs.
+- [Setup & Deployment Guide](docs/SETUP.md): Docker Compose stack, Cloudflare Tunnel ingress, and server hardening checklist.
+- [System Architecture](docs/ARCHITECTURE.md): Deep-dive into proxy routing, SSE streaming, SQLite WAL concurrency, and background workers.
+- [LLM Context Guide](llms.md): Technical cheat sheet and context document for LLMs and coding agents.
+
+## Codebase Highlights
+
+- [Application Entrypoint](cmd/gateway/main.go): Chi router initialization, security headers middleware, route setup, graceful shutdown.
+- [Reverse Proxy & Caching](internal/proxy/proxy.go): Core reverse proxy engine, SSE stream token interceptor, exact-match cache, and rate limiter.
+- [Database & Migrations](internal/database/db.go): SQLite connection initialization with WAL mode and schema definitions.
+- [Data Access Layer](internal/repository/repo.go): Repository interface and SQLite implementation for users, API keys, logs, and sessions.
+- [Web Handlers & Auth](internal/handlers/handlers.go): Web dashboard controller, authentication middleware, and crypto helpers.
+- [Web Assets & Templates](web/web.go): Embedded HTML templates and static CSS/JS assets (standard web layout).
+- [Data Models](internal/models/models.go): Core Go structs representing Users, APIKeys, RequestLogs, Transactions, and Sessions.
+- [Key Syncer](internal/syncer/syncer.go): Daemon synchronizing gateway API keys to 9router Core SQLite database.
+- [Provider Keeper](internal/worker/provider_keeper.go): Background daemon checking and reactivating reset upstream provider accounts.
+- [Verification Suite](scripts/verify.sh): End-to-end integration and endpoint validation script.

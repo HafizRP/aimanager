@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -38,7 +39,7 @@ func NewGatewayProxy(cfg *config.Config, repo repository.Repository) *GatewayPro
 
 func (p *GatewayProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
-	clientIP := getClientIP(r)
+	clientIP := GetClientIP(r)
 
 	// Handle CORS preflight
 	if r.Method == http.MethodOptions {
@@ -107,7 +108,7 @@ func (p *GatewayProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *GatewayProxy) handleGetModels(w http.ResponseWriter, r *http.Request, user *models.User, key *models.APIKey) {
-	upstreamReq, err := http.NewRequestWithContext(r.Context(), http.MethodGet, p.cfg.UpstreamURL+"/v1/models", nil)
+	upstreamReq, err := http.NewRequestWithContext(r.Context(), http.MethodGet, p.cfg.GetUpstreamURL()+"/v1/models", nil)
 	if err != nil {
 		p.writeJSONError(w, http.StatusBadGateway, "Failed to create upstream request", "gateway_error")
 		return
@@ -115,7 +116,7 @@ func (p *GatewayProxy) handleGetModels(w http.ResponseWriter, r *http.Request, u
 
 	authKey := key.Key
 	if authKey == "" {
-		authKey = p.cfg.UpstreamAPIKey
+		authKey = p.cfg.GetUpstreamAPIKey()
 	}
 	upstreamReq.Header.Set("Authorization", "Bearer "+authKey)
 	resp, err := p.httpClient.Do(upstreamReq)
@@ -150,8 +151,8 @@ func (p *GatewayProxy) handleGetModels(w http.ResponseWriter, r *http.Request, u
 	}
 
 	// Parse user allowed models
-	allowedList := parseAllowedModels(user.AllowedModels)
-	if hasWildcard(allowedList) {
+	allowedList := models.ParseAllowedModels(user.AllowedModels)
+	if models.HasWildcard(allowedList) {
 		// Return full catalog
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(bodyBytes)
@@ -201,8 +202,8 @@ func (p *GatewayProxy) handleForwardRequest(w http.ResponseWriter, r *http.Reque
 
 	// Model Whitelist Check (for requests specifying a model)
 	if requestedModel != "" {
-		allowedList := parseAllowedModels(user.AllowedModels)
-		if !hasWildcard(allowedList) && !isModelAllowed(requestedModel, allowedList) {
+		if !user.HasModelAccess(requestedModel) {
+			allowedList := user.GetAllowedModels()
 			duration := time.Since(startTime).Milliseconds()
 			errMsg := fmt.Sprintf("Model '%s' is not allowed for your API key. Allowed models: %v", requestedModel, allowedList)
 			p.writeJSONError(w, http.StatusForbidden, errMsg, "permission_denied")
@@ -225,8 +226,8 @@ func (p *GatewayProxy) handleForwardRequest(w http.ResponseWriter, r *http.Reque
 
 		// Key-level Model Whitelist Check
 		if key.AllowedModels != "" && key.AllowedModels != "[]" && key.AllowedModels != "[\"*\"]" {
-			keyAllowed := parseAllowedModels(key.AllowedModels)
-			if !hasWildcard(keyAllowed) && !isModelAllowed(requestedModel, keyAllowed) {
+			if !key.HasModelAccess(requestedModel) {
+				keyAllowed := key.GetAllowedModels()
 				duration := time.Since(startTime).Milliseconds()
 				errMsg := fmt.Sprintf("Model '%s' is not allowed for this specific API key. Allowed key models: %v", requestedModel, keyAllowed)
 				p.writeJSONError(w, http.StatusForbidden, errMsg, "permission_denied")
@@ -262,23 +263,24 @@ func (p *GatewayProxy) handleForwardRequest(w http.ResponseWriter, r *http.Reque
 			w.WriteHeader(cached.StatusCode)
 			_, _ = w.Write(cached.Body)
 
+			_ = p.repo.UpdateKeyLastUsed(r.Context(), key.ID)
 			_ = p.repo.CreateRequestLog(r.Context(), &models.RequestLog{
-				UserID:       user.ID,
-				APIKeyID:     key.ID,
-				Path:         r.URL.Path,
-				Method:       r.Method,
-				Model:        requestedModel,
-				IsStream:     false,
-				StatusCode:   cached.StatusCode,
-				DurationMs:   1,
-				ClientIP:     clientIP,
+				UserID:     user.ID,
+				APIKeyID:   key.ID,
+				Path:       r.URL.Path,
+				Method:     r.Method,
+				Model:      requestedModel,
+				IsStream:   false,
+				StatusCode: cached.StatusCode,
+				DurationMs: 1,
+				ClientIP:   clientIP,
 			})
 			return
 		}
 	}
 
 	// Prepare outbound upstream request
-	upstreamURL := p.cfg.UpstreamURL + r.URL.RequestURI()
+	upstreamURL := p.cfg.GetUpstreamURL() + r.URL.RequestURI()
 	upstreamReq, err := http.NewRequestWithContext(r.Context(), r.Method, upstreamURL, bytes.NewBuffer(bodyBytes))
 	if err != nil {
 		p.writeJSONError(w, http.StatusInternalServerError, "Failed to build upstream request", "gateway_error")
@@ -294,7 +296,7 @@ func (p *GatewayProxy) handleForwardRequest(w http.ResponseWriter, r *http.Reque
 	// Inject Upstream Key
 	authKey := key.Key
 	if authKey == "" {
-		authKey = p.cfg.UpstreamAPIKey
+		authKey = p.cfg.GetUpstreamAPIKey()
 	}
 	upstreamReq.Header.Set("Authorization", "Bearer "+authKey)
 	upstreamReq.Header.Set("X-Forwarded-For", clientIP)
@@ -535,57 +537,24 @@ func extractAPIKey(r *http.Request) string {
 	return ""
 }
 
-func getClientIP(r *http.Request) string {
+// GetClientIP extracts client IP address from various standard HTTP headers.
+func GetClientIP(r *http.Request) string {
+	if cfIP := strings.TrimSpace(r.Header.Get("CF-Connecting-IP")); cfIP != "" {
+		return cfIP
+	}
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		parts := strings.Split(xff, ",")
-		return strings.TrimSpace(parts[0])
-	}
-	if xrip := r.Header.Get("X-Real-IP"); xrip != "" {
-		return strings.TrimSpace(xrip)
-	}
-	parts := strings.Split(r.RemoteAddr, ":")
-	if len(parts) > 0 {
-		return parts[0]
-	}
-	return r.RemoteAddr
-}
-
-func parseAllowedModels(raw string) []string {
-	var list []string
-	if strings.TrimSpace(raw) == "" {
-		return []string{"*"}
-	}
-	if err := json.Unmarshal([]byte(raw), &list); err == nil {
-		return list
-	}
-	// Fallback comma-separated
-	parts := strings.Split(raw, ",")
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p != "" {
-			list = append(list, p)
+		ip := strings.TrimSpace(parts[0])
+		if ip != "" {
+			return ip
 		}
 	}
-	if len(list) == 0 {
-		return []string{"*"}
+	if xrip := strings.TrimSpace(r.Header.Get("X-Real-IP")); xrip != "" {
+		return xrip
 	}
-	return list
-}
-
-func hasWildcard(list []string) bool {
-	for _, m := range list {
-		if strings.TrimSpace(m) == "*" {
-			return true
-		}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err == nil {
+		return host
 	}
-	return false
-}
-
-func isModelAllowed(requested string, allowedList []string) bool {
-	for _, a := range allowedList {
-		if a == "*" || strings.EqualFold(a, requested) {
-			return true
-		}
-	}
-	return false
+	return strings.TrimSpace(r.RemoteAddr)
 }

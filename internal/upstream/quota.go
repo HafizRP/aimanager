@@ -2,22 +2,20 @@ package upstream
 
 import (
 	"context"
-	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"math"
 	"net/http"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog/log"
+
 	"9router-gateway/internal/config"
+
 	_ "modernc.org/sqlite"
 )
 
@@ -111,9 +109,9 @@ type ModelQuotaSummary struct {
 }
 
 type UpstreamQuotaReport struct {
-	Accounts      []ProviderAccount            `json:"accounts"`
-	FetchedAt     time.Time                    `json:"fetched_at"`
-	FetchedAtWIB  string                       `json:"fetched_at_wib"`
+	Accounts       []ProviderAccount            `json:"accounts"`
+	FetchedAt      time.Time                    `json:"fetched_at"`
+	FetchedAtWIB   string                       `json:"fetched_at_wib"`
 	ModelSummaries map[string]ModelQuotaSummary `json:"model_summaries"`
 }
 
@@ -137,36 +135,7 @@ func NewQuotaManager(cfg *config.Config) *QuotaManager {
 }
 
 func (m *QuotaManager) deriveCLIToken() string {
-	dataDir := filepath.Dir(filepath.Dir(m.cfg.NineRouterDBPath))
-	machineIDPath := filepath.Join(dataDir, "machine-id")
-	cliSecretPath := filepath.Join(dataDir, "auth", "cli-secret")
-
-	machineIDBytes, err1 := os.ReadFile(machineIDPath)
-	cliSecretBytes, err2 := os.ReadFile(cliSecretPath)
-	if err1 != nil || err2 != nil {
-		// Try default fallback to 9router-gateway/data/core then /home/b14/9router/data
-		dataDir = "/home/b14/9router-gateway/data/core"
-		machineIDBytes, err1 = os.ReadFile(filepath.Join(dataDir, "machine-id"))
-		cliSecretBytes, err2 = os.ReadFile(filepath.Join(dataDir, "auth", "cli-secret"))
-		if err1 != nil || err2 != nil {
-			dataDir = "/home/b14/9router/data"
-			machineIDBytes, _ = os.ReadFile(filepath.Join(dataDir, "machine-id"))
-			cliSecretBytes, _ = os.ReadFile(filepath.Join(dataDir, "auth", "cli-secret"))
-		}
-	}
-
-	machineID := strings.TrimSpace(string(machineIDBytes))
-	cliSecret := strings.TrimSpace(string(cliSecretBytes))
-	if machineID == "" || cliSecret == "" {
-		return ""
-	}
-
-	h := sha256.Sum256([]byte(machineID + "9r-cli-auth" + cliSecret))
-	token := hex.EncodeToString(h[:])
-	if len(token) > 16 {
-		return token[:16]
-	}
-	return token
+	return DeriveCLIToken(m.cfg)
 }
 
 func (m *QuotaManager) formatWIB(t time.Time) (string, string) {
@@ -236,7 +205,7 @@ func (m *QuotaManager) FetchAllQuotas(ctx context.Context, force bool) (*Upstrea
 	}
 
 	// 1. Open 9router SQLite to query active provider connections
-	dsn := fmt.Sprintf("%s?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)", m.cfg.NineRouterDBPath)
+	dsn := fmt.Sprintf("%s?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)", m.cfg.GetNineRouterDBPath())
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open 9router db: %w", err)
@@ -286,7 +255,7 @@ func (m *QuotaManager) FetchAllQuotas(ctx context.Context, force bool) (*Upstrea
 				FetchedAt: time.Now(),
 			}
 
-			reqURL := fmt.Sprintf("%s/api/usage/%s", m.cfg.UpstreamURL, conn.id)
+			reqURL := fmt.Sprintf("%s/api/usage/%s", m.cfg.GetUpstreamURL(), conn.id)
 			req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 			if err != nil {
 				acc.Status = "error"
@@ -300,8 +269,8 @@ func (m *QuotaManager) FetchAllQuotas(ctx context.Context, force bool) (*Upstrea
 			if cliToken != "" {
 				req.Header.Set("x-9r-cli-token", cliToken)
 			}
-			if m.cfg.UpstreamAPIKey != "" {
-				req.Header.Set("Authorization", "Bearer "+m.cfg.UpstreamAPIKey)
+			if apiKey := m.cfg.GetUpstreamAPIKey(); apiKey != "" {
+				req.Header.Set("Authorization", "Bearer "+apiKey)
 			}
 
 			resp, err := m.httpClient.Do(req)
@@ -444,16 +413,16 @@ func (m *QuotaManager) FetchAllQuotas(ctx context.Context, force bool) (*Upstrea
 	now := time.Now().In(loc)
 
 	report := &UpstreamQuotaReport{
-		Accounts:      accounts,
-		FetchedAt:     now,
-		FetchedAtWIB:  now.Format("15:04:05 WIB"),
+		Accounts:       accounts,
+		FetchedAt:      now,
+		FetchedAtWIB:   now.Format("15:04:05 WIB"),
 		ModelSummaries: make(map[string]ModelQuotaSummary),
 	}
 
 	m.cache = report
 	m.cacheTime = time.Now()
 
-	slog.Info("Fetched upstream model quotas successfully", "accounts_count", len(accounts))
+	log.Info().Int("accounts_count", len(accounts)).Msg("Fetched upstream model quotas successfully")
 	return report, nil
 }
 

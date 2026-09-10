@@ -46,20 +46,40 @@ func (c *CoreClient) deriveCLIToken() string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	dataDir := filepath.Dir(filepath.Dir(c.cfg.NineRouterDBPath))
-	machineIDPath := filepath.Join(dataDir, "machine-id")
-	cliSecretPath := filepath.Join(dataDir, "auth", "cli-secret")
+	if c.cliToken != "" {
+		return c.cliToken
+	}
 
-	machineIDBytes, err1 := os.ReadFile(machineIDPath)
-	cliSecretBytes, err2 := os.ReadFile(cliSecretPath)
-	if err1 != nil || err2 != nil {
-		dataDir = "/home/b14/9router-gateway/data/core"
-		machineIDBytes, err1 = os.ReadFile(filepath.Join(dataDir, "machine-id"))
-		cliSecretBytes, err2 = os.ReadFile(filepath.Join(dataDir, "auth", "cli-secret"))
-		if err1 != nil || err2 != nil {
-			dataDir = "/home/b14/9router/data"
-			machineIDBytes, _ = os.ReadFile(filepath.Join(dataDir, "machine-id"))
-			cliSecretBytes, _ = os.ReadFile(filepath.Join(dataDir, "auth", "cli-secret"))
+	c.cliToken = DeriveCLIToken(c.cfg)
+	return c.cliToken
+}
+
+// ResetCLIToken invalidates the cached CLI token so it can be re-derived on next request.
+func (c *CoreClient) ResetCLIToken() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cliToken = ""
+}
+
+// DeriveCLIToken discovers machine-id and auth/cli-secret from core directories
+// configured in Config (via .env or derived from database paths) and computes the 9router CLI auth token.
+func DeriveCLIToken(cfg *config.Config) string {
+	dirs := cfg.GetCoreDataDirs()
+	var machineIDBytes, cliSecretBytes []byte
+
+	for _, dir := range dirs {
+		if len(machineIDBytes) == 0 {
+			if b, err := os.ReadFile(filepath.Join(dir, "machine-id")); err == nil {
+				machineIDBytes = b
+			}
+		}
+		if len(cliSecretBytes) == 0 {
+			if b, err := os.ReadFile(filepath.Join(dir, "auth", "cli-secret")); err == nil {
+				cliSecretBytes = b
+			}
+		}
+		if len(machineIDBytes) > 0 && len(cliSecretBytes) > 0 {
+			break
 		}
 	}
 
@@ -74,12 +94,11 @@ func (c *CoreClient) deriveCLIToken() string {
 	if len(token) > 16 {
 		token = token[:16]
 	}
-	c.cliToken = token
 	return token
 }
 
 func (c *CoreClient) doRequest(ctx context.Context, method, endpoint string, reqBody interface{}) ([]byte, error) {
-	url := fmt.Sprintf("%s%s", strings.TrimRight(c.cfg.UpstreamURL, "/"), endpoint)
+	url := fmt.Sprintf("%s%s", strings.TrimRight(c.cfg.GetUpstreamURL(), "/"), endpoint)
 
 	var bodyReader io.Reader
 	if reqBody != nil {
@@ -100,8 +119,8 @@ func (c *CoreClient) doRequest(ctx context.Context, method, endpoint string, req
 	if cliToken != "" {
 		req.Header.Set("x-9r-cli-token", cliToken)
 	}
-	if c.cfg.UpstreamAPIKey != "" {
-		req.Header.Set("Authorization", "Bearer "+c.cfg.UpstreamAPIKey)
+	if apiKey := c.cfg.GetUpstreamAPIKey(); apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
 	}
 
 	resp, err := c.httpClient.Do(req)

@@ -17,6 +17,11 @@ import (
 	"9router-gateway/internal/models"
 )
 
+var (
+	nonAlphaNumericRegex = regexp.MustCompile(`[^a-z0-9]+`)
+	validUsernameRegex   = regexp.MustCompile(`^[a-z0-9_.-]{3,32}$`)
+)
+
 func (h *Handler) UsersPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	users, err := h.repo.GetAllUsers(ctx)
@@ -103,25 +108,36 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/users?error=User+name+cannot+be+empty", http.StatusSeeOther)
 		return
 	}
+	if len(name) > 100 {
+		name = name[:100]
+	}
 
 	username := strings.ToLower(strings.TrimSpace(r.FormValue("username")))
 	if username == "" {
 		// Clean up name for username
-		reg := regexp.MustCompile("[^a-z0-9]+")
-		username = reg.ReplaceAllString(strings.ToLower(name), "")
+		username = nonAlphaNumericRegex.ReplaceAllString(strings.ToLower(name), "")
 		if username == "" {
 			username = "user" + GenerateRandomPassword(4)
 		}
 	}
 
+	if !validUsernameRegex.MatchString(username) {
+		http.Redirect(w, r, "/users?error="+url.QueryEscape("Username must be 3-32 characters and contain only letters, numbers, hyphens, or underscores"), http.StatusSeeOther)
+		return
+	}
+
 	// Check if username already exists
 	ctx := r.Context()
 	if existing, _ := h.repo.GetUserByUsername(ctx, username); existing != nil {
-		http.Redirect(w, r, "/users?error=Username+'"+username+"'+is+already+taken", http.StatusSeeOther)
+		http.Redirect(w, r, "/users?error="+url.QueryEscape("Username '"+username+"' is already taken"), http.StatusSeeOther)
 		return
 	}
 
 	password := strings.TrimSpace(r.FormValue("password"))
+	if password != "" && len(password) < 6 {
+		http.Redirect(w, r, "/users?error="+url.QueryEscape("Password must be at least 6 characters"), http.StatusSeeOther)
+		return
+	}
 	if password == "" {
 		password = GenerateRandomPassword(8)
 	}
@@ -139,6 +155,9 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	quotaStr := r.FormValue("token_quota")
 	quota, _ := strconv.ParseInt(quotaStr, 10, 64)
+	if quota < 0 {
+		quota = 0
+	}
 
 	var allowedModelsJSON string
 	if r.FormValue("allow_all") == "true" {
@@ -167,7 +186,7 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.CreateUser(ctx, user); err != nil {
-		http.Redirect(w, r, "/users?error="+err.Error(), http.StatusSeeOther)
+		http.Redirect(w, r, "/users?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
 
@@ -186,12 +205,12 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 			_ = h.syncer.SyncKey(apiKey, user.Name)
 		}
 		msg := fmt.Sprintf("User '%s' created! Password: %s | Key: %s", username, password, generatedKey)
-		http.Redirect(w, r, "/users?msg="+msg, http.StatusSeeOther)
+		http.Redirect(w, r, "/users?msg="+url.QueryEscape(msg), http.StatusSeeOther)
 		return
 	}
 
 	msg := fmt.Sprintf("User '%s' created successfully! Login Password: %s", username, password)
-	http.Redirect(w, r, "/users?msg="+msg, http.StatusSeeOther)
+	http.Redirect(w, r, "/users?msg="+url.QueryEscape(msg), http.StatusSeeOther)
 }
 
 func (h *Handler) EditUser(w http.ResponseWriter, r *http.Request) {
@@ -200,24 +219,32 @@ func (h *Handler) EditUser(w http.ResponseWriter, r *http.Request) {
 	if userID == "" {
 		userID = r.FormValue("id")
 	}
+	redirectURL := safeRedirectURL(r.FormValue("redirect"), "/users")
 
 	ctx := r.Context()
 	user, err := h.repo.GetUserByID(ctx, userID)
 	if err != nil {
-		http.Redirect(w, r, "/users?error=User+not+found", http.StatusSeeOther)
+		http.Redirect(w, r, redirectURL+"?error=User+not+found", http.StatusSeeOther)
 		return
 	}
 
 	name := strings.TrimSpace(r.FormValue("name"))
 	if name != "" {
+		if len(name) > 100 {
+			name = name[:100]
+		}
 		user.Name = name
 	}
 
 	username := strings.ToLower(strings.TrimSpace(r.FormValue("username")))
 	if username != "" && username != user.Username {
+		if !validUsernameRegex.MatchString(username) {
+			http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape("Username must be 3-32 characters and contain only letters, numbers, hyphens, or underscores"), http.StatusSeeOther)
+			return
+		}
 		// Check uniqueness
 		if existing, _ := h.repo.GetUserByUsername(ctx, username); existing != nil && existing.ID != user.ID {
-			http.Redirect(w, r, "/users?error=Username+'"+username+"'+is+already+taken", http.StatusSeeOther)
+			http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape("Username '"+username+"' is already taken"), http.StatusSeeOther)
 			return
 		}
 		user.Username = username
@@ -230,6 +257,9 @@ func (h *Handler) EditUser(w http.ResponseWriter, r *http.Request) {
 
 	quotaStr := r.FormValue("token_quota")
 	quota, _ := strconv.ParseInt(quotaStr, 10, 64)
+	if quota < 0 {
+		quota = 0
+	}
 	user.TokenQuota = quota
 
 	if r.FormValue("allow_all") == "true" {
@@ -246,11 +276,6 @@ func (h *Handler) EditUser(w http.ResponseWriter, r *http.Request) {
 
 	user.IsActive = (r.FormValue("is_active") == "true")
 
-	redirectURL := r.FormValue("redirect")
-	if redirectURL == "" {
-		redirectURL = "/users"
-	}
-
 	if err := h.repo.UpdateUser(ctx, user); err != nil {
 		http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
@@ -263,10 +288,7 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	userID := chi.URLParam(r, "id")
 	ctx := r.Context()
-	redirectURL := r.FormValue("redirect")
-	if redirectURL == "" {
-		redirectURL = "/users"
-	}
+	redirectURL := safeRedirectURL(r.FormValue("redirect"), "/users")
 
 	user, err := h.repo.GetUserByID(ctx, userID)
 	if err != nil {
@@ -275,6 +297,10 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	newPassword := strings.TrimSpace(r.FormValue("new_password"))
+	if newPassword != "" && len(newPassword) < 6 {
+		http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape("New password must be at least 6 characters"), http.StatusSeeOther)
+		return
+	}
 	if newPassword == "" {
 		newPassword = GenerateRandomPassword(8)
 	}
@@ -297,12 +323,9 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ResetUsage(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	ctx := r.Context()
-	redirectURL := r.URL.Query().Get("redirect")
+	redirectURL := safeRedirectURL(r.URL.Query().Get("redirect"), "")
 	if redirectURL == "" {
-		redirectURL = r.FormValue("redirect")
-	}
-	if redirectURL == "" {
-		redirectURL = "/users"
+		redirectURL = safeRedirectURL(r.FormValue("redirect"), "/users")
 	}
 
 	if err := h.repo.ResetUserUsage(ctx, userID); err != nil {
@@ -316,12 +339,9 @@ func (h *Handler) ResetUsage(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) ToggleUserStatus(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	ctx := r.Context()
-	redirectURL := r.URL.Query().Get("redirect")
+	redirectURL := safeRedirectURL(r.URL.Query().Get("redirect"), "")
 	if redirectURL == "" {
-		redirectURL = r.FormValue("redirect")
-	}
-	if redirectURL == "" {
-		redirectURL = "/users"
+		redirectURL = safeRedirectURL(r.FormValue("redirect"), "/users")
 	}
 
 	user, err := h.repo.GetUserByID(ctx, userID)
@@ -359,7 +379,7 @@ func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	keys, _ := h.repo.GetAPIKeysByUserID(ctx, userID)
 
 	if err := h.repo.DeleteUser(ctx, userID); err != nil {
-		http.Redirect(w, r, "/users?error="+err.Error(), http.StatusSeeOther)
+		http.Redirect(w, r, "/users?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
 

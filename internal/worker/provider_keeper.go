@@ -3,8 +3,9 @@ package worker
 import (
 	"context"
 	"database/sql"
-	"log/slog"
 	"time"
+
+	"github.com/rs/zerolog/log"
 
 	"9router-gateway/internal/config"
 	"9router-gateway/internal/upstream"
@@ -27,7 +28,7 @@ func NewProviderKeeper(cfg *config.Config, coreClient *upstream.CoreClient, quot
 }
 
 func (pk *ProviderKeeper) Start() {
-	slog.Info("Starting Provider Auto-Reactivation Worker...")
+	log.Info().Msg("Starting Provider Auto-Reactivation Worker...")
 	go func() {
 		ticker := time.NewTicker(45 * time.Second)
 		defer ticker.Stop()
@@ -51,9 +52,9 @@ func (pk *ProviderKeeper) checkAndReactivate() {
 	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 
-	dbPath := pk.cfg.NineRouterDBPath
+	dbPath := pk.cfg.GetNineRouterDBPath()
 	if dbPath == "" {
-		dbPath = "/home/b14/9router-gateway/data/core/db/data.sqlite"
+		dbPath = "./data/core/db/data.sqlite"
 	}
 
 	db, err := sql.Open("sqlite", dbPath+"?mode=ro")
@@ -106,12 +107,12 @@ func (pk *ProviderKeeper) checkAndReactivate() {
 			// Account has recovered! Reactivate connection
 			err := pk.coreClient.ToggleProvider(ctx, conn.ID, true)
 			if err == nil {
-				slog.Info("Auto-reactivated provider account after quota reset window",
-					"id", conn.ID,
-					"provider", conn.Provider,
-					"name", conn.Name,
-					"email", conn.Email,
-				)
+				log.Info().
+					Str("id", conn.ID).
+					Str("provider", conn.Provider).
+					Str("name", conn.Name).
+					Str("email", conn.Email).
+					Msg("Auto-reactivated provider account after quota reset window")
 			}
 		}
 	}

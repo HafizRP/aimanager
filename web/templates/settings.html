@@ -25,6 +25,7 @@
         </div>
 
         <form action="/settings/upstream" method="POST">
+          <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
           <div class="mb-3">
             <div class="d-flex justify-content-between align-items-center mb-1">
               <label class="form-label small text-muted mb-0">Upstream Base URL</label>
@@ -32,21 +33,27 @@
                 <i class="bi bi-broadcast"></i> Test Ping
               </button>
             </div>
-            <input type="text" name="upstream_url" id="inputUpstreamURL" class="form-control form-control-modern font-monospace" value="{{ .Config.UpstreamURL }}" placeholder="http://127.0.0.1:20128" required>
+            <input type="text" id="inputUpstreamURL" name="upstream_url" class="form-control form-control-modern font-monospace" value="{{ .Config.UpstreamURL }}" placeholder="http://127.0.0.1:20128" required>
+            <div class="text-dim small mt-1" style="font-size: 0.72rem;">
+              <i class="bi bi-info-circle me-1"></i>Stored in SQLite database.
+            </div>
             <div id="testPingResult" class="mt-2 small d-none"></div>
           </div>
 
           <div class="mb-3">
             <label class="form-label small text-muted">9router SQLite Database Path</label>
-            <input type="text" name="ninerouter_db_path" class="form-control form-control-modern font-monospace" value="{{ .Config.NineRouterDBPath }}" placeholder="/home/b14/9router-gateway/data/core/db/data.sqlite" required>
+            <input type="text" name="ninerouter_db_path" class="form-control form-control-modern font-monospace" value="{{ .Config.NineRouterDBPath }}" placeholder="./data/core/db/data.sqlite" required>
             <div class="text-dim small mt-1" style="font-size: 0.72rem;">
-              Used by Syncer to automatically replicate API keys to 9router Core.
+              Saved in SQLite database. Used by Syncer to automatically replicate API keys to 9router Core.
             </div>
           </div>
 
           <div class="mb-3">
             <label class="form-label small text-muted">Upstream Master Key (Optional)</label>
             <input type="password" name="upstream_api_key" class="form-control form-control-modern font-monospace" value="{{ .Config.UpstreamAPIKey }}" placeholder="Leave empty for direct key passthrough">
+            <div class="text-dim small mt-1" style="font-size: 0.72rem;">
+              Saved in SQLite database. Leave empty for direct key passthrough.
+            </div>
           </div>
 
           <button type="submit" class="btn-modern-primary btn-sm w-100 py-2">

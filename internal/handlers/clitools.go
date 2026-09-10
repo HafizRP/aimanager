@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"9router-gateway/internal/models"
 	"net/http"
 )
 
@@ -26,7 +27,7 @@ func (h *Handler) CLIToolsPage(w http.ResponseWriter, r *http.Request) {
 
 	userModel := "ag/gemini-3.8-flash-high"
 	if currentUser != nil {
-		allowed := parseAllowedModels(currentUser.AllowedModels)
+		allowed := models.ParseAllowedModels(currentUser.AllowedModels)
 		if len(allowed) > 0 && allowed[0] != "*" {
 			userModel = allowed[0]
 		}

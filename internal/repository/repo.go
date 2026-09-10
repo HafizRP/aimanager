@@ -66,6 +66,7 @@ type Repository interface {
 	RecordLoginAttempt(ctx context.Context, ip string) error
 	GetRecentLoginAttempts(ctx context.Context, ip string, windowMinutes int) (int, error)
 	ClearLoginAttempts(ctx context.Context, ip string) error
+	CleanOldLoginAttempts(ctx context.Context) error
 }
 
 type SQLiteRepo struct {
@@ -1039,5 +1040,10 @@ func (r *SQLiteRepo) GetRecentLoginAttempts(ctx context.Context, ip string, wind
 
 func (r *SQLiteRepo) ClearLoginAttempts(ctx context.Context, ip string) error {
 	_, err := r.db.ExecContext(ctx, "DELETE FROM login_attempts WHERE ip = ?", ip)
+	return err
+}
+
+func (r *SQLiteRepo) CleanOldLoginAttempts(ctx context.Context) error {
+	_, err := r.db.ExecContext(ctx, "DELETE FROM login_attempts WHERE attempt_time < datetime('now', '-24 hours')")
 	return err
 }

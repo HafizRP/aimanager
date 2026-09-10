@@ -3,6 +3,7 @@ package billing
 import (
 	"bytes"
 	"crypto/sha512"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -146,10 +147,13 @@ type MidtransWebhookPayload struct {
 
 // VerifySignature validates SHA512(order_id + status_code + gross_amount + server_key)
 func (m *MidtransClient) VerifySignature(payload *MidtransWebhookPayload) bool {
+	if m.serverKey == "" || payload == nil || payload.SignatureKey == "" {
+		return false
+	}
 	raw := payload.OrderID + payload.StatusCode + payload.GrossAmount + m.serverKey
 	hasher := sha512.New()
 	hasher.Write([]byte(raw))
 	expected := hex.EncodeToString(hasher.Sum(nil))
 
-	return strings.EqualFold(expected, payload.SignatureKey)
+	return subtle.ConstantTimeCompare([]byte(strings.ToLower(expected)), []byte(strings.ToLower(payload.SignatureKey))) == 1
 }

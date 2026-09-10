@@ -3,12 +3,15 @@ package syncer
 import (
 	"database/sql"
 	"fmt"
-	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/rs/zerolog/log"
+
 	"9router-gateway/internal/models"
+
 	_ "modernc.org/sqlite"
 )
 
@@ -19,16 +22,21 @@ type Syncer struct {
 
 func NewSyncer(dbPath string) *Syncer {
 	machineID := "33b8f86c23c91fec"
-	// Try reading machineId from 9router-gateway/data/core/machine-id, fallback to /home/b14/9router/data/machine-id
-	if bytes, err := os.ReadFile("/home/b14/9router-gateway/data/core/machine-id"); err == nil {
-		content := strings.TrimSpace(string(bytes))
-		if len(content) >= 16 {
-			machineID = content[:16]
-		}
-	} else if bytes, err := os.ReadFile("/home/b14/9router/data/machine-id"); err == nil {
-		content := strings.TrimSpace(string(bytes))
-		if len(content) >= 16 {
-			machineID = content[:16]
+	// Read machineId from core directory relative to dbPath or local ./data/core
+	coreDir := filepath.Dir(filepath.Dir(dbPath))
+	candidates := []string{
+		filepath.Join(coreDir, "machine-id"),
+		filepath.Join(filepath.Dir(dbPath), "machine-id"),
+		"./data/core/machine-id",
+	}
+
+	for _, p := range candidates {
+		if bytes, err := os.ReadFile(p); err == nil {
+			content := strings.TrimSpace(string(bytes))
+			if len(content) >= 16 {
+				machineID = content[:16]
+				break
+			}
 		}
 	}
 
@@ -59,7 +67,7 @@ func (s *Syncer) getDB() (*sql.DB, error) {
 func (s *Syncer) SyncKey(key *models.APIKey, userName string) error {
 	db, err := s.getDB()
 	if err != nil {
-		slog.Warn("9router sync skipped (cannot open db)", "err", err)
+		log.Warn().Err(err).Msg("9router sync skipped (cannot open db)")
 		return err
 	}
 	defer db.Close()
@@ -83,11 +91,11 @@ func (s *Syncer) SyncKey(key *models.APIKey, userName string) error {
 	          VALUES (?, ?, ?, ?, ?, ?)`
 	_, err = db.Exec(query, key.ID, key.Key, name, s.machineID, activeInt, createdAtStr)
 	if err != nil {
-		slog.Error("Failed to sync key to 9router db", "key_id", key.ID, "err", err)
+		log.Error().Str("key_id", key.ID).Err(err).Msg("Failed to sync key to 9router db")
 		return err
 	}
 
-	slog.Info("Synced API key to 9router core database", "key_id", key.ID, "name", name)
+	log.Info().Str("key_id", key.ID).Str("name", name).Msg("Synced API key to 9router core database")
 	return nil
 }
 

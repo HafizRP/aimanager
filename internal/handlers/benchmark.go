@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sort"
 	"sync"
@@ -11,14 +12,14 @@ import (
 )
 
 type BenchmarkResult struct {
-	Model       string  `json:"model"`
-	LatencyMs   int64   `json:"latency_ms"`
-	TTFTMs      int64   `json:"ttft_ms"`
-	TokensSec   float64 `json:"tokens_sec"`
-	StatusCode  int     `json:"status_code"`
-	Success     bool    `json:"success"`
-	OutputText  string  `json:"output_text"`
-	ErrorMsg    string  `json:"error_msg,omitempty"`
+	Model      string  `json:"model"`
+	LatencyMs  int64   `json:"latency_ms"`
+	TTFTMs     int64   `json:"ttft_ms"`
+	TokensSec  float64 `json:"tokens_sec"`
+	StatusCode int     `json:"status_code"`
+	Success    bool    `json:"success"`
+	OutputText string  `json:"output_text"`
+	ErrorMsg   string  `json:"error_msg,omitempty"`
 }
 
 func (h *Handler) BenchmarkPage(w http.ResponseWriter, r *http.Request) {
@@ -41,6 +42,9 @@ func (h *Handler) APIBenchmarkRun(w http.ResponseWriter, r *http.Request) {
 	if len(req.Models) == 0 {
 		// Default benchmark models
 		req.Models = []string{"main", "ag/gemini-3.8-flash-high", "free-only"}
+	}
+	if len(req.Models) > 10 {
+		req.Models = req.Models[:10]
 	}
 
 	currentUser := GetUserFromContext(ctx)
@@ -108,7 +112,7 @@ func (h *Handler) benchmarkSingleModel(modelName, apiKey string) BenchmarkResult
 	}
 
 	b, _ := json.Marshal(payload)
-	targetURL := "http://127.0.0.1:20129/v1/chat/completions"
+	targetURL := fmt.Sprintf("http://127.0.0.1:%d/v1/chat/completions", h.cfg.Port)
 
 	client := &http.Client{Timeout: 15 * time.Second}
 	req, err := http.NewRequestWithContext(context.Background(), "POST", targetURL, bytes.NewReader(b))
