@@ -1,0 +1,40 @@
+name: Deploy
+
+on:
+  push:
+    branches: [master]
+
+concurrency:
+  group: deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            cd /home/b14/9router-gateway
+
+            echo "→ Pulling latest changes..."
+            git fetch origin master
+            git reset --hard origin/master
+
+            echo "→ Building..."
+            CGO_ENABLED=0 /home/b14/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/bin/go build -o 9router-gateway ./cmd/gateway
+
+            echo "→ Restarting service..."
+            sudo systemctl restart 9router-gateway.service
+            sleep 2
+
+            echo "→ Verifying..."
+            systemctl is-active 9router-gateway.service
+            curl -sf http://127.0.0.1:20129/healthz && echo " healthz OK"
+
+            echo "✅ Deploy complete"
