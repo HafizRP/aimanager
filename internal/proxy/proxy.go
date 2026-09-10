@@ -66,6 +66,12 @@ func (p *GatewayProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 1a. Key Expiry Enforcement
+	if key.IsExpired() {
+		p.writeJSONError(w, http.StatusUnauthorized, "API key has expired. Please contact administrator.", "invalid_request_error")
+		return
+	}
+
 	user, err := p.repo.GetUserByID(ctx, key.UserID)
 	if err != nil || !user.IsActive {
 		p.writeJSONError(w, http.StatusForbidden, "User account is suspended or inactive", "permission_denied")
@@ -258,6 +264,7 @@ func (p *GatewayProxy) handleForwardRequest(w http.ResponseWriter, r *http.Reque
 		}
 		cacheKey = p.cache.GenerateKey(requestedModel, reqBodyMap["messages"], temp)
 		if cached, found := p.cache.Get(cacheKey); found {
+			// CACHE HIT
 			w.Header().Set("Content-Type", cached.ContentType)
 			w.Header().Set("X-Cache", "HIT")
 			w.WriteHeader(cached.StatusCode)
@@ -277,6 +284,10 @@ func (p *GatewayProxy) handleForwardRequest(w http.ResponseWriter, r *http.Reque
 			})
 			return
 		}
+		// Cacheable request but no entry yet → miss is already counted inside Get()
+	} else {
+		// Streaming or non-cacheable → count as miss (no cache entry possible)
+		p.cache.RecordMiss()
 	}
 
 	// Prepare outbound upstream request
@@ -322,6 +333,11 @@ func (p *GatewayProxy) handleForwardRequest(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	defer resp.Body.Close()
+
+	// Record measured upstream round-trip latency for cache analytics (miss path only)
+	if requestedModel != "" {
+		p.cache.RecordUpstreamLatency(requestedModel, time.Since(startTime).Milliseconds())
+	}
 
 	contentType := resp.Header.Get("Content-Type")
 	isSSE := strings.Contains(contentType, "text/event-stream") || isStreamRequested

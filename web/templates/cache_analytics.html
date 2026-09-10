@@ -1,0 +1,193 @@
+{{ define "title" }}Cache Analytics - AI Manager{{ end }}
+
+{{ define "content" }}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+  <div>
+    <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
+      <i class="bi bi-database-check text-cyan"></i> Cache Analytics
+    </h4>
+    <p class="text-dim small mb-0">Exact-match response cache performance, savings, and per-model hit stats.</p>
+  </div>
+  <div class="d-flex align-items-center gap-2">
+    <button class="btn-modern-ghost py-1 px-3 d-inline-flex align-items-center gap-2 text-info" id="btnRefreshCacheStats" title="Refresh stats">
+      <i class="bi bi-arrow-clockwise" id="refreshCacheIcon"></i> Refresh
+    </button>
+    <button class="btn-modern-ghost py-1 px-3 d-inline-flex align-items-center gap-2 text-danger" id="btnResetCacheStats" title="Reset analytics counters">
+      <i class="bi bi-trash3"></i> Reset
+    </button>
+  </div>
+</div>
+
+<!-- KPI Cards -->
+<div class="row g-3 mb-4" id="cacheKpis">
+  <div class="col-sm-6 col-xl-3">
+    <div class="card-modern card-interactive p-3 h-100">
+      <div class="d-flex align-items-center justify-content-between">
+        <div>
+          <span class="kpi-title">Cache Hit Rate</span>
+          <div class="kpi-value mt-1 text-emerald" id="statHitRate">-</div>
+        </div>
+        <div class="kpi-icon kpi-icon-emerald"><i class="bi bi-bullseye"></i></div>
+      </div>
+      <div class="mt-3 pt-2 border-top border-secondary border-opacity-10 d-flex align-items-center justify-content-between text-dim small">
+        <span class="d-flex align-items-center gap-1 text-muted"><i class="bi bi-lightning-charge-fill text-amber"></i> Hits / Requests</span>
+        <span class="badge-modern badge-emerald" style="font-size:0.68rem;" id="statHitsMisses">-</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-sm-6 col-xl-3">
+    <div class="card-modern card-interactive p-3 h-100">
+      <div class="d-flex align-items-center justify-content-between">
+        <div>
+          <span class="kpi-title">Tokens Saved</span>
+          <div class="kpi-value mt-1 text-light" id="statTokensSaved">-</div>
+        </div>
+        <div class="kpi-icon kpi-icon-cyan"><i class="bi bi-database-check"></i></div>
+      </div>
+      <div class="mt-3 pt-2 border-top border-secondary border-opacity-10 d-flex align-items-center justify-content-between text-dim small">
+        <span>Est. Cost Saved</span>
+        <span class="text-emerald fw-semibold font-monospace" id="statCostSaved">-</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-sm-6 col-xl-3">
+    <div class="card-modern card-interactive p-3 h-100">
+      <div class="d-flex align-items-center justify-content-between">
+        <div>
+          <span class="kpi-title">Cache Entries</span>
+          <div class="kpi-value mt-1 text-warning" id="statEntries">-</div>
+        </div>
+        <div class="kpi-icon kpi-icon-amber"><i class="bi bi-archive"></i></div>
+      </div>
+      <div class="mt-3 pt-2 border-top border-secondary border-opacity-10 d-flex align-items-center justify-content-between text-dim small">
+        <span>TTL</span>
+        <span class="font-monospace" id="statTTL">-</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-sm-6 col-xl-3">
+    <div class="card-modern card-interactive p-3 h-100">
+      <div class="d-flex align-items-center justify-content-between">
+        <div>
+          <span class="kpi-title">Uptime / Last Hit</span>
+          <div class="kpi-value mt-1 text-info" id="statUptime">-</div>
+        </div>
+        <div class="kpi-icon kpi-icon-indigo"><i class="bi bi-clock-history"></i></div>
+      </div>
+      <div class="mt-3 pt-2 border-top border-secondary border-opacity-10 d-flex align-items-center justify-content-between text-dim small">
+        <span>Last cache hit</span>
+        <span class="font-monospace" id="statLastHit">-</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Per-Model Stats Table -->
+<div class="card-modern mb-4">
+  <div class="d-flex align-items-center justify-content-between p-3 pb-2">
+    <h6 class="fw-bold mb-0 text-light d-flex align-items-center gap-2">
+      <i class="bi bi-cpu text-info"></i> Top Models by Cache Hits
+    </h6>
+    <span class="text-dim small">Live from gateway memory — resets on restart</span>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-modern mb-0">
+      <thead>
+        <tr>
+          <th>Model</th>
+          <th>Hits</th>
+          <th>Tokens Saved</th>
+          <th>Bytes Saved</th>
+          <th>Avg Latency Avoided</th>
+          <th>Est. Cost Saved</th>
+        </tr>
+      </thead>
+      <tbody id="cacheTopModels">
+        <tr>
+          <td colspan="6" class="text-center text-dim py-4 small">Loading…</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{{ end }}
+
+{{ define "scripts" }}
+<script>
+(function() {
+  const fmtNum = (n) => {
+    if (n === null || n === undefined || isNaN(n)) return '-';
+    if (n >= 1000000) return (n / 1000000).toFixed(2) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+    return n.toString();
+  };
+  const fmtBytes = (b) => {
+    if (!b) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let i = 0;
+    let v = b;
+    while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+    return v.toFixed(1) + ' ' + units[i];
+  };
+  const fmtUSD = (v) => '$' + (v || 0).toFixed(2);
+  const fmtIDR = (v) => 'Rp ' + fmtNum(v || 0);
+  const fmtDate = (s) => s ? new Date(s).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) : '-';
+
+  async function loadStats() {
+    try {
+      const res = await fetch('/api/cache/stats', { headers: { 'Accept': 'application/json' } });
+      const d = await res.json();
+      if (!d) return;
+
+      const hitRate = d.hit_rate !== undefined ? (d.hit_rate * 100).toFixed(1) + '%' : '-';
+      document.getElementById('statHitRate').textContent = hitRate;
+      document.getElementById('statHitsMisses').textContent = fmtNum(d.hits) + ' / ' + fmtNum(d.misses);
+      document.getElementById('statTokensSaved').textContent = fmtNum(d.tokens_saved);
+      document.getElementById('statCostSaved').textContent = fmtUSD(d.cost_saved_usd) + ' · ' + fmtIDR(d.cost_saved_idr);
+      document.getElementById('statEntries').textContent = fmtNum(d.entries) + ' / ' + fmtNum(d.capacity);
+      document.getElementById('statTTL').textContent = d.ttl_seconds ? Math.round(d.ttl_seconds / 60) + ' min' : '-';
+      document.getElementById('statUptime').textContent = d.uptime_seconds ? (d.uptime_seconds / 3600).toFixed(1) + 'h' : '-';
+      document.getElementById('statLastHit').textContent = fmtDate(d.last_hit);
+
+      const tbody = document.getElementById('cacheTopModels');
+      if (d.top_models && d.top_models.length) {
+        tbody.innerHTML = d.top_models.map(m => `
+          <tr>
+            <td><span class="model-pill">${m.model || '-'}</span></td>
+            <td class="font-monospace text-light">${fmtNum(m.hits)}</td>
+            <td class="font-monospace text-light">${fmtNum(m.tokens_saved)}</td>
+            <td class="font-monospace text-dim">${fmtBytes(m.bytes_saved)}</td>
+            <td class="font-monospace text-dim">${m.avg_latency_ms ? m.avg_latency_ms + 'ms' : '-'}</td>
+            <td class="font-monospace text-emerald">${fmtUSD((m.tokens_saved || 0) * 0.000005)}</td>
+          </tr>`).join('');
+      } else {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center text-dim py-4 small">No cache hits recorded yet.</td></tr>`;
+      }
+    } catch (err) {
+      console.error('Failed to load cache stats:', err);
+      document.getElementById('statHitRate').textContent = 'Error';
+    }
+  }
+
+  document.getElementById('btnRefreshCacheStats').addEventListener('click', async function() {
+    const icon = document.getElementById('refreshCacheIcon');
+    icon.classList.add('spin');
+    await loadStats();
+    setTimeout(() => icon.classList.remove('spin'), 400);
+  });
+
+  document.getElementById('btnResetCacheStats').addEventListener('click', async function() {
+    if (!confirm('Reset cache analytics counters? Cache entries are preserved.')) return;
+    const res = await fetch('/api/cache/stats', { method: 'DELETE' });
+    if (res.ok) loadStats();
+  });
+
+  loadStats();
+  // Auto-refresh every 5s for live updates
+  setInterval(loadStats, 5000);
+})();
+</script>
+{{ end }}

@@ -26,6 +26,7 @@
           <th>Model Scope</th>
           <th>RPM</th>
           <th>Status</th>
+          <th>Expires</th>
           <th>Created</th>
           <th>Last Used</th>
           <th class="text-end">Actions</th>
@@ -71,6 +72,17 @@
                   <span class="badge-modern badge-emerald"><i class="bi bi-check-circle"></i> Active</span>
                 {{ else }}
                   <span class="badge-modern badge-rose"><i class="bi bi-slash-circle"></i> Revoked</span>
+                {{ end }}
+              </td>
+              <td class="text-dim small font-monospace">
+                {{ if .ExpiresAt }}
+                  {{ if .IsExpired }}
+                    <span class="badge-modern badge-rose text-danger" title="This key has expired"><i class="bi bi-hourglass-split"></i> Expired {{ formatDate .ExpiresAt }}</span>
+                  {{ else }}
+                    <span class="badge-modern badge-amber text-warning font-monospace" style="font-size: 0.68rem;"><i class="bi bi-hourglass-top"></i> {{ formatDate .ExpiresAt }}</span>
+                  {{ end }}
+                {{ else }}
+                  <span class="text-secondary opacity-60">Never</span>
                 {{ end }}
               </td>
               <td class="text-dim small font-monospace">{{ formatDate .CreatedAt }}</td>
@@ -151,6 +163,11 @@
           <div class="mb-3">
             <label class="form-label small text-muted">Rate Limit RPM (Requests / Minute)</label>
             <input type="number" name="rate_limit_rpm" class="form-control form-control-modern font-monospace" placeholder="0 = Unlimited" value="0" min="0" max="1000">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small text-muted">Expires At (Optional)</label>
+            <input type="datetime-local" name="expires_at" class="form-control form-control-modern font-monospace" value="">
+            <div class="text-dim small mt-1">Leave empty for a permanent key. Timezone: WIB (Asia/Jakarta).</div>
           </div>
           <div class="mb-3">
             <label class="form-label small text-muted">Custom API Key Token (Optional)</label>

@@ -75,6 +75,31 @@ func (h *Handler) APIStats(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(stats)
 }
 
+func (h *Handler) APICacheStats(w http.ResponseWriter, r *http.Request) {
+	if h.cache == nil {
+		http.Error(w, "Cache not initialized", http.StatusInternalServerError)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(h.cache.Stats())
+	case http.MethodDelete:
+		h.cache.ResetStats()
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "message": "Cache analytics reset"})
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (h *Handler) CacheAnalyticsPage(w http.ResponseWriter, r *http.Request) {
+	h.render(w, r, "cache_analytics.html", "base.html", map[string]interface{}{
+		"ActivePage": "cache-analytics",
+	})
+}
+
 func (h *Handler) APIUpstreamQuotas(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	force := r.URL.Query().Get("refresh") == "true"

@@ -13,6 +13,7 @@ import (
 	"9router-gateway/internal/config"
 	"9router-gateway/internal/database"
 	"9router-gateway/internal/models"
+	"9router-gateway/internal/proxy"
 	"9router-gateway/internal/repository"
 )
 
@@ -243,6 +244,51 @@ func TestUpdateUpstreamPost_Validation(t *testing.T) {
 	h.UpdateUpstreamPost(rrUser, reqUser)
 	if !strings.Contains(rrUser.Header().Get("Location"), "Unauthorized") {
 		t.Errorf("expected Unauthorized redirect for normal user, got %s", rrUser.Header().Get("Location"))
+	}
+}
+
+func TestAPICacheStats(t *testing.T) {
+	tempDir := t.TempDir()
+	db, err := database.InitDB(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("failed to init db: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+	cfg := &config.Config{
+		SessionSecret: "test-secret-32-character-token-key",
+	}
+
+	h, err := NewHandler(cfg, repo, nil, nil)
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+
+	// GET returns fresh stats (all zero)
+	req := httptest.NewRequest(http.MethodGet, "/api/cache/stats", nil)
+	req = req.WithContext(context.WithValue(req.Context(), userContextKey, &models.User{Role: "admin"}))
+	rr := httptest.NewRecorder()
+	h.APICacheStats(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rr.Code)
+	}
+	var stats proxy.CacheStats
+	if err := json.NewDecoder(rr.Body).Decode(&stats); err != nil {
+		t.Fatalf("failed to decode stats: %v", err)
+	}
+	if stats.Hits != 0 || stats.Misses != 0 {
+		t.Errorf("expected zero initial stats, got hits=%d misses=%d", stats.Hits, stats.Misses)
+	}
+
+	// DELETE resets (no crash)
+	reqDel := httptest.NewRequest(http.MethodDelete, "/api/cache/stats", nil)
+	reqDel = reqDel.WithContext(context.WithValue(reqDel.Context(), userContextKey, &models.User{Role: "admin"}))
+	rrDel := httptest.NewRecorder()
+	h.APICacheStats(rrDel, reqDel)
+	if rrDel.Code != http.StatusOK {
+		t.Fatalf("expected 200 on reset, got %d", rrDel.Code)
 	}
 }
 

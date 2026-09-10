@@ -283,6 +283,11 @@ func main() {
 		authRouter.Get("/benchmark", h.BenchmarkPage)
 		authRouter.Post("/api/benchmark/run", h.APIBenchmarkRun)
 
+		// Cache Analytics (self-service for users, full stats for admin)
+		authRouter.Get("/cache-analytics", h.CacheAnalyticsPage)
+		authRouter.Get("/api/cache/stats", h.APICacheStats)
+		authRouter.Delete("/api/cache/stats", h.APICacheStats)
+
 		// Admin-Only Routes (User Management & Administrative Overrides)
 		authRouter.Group(func(adminOnly chi.Router) {
 			adminOnly.Use(h.RequireAdmin)

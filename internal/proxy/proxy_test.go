@@ -168,3 +168,34 @@ func TestResponseCache(t *testing.T) {
 		t.Fatalf("expected cache item to be expired")
 	}
 }
+
+func TestAPIKey_IsExpired(t *testing.T) {
+	now := time.Now()
+
+	// Nil ExpiresAt → never expires
+	k1 := &models.APIKey{}
+	if k1.IsExpired() {
+		t.Error("expected nil ExpiresAt to not be expired")
+	}
+
+	// Future expiry → not expired
+	future := now.Add(24 * time.Hour)
+	k2 := &models.APIKey{ExpiresAt: &future}
+	if k2.IsExpired() {
+		t.Error("expected future expiry to not be expired")
+	}
+
+	// Past expiry → expired
+	past := now.Add(-1 * time.Hour)
+	k3 := &models.APIKey{ExpiresAt: &past}
+	if !k3.IsExpired() {
+		t.Error("expected past expiry to be expired")
+	}
+
+	// Precisely now (with some buffer) → expired
+	justNow := now.Add(-1 * time.Millisecond)
+	k4 := &models.APIKey{ExpiresAt: &justNow}
+	if !k4.IsExpired() {
+		t.Error("expected past-ish expiry to be expired")
+	}
+}
