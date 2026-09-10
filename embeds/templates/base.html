@@ -53,6 +53,11 @@
             </li>
           {{ end }}
           <li class="nav-item">
+            <a class="nav-link {{ if eq .ActivePage "billing" }}active{{ end }}" href="/billing">
+              <i class="bi bi-wallet2 text-emerald"></i> Buy Tokens
+            </a>
+          </li>
+          <li class="nav-item">
             <a class="nav-link {{ if eq .ActivePage "keys" }}active{{ end }}" href="/keys">
               <i class="bi bi-key"></i> API Keys
             </a>

@@ -90,6 +90,37 @@ func migrate(db *sql.DB) error {
 		value TEXT NOT NULL,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
+
+	CREATE TABLE IF NOT EXISTS token_packages (
+		id TEXT PRIMARY KEY,
+		name TEXT NOT NULL,
+		tokens INTEGER NOT NULL,
+		price_idr INTEGER NOT NULL,
+		description TEXT,
+		is_popular INTEGER NOT NULL DEFAULT 0,
+		is_active INTEGER NOT NULL DEFAULT 1,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS transactions (
+		id TEXT PRIMARY KEY,
+		user_id TEXT NOT NULL,
+		package_id TEXT,
+		tokens INTEGER NOT NULL,
+		amount_idr INTEGER NOT NULL,
+		status TEXT NOT NULL DEFAULT 'pending',
+		payment_type TEXT,
+		snap_token TEXT,
+		snap_url TEXT,
+		midtrans_tx_id TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		paid_at DATETIME,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_tx_user_id ON transactions(user_id);
+	CREATE INDEX IF NOT EXISTS idx_tx_status ON transactions(status);
+	CREATE INDEX IF NOT EXISTS idx_tx_created_at ON transactions(created_at);
 	`
 
 	if _, err := db.Exec(schema); err != nil {
@@ -101,6 +132,20 @@ func migrate(db *sql.DB) error {
 	_, _ = db.Exec(`ALTER TABLE users ADD COLUMN password_hash TEXT;`)
 	_, _ = db.Exec(`ALTER TABLE users ADD COLUMN last_login_at DATETIME;`)
 	_, _ = db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username);`)
+
+	// Seed default packages if none exist
+	var count int
+	_ = db.QueryRow("SELECT COUNT(*) FROM token_packages").Scan(&count)
+	if count == 0 {
+		seedPackages := `
+		INSERT INTO token_packages (id, name, tokens, price_idr, description, is_popular, is_active) VALUES
+		('pkg-starter', 'Starter Pack', 500000, 25000, 'Ideal for testing Cursor & Cline with high-speed models', 0, 1),
+		('pkg-pro', 'Pro Developer', 2000000, 80000, 'Best value for active developers & daily coding workflows', 1, 1),
+		('pkg-power', 'Power Builder', 10000000, 350000, 'Heavy coding, multi-agent runs, & long contexts', 0, 1),
+		('pkg-enterprise', 'Enterprise Tier', 50000000, 1500000, 'Large project migrations, teams & production workloads', 0, 1);
+		`
+		_, _ = db.Exec(seedPackages)
+	}
 
 	return nil
 }

@@ -102,3 +102,32 @@ type DashboardStats struct {
 	TopModels     []TopModelStat `json:"top_models"`
 	RecentLogs    []RequestLog   `json:"recent_logs"`
 }
+
+type TokenPackage struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Tokens      int64     `json:"tokens"`
+	PriceIDR    int64     `json:"price_idr"`
+	Description string    `json:"description"`
+	IsPopular   bool      `json:"is_popular"`
+	IsActive    bool      `json:"is_active"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+type Transaction struct {
+	ID           string     `json:"id"` // order_id
+	UserID       string     `json:"user_id"`
+	PackageID    string     `json:"package_id"`
+	Tokens       int64      `json:"tokens"`
+	AmountIDR    int64      `json:"amount_idr"`
+	Status       string     `json:"status"` // "pending", "settlement", "expire", "cancel"
+	PaymentType  string     `json:"payment_type"`
+	SnapToken    string     `json:"snap_token"`
+	SnapURL      string     `json:"snap_url"`
+	MidtransTxID string     `json:"midtrans_tx_id"`
+	CreatedAt    time.Time  `json:"created_at"`
+	PaidAt       *time.Time `json:"paid_at,omitempty"`
+
+	// Virtual UI fields
+	UserName string `json:"user_name,omitempty"`
+}

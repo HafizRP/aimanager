@@ -40,6 +40,20 @@ type Repository interface {
 	// Stats
 	GetDashboardStats(ctx context.Context) (*models.DashboardStats, error)
 	GetUserDashboardStats(ctx context.Context, userID string) (*models.DashboardStats, error)
+
+	// Billing & Midtrans Transactions
+	GetActivePackages(ctx context.Context) ([]models.TokenPackage, error)
+	GetPackageByID(ctx context.Context, id string) (*models.TokenPackage, error)
+	CreateTransaction(ctx context.Context, tx *models.Transaction) error
+	GetTransactionByID(ctx context.Context, id string) (*models.Transaction, error)
+	UpdateTransactionStatus(ctx context.Context, id, status, paymentType, midtransTxID string) error
+	GetTransactionsByUserID(ctx context.Context, userID string, limit, offset int) ([]models.Transaction, int, error)
+	GetAllTransactions(ctx context.Context, limit, offset int) ([]models.Transaction, int, error)
+	CreditUserTokens(ctx context.Context, userID string, tokens int64) error
+
+	// Settings
+	SaveSetting(ctx context.Context, key, value string) error
+	GetSetting(ctx context.Context, key string) (string, error)
 }
 
 type SQLiteRepo struct {
@@ -550,4 +564,206 @@ func (r *SQLiteRepo) GetUserDashboardStats(ctx context.Context, userID string) (
 	stats.RecentLogs = recentLogs
 
 	return stats, nil
+}
+
+// Billing & Midtrans Transactions
+
+func (r *SQLiteRepo) GetActivePackages(ctx context.Context) ([]models.TokenPackage, error) {
+	query := `SELECT id, name, tokens, price_idr, description, is_popular, is_active, created_at 
+	          FROM token_packages WHERE is_active = 1 ORDER BY price_idr ASC`
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var pkgs []models.TokenPackage
+	for rows.Next() {
+		var p models.TokenPackage
+		var isPop, isActive int
+		var createdAt string
+		if err := rows.Scan(&p.ID, &p.Name, &p.Tokens, &p.PriceIDR, &p.Description, &isPop, &isActive, &createdAt); err != nil {
+			return nil, err
+		}
+		p.IsPopular = (isPop == 1)
+		p.IsActive = (isActive == 1)
+		p.CreatedAt = parseTimeFlexible(createdAt)
+		pkgs = append(pkgs, p)
+	}
+	return pkgs, nil
+}
+
+func (r *SQLiteRepo) GetPackageByID(ctx context.Context, id string) (*models.TokenPackage, error) {
+	query := `SELECT id, name, tokens, price_idr, description, is_popular, is_active, created_at 
+	          FROM token_packages WHERE id = ?`
+	var p models.TokenPackage
+	var isPop, isActive int
+	var createdAt string
+	err := r.db.QueryRowContext(ctx, query, id).Scan(&p.ID, &p.Name, &p.Tokens, &p.PriceIDR, &p.Description, &isPop, &isActive, &createdAt)
+	if err != nil {
+		return nil, err
+	}
+	p.IsPopular = (isPop == 1)
+	p.IsActive = (isActive == 1)
+	p.CreatedAt = parseTimeFlexible(createdAt)
+	return &p, nil
+}
+
+func (r *SQLiteRepo) CreateTransaction(ctx context.Context, tx *models.Transaction) error {
+	query := `INSERT INTO transactions (id, user_id, package_id, tokens, amount_idr, status, payment_type, snap_token, snap_url, midtrans_tx_id, created_at)
+	          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+	_, err := r.db.ExecContext(ctx, query, tx.ID, tx.UserID, tx.PackageID, tx.Tokens, tx.AmountIDR, tx.Status, tx.PaymentType, tx.SnapToken, tx.SnapURL, tx.MidtransTxID)
+	return err
+}
+
+func (r *SQLiteRepo) GetTransactionByID(ctx context.Context, id string) (*models.Transaction, error) {
+	query := `SELECT t.id, t.user_id, t.package_id, t.tokens, t.amount_idr, t.status, 
+	                 COALESCE(t.payment_type, ''), COALESCE(t.snap_token, ''), COALESCE(t.snap_url, ''), 
+	                 COALESCE(t.midtrans_tx_id, ''), t.created_at, t.paid_at,
+	                 COALESCE(u.name, 'Unknown')
+	          FROM transactions t
+	          LEFT JOIN users u ON t.user_id = u.id
+	          WHERE t.id = ?`
+	var t models.Transaction
+	var createdAt string
+	var paidAt sql.NullString
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&t.ID, &t.UserID, &t.PackageID, &t.Tokens, &t.AmountIDR, &t.Status,
+		&t.PaymentType, &t.SnapToken, &t.SnapURL, &t.MidtransTxID,
+		&createdAt, &paidAt, &t.UserName,
+	)
+	if err != nil {
+		return nil, err
+	}
+	t.CreatedAt = parseTimeFlexible(createdAt)
+	if paidAt.Valid {
+		pt := parseTimeFlexible(paidAt.String)
+		if !pt.IsZero() {
+			t.PaidAt = &pt
+		}
+	}
+	return &t, nil
+}
+
+func (r *SQLiteRepo) UpdateTransactionStatus(ctx context.Context, id, status, paymentType, midtransTxID string) error {
+	if status == "settlement" || status == "capture" || status == "paid" {
+		query := `UPDATE transactions 
+		          SET status = ?, payment_type = ?, midtrans_tx_id = ?, paid_at = datetime('now')
+		          WHERE id = ?`
+		_, err := r.db.ExecContext(ctx, query, status, paymentType, midtransTxID, id)
+		return err
+	}
+	query := `UPDATE transactions 
+	          SET status = ?, payment_type = ?, midtrans_tx_id = ?
+	          WHERE id = ?`
+	_, err := r.db.ExecContext(ctx, query, status, paymentType, midtransTxID, id)
+	return err
+}
+
+func (r *SQLiteRepo) GetTransactionsByUserID(ctx context.Context, userID string, limit, offset int) ([]models.Transaction, int, error) {
+	var total int
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM transactions WHERE user_id = ?", userID).Scan(&total)
+
+	query := `SELECT t.id, t.user_id, t.package_id, t.tokens, t.amount_idr, t.status, 
+	                 COALESCE(t.payment_type, ''), COALESCE(t.snap_token, ''), COALESCE(t.snap_url, ''), 
+	                 COALESCE(t.midtrans_tx_id, ''), t.created_at, t.paid_at,
+	                 COALESCE(u.name, 'Unknown')
+	          FROM transactions t
+	          LEFT JOIN users u ON t.user_id = u.id
+	          WHERE t.user_id = ?
+	          ORDER BY t.created_at DESC
+	          LIMIT ? OFFSET ?`
+	rows, err := r.db.QueryContext(ctx, query, userID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var txs []models.Transaction
+	for rows.Next() {
+		var t models.Transaction
+		var createdAt string
+		var paidAt sql.NullString
+		if err := rows.Scan(
+			&t.ID, &t.UserID, &t.PackageID, &t.Tokens, &t.AmountIDR, &t.Status,
+			&t.PaymentType, &t.SnapToken, &t.SnapURL, &t.MidtransTxID,
+			&createdAt, &paidAt, &t.UserName,
+		); err != nil {
+			return nil, 0, err
+		}
+		t.CreatedAt = parseTimeFlexible(createdAt)
+		if paidAt.Valid {
+			pt := parseTimeFlexible(paidAt.String)
+			if !pt.IsZero() {
+				t.PaidAt = &pt
+			}
+		}
+		txs = append(txs, t)
+	}
+	return txs, total, nil
+}
+
+func (r *SQLiteRepo) GetAllTransactions(ctx context.Context, limit, offset int) ([]models.Transaction, int, error) {
+	var total int
+	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM transactions").Scan(&total)
+
+	query := `SELECT t.id, t.user_id, t.package_id, t.tokens, t.amount_idr, t.status, 
+	                 COALESCE(t.payment_type, ''), COALESCE(t.snap_token, ''), COALESCE(t.snap_url, ''), 
+	                 COALESCE(t.midtrans_tx_id, ''), t.created_at, t.paid_at,
+	                 COALESCE(u.name, 'Unknown')
+	          FROM transactions t
+	          LEFT JOIN users u ON t.user_id = u.id
+	          ORDER BY t.created_at DESC
+	          LIMIT ? OFFSET ?`
+	rows, err := r.db.QueryContext(ctx, query, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var txs []models.Transaction
+	for rows.Next() {
+		var t models.Transaction
+		var createdAt string
+		var paidAt sql.NullString
+		if err := rows.Scan(
+			&t.ID, &t.UserID, &t.PackageID, &t.Tokens, &t.AmountIDR, &t.Status,
+			&t.PaymentType, &t.SnapToken, &t.SnapURL, &t.MidtransTxID,
+			&createdAt, &paidAt, &t.UserName,
+		); err != nil {
+			return nil, 0, err
+		}
+		t.CreatedAt = parseTimeFlexible(createdAt)
+		if paidAt.Valid {
+			pt := parseTimeFlexible(paidAt.String)
+			if !pt.IsZero() {
+				t.PaidAt = &pt
+			}
+		}
+		txs = append(txs, t)
+	}
+	return txs, total, nil
+}
+
+func (r *SQLiteRepo) CreditUserTokens(ctx context.Context, userID string, tokens int64) error {
+	if tokens <= 0 {
+		return nil
+	}
+	// Increase token_quota by tokens
+	query := `UPDATE users SET token_quota = token_quota + ?, updated_at = datetime('now') WHERE id = ?`
+	_, err := r.db.ExecContext(ctx, query, tokens, userID)
+	return err
+}
+
+func (r *SQLiteRepo) SaveSetting(ctx context.Context, key, value string) error {
+	query := `INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
+	          ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')`
+	_, err := r.db.ExecContext(ctx, query, key, value)
+	return err
+}
+
+func (r *SQLiteRepo) GetSetting(ctx context.Context, key string) (string, error) {
+	var val string
+	err := r.db.QueryRowContext(ctx, "SELECT value FROM settings WHERE key = ?", key).Scan(&val)
+	return val, err
 }

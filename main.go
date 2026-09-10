@@ -120,10 +120,11 @@ func main() {
 	r.HandleFunc("/v1", gwProxy.ServeHTTP)
 	r.HandleFunc("/v1/*", gwProxy.ServeHTTP)
 
-	// 8. Public Auth Routes for Dashboard
+	// 8. Public Auth & Webhook Routes
 	r.Get("/login", h.LoginPage)
 	r.Post("/login", h.LoginPost)
 	r.Post("/logout", h.LogoutPost)
+	r.Post("/api/webhook/midtrans", h.MidtransWebhook)
 
 	// 9. Protected Web Dashboard Routes (Accessible by Authenticated Users)
 	r.Group(func(authRouter chi.Router) {
@@ -132,6 +133,10 @@ func main() {
 		// Shared: Dashboard, Keys (self-scoped for user), Logs (self-scoped for user), Models (whitelist-scoped for user)
 		authRouter.Get("/", h.DashboardPage)
 		authRouter.Get("/api/stats", h.APIStats)
+
+		// Billing & Top-Up
+		authRouter.Get("/billing", h.BillingPage)
+		authRouter.Post("/api/billing/checkout", h.CheckoutSnap)
 
 		// Keys (Scoped: Admin can manage all, Standard users manage their own)
 		authRouter.Get("/keys", h.KeysPage)
@@ -156,6 +161,10 @@ func main() {
 			adminOnly.Post("/users/{id}/reset-usage", h.ResetUsage)
 			adminOnly.Post("/users/{id}/toggle", h.ToggleUserStatus)
 			adminOnly.Post("/users/{id}/delete", h.DeleteUser)
+
+			// Admin Billing Actions
+			adminOnly.Post("/api/billing/manual-credit", h.ManualCreditTokens)
+			adminOnly.Post("/settings/midtrans", h.UpdateMidtransPost)
 		})
 	})
 

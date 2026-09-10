@@ -40,6 +40,36 @@
           <code class="text-warning font-monospace">http://0.0.0.0:{{ .Config.Port }}</code>
         </div>
       </div>
+
+      <!-- Midtrans Payment Gateway Settings -->
+      <div class="card-modern p-4 mb-4">
+        <h6 class="fw-bold mb-3 text-light d-flex align-items-center gap-2">
+          <i class="bi bi-credit-card text-emerald"></i> Midtrans Payment Gateway
+        </h6>
+        <form action="/settings/midtrans" method="POST">
+          <div class="mb-3">
+            <label class="form-label small text-muted">Server Key</label>
+            <input type="text" name="server_key" class="form-control form-control-modern font-monospace" value="{{ .Config.MidtransServerKey }}" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small text-muted">Client Key</label>
+            <input type="text" name="client_key" class="form-control form-control-modern font-monospace" value="{{ .Config.MidtransClientKey }}" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small text-muted">Merchant ID (Optional)</label>
+            <input type="text" name="merchant_id" class="form-control form-control-modern font-monospace" value="{{ .Config.MidtransMerchantID }}">
+          </div>
+          <div class="form-check form-switch p-3 rounded-3 mb-3" style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-subtle);">
+            <input class="form-check-input ms-0 me-2" type="checkbox" name="is_production" id="midtransProdToggle" value="true" {{ if .Config.MidtransIsProduction }}checked{{ end }}>
+            <label class="form-check-label text-light fw-medium" for="midtransProdToggle">
+              Production Mode (Uncheck for Sandbox)
+            </label>
+          </div>
+          <button type="submit" class="btn-modern-primary btn-sm w-100 py-2">
+            <i class="bi bi-check2"></i> Save Midtrans Config
+          </button>
+        </form>
+      </div>
     {{ end }}
 
     <!-- Password Change Card -->

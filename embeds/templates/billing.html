@@ -1,0 +1,318 @@
+{{ define "title" }}Billing & Token Store - AI Manager{{ end }}
+
+{{ define "content" }}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+  <div>
+    <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
+      <i class="bi bi-wallet2 text-emerald"></i> Token Store & Billing
+    </h4>
+    <p class="text-dim small mb-0">Top up your AI token balance instantly using QRIS, GoPay, ShopeePay, or Virtual Accounts.</p>
+  </div>
+  <div class="d-flex gap-2 align-items-center">
+    {{ if .IsAdmin }}
+      <button class="btn-modern-primary btn-sm" data-bs-toggle="modal" data-bs-target="#manualCreditModal">
+        <i class="bi bi-plus-circle me-1"></i> Manual Credit Tokens
+      </button>
+    {{ end }}
+    <div class="badge-modern badge-gray">
+      <span class="pulse-dot"></span> Midtrans {{ if .IsProduction }}Production{{ else }}Sandbox{{ end }}
+    </div>
+  </div>
+</div>
+
+<!-- Admin Revenue Overview (Only for Admin) -->
+{{ if .IsAdmin }}
+  <div class="row g-3 mb-4">
+    <div class="col-md-6 col-xl-4">
+      <div class="card-modern p-3">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <span class="kpi-title">Total Revenue</span>
+            <div class="kpi-value text-emerald mt-1">Rp {{ formatNumber .TotalRevenue }}</div>
+          </div>
+          <div class="kpi-icon kpi-icon-emerald">
+            <i class="bi bi-cash-stack"></i>
+          </div>
+        </div>
+        <div class="text-dim small mt-2">
+          From settled client token purchases
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6 col-xl-4">
+      <div class="card-modern p-3">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <span class="kpi-title">Total Orders</span>
+            <div class="kpi-value mt-1">{{ .TotalTxCount }}</div>
+          </div>
+          <div class="kpi-icon kpi-icon-indigo">
+            <i class="bi bi-receipt"></i>
+          </div>
+        </div>
+        <div class="text-dim small mt-2">
+          Recorded transactions & invoices
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-12 col-xl-4">
+      <div class="card-modern p-3">
+        <span class="kpi-title d-block mb-1">Midtrans Webhook URL</span>
+        <div class="d-flex align-items-center gap-1 mt-1">
+          <code class="font-monospace small text-cyan flex-grow-1 p-2 rounded-2" style="background:#0b0d14; border: 1px solid var(--border-subtle); font-size: 0.75rem;">https://aimanager.b14.my.id/api/webhook/midtrans</code>
+          <button class="btn-modern-ghost btn-sm py-1 px-2 copy-btn" data-copy="https://aimanager.b14.my.id/api/webhook/midtrans" title="Copy webhook URL">
+            <i class="bi bi-clipboard"></i>
+          </button>
+        </div>
+        <div class="text-dim small mt-2" style="font-size: 0.72rem;">
+          Paste in Midtrans Dashboard &gt; Settings &gt; Configuration &gt; Notification URL
+        </div>
+      </div>
+    </div>
+  </div>
+{{ end }}
+
+<!-- Token Packages Grid -->
+<div class="mb-5">
+  <div class="d-flex align-items-center justify-content-between mb-3">
+    <h5 class="fw-bold text-light mb-0"><i class="bi bi-grid-fill me-2 text-primary"></i>Choose Token Package</h5>
+    <span class="text-dim small">Instant top-up via QRIS & VA</span>
+  </div>
+
+  <div class="row g-3">
+    {{ range .Packages }}
+      <div class="col-md-6 col-xl-3">
+        <div class="card-modern card-interactive p-4 h-100 position-relative d-flex flex-column justify-content-between {{ if .IsPopular }}border-primary border-opacity-50{{ end }}">
+          {{ if .IsPopular }}
+            <span class="position-absolute top-0 end-0 m-3 badge-modern badge-indigo" style="font-size: 0.7rem;">
+              <i class="bi bi-star-fill text-warning"></i> Best Value
+            </span>
+          {{ end }}
+
+          <div>
+            <span class="kpi-title text-light">{{ .Name }}</span>
+            <div class="mt-2 mb-1">
+              <span class="fs-2 fw-bold text-light font-monospace">{{ formatNumber .Tokens }}</span>
+              <span class="text-dim small">tokens</span>
+            </div>
+            <div class="text-emerald fw-bold fs-5 mb-3">
+              Rp {{ formatNumber .PriceIDR }}
+            </div>
+            <p class="text-dim small mb-4" style="min-height: 40px;">
+              {{ .Description }}
+            </p>
+          </div>
+
+          <div>
+            <button class="btn-modern-primary w-100 py-2 btn-checkout-snap d-flex align-items-center justify-content-center gap-2" 
+                    data-package-id="{{ .ID }}" data-package-name="{{ .Name }}" data-price="{{ .PriceIDR }}">
+              <i class="bi bi-qr-code-scan"></i> Buy with QRIS / VA
+            </button>
+          </div>
+        </div>
+      </div>
+    {{ end }}
+  </div>
+</div>
+
+<!-- Transactions History Table -->
+<div class="card-modern mb-4">
+  <div class="p-3 border-bottom border-secondary border-opacity-10 d-flex justify-content-between align-items-center">
+    <h6 class="fw-bold mb-0 text-light d-flex align-items-center gap-2">
+      <i class="bi bi-clock-history text-info"></i> Transaction History
+    </h6>
+    <span class="text-dim small">Showing {{ len .Transactions }} entries</span>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-modern mb-0">
+      <thead>
+        <tr>
+          <th>Order ID</th>
+          <th>Date</th>
+          {{ if .IsAdmin }}<th>User</th>{{ end }}
+          <th>Tokens Added</th>
+          <th>Amount</th>
+          <th>Payment Type</th>
+          <th>Status</th>
+          <th class="text-end">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{ if .Transactions }}
+          {{ range .Transactions }}
+            <tr>
+              <td>
+                <span class="font-monospace text-light fw-medium small">{{ .ID }}</span>
+              </td>
+              <td class="text-dim font-monospace small" style="font-size: 0.78rem;">
+                {{ formatDate .CreatedAt }}
+              </td>
+              {{ if $.IsAdmin }}
+                <td>
+                  <span class="fw-medium text-light small">{{ .UserName }}</span>
+                </td>
+              {{ end }}
+              <td class="font-monospace text-light fw-bold">
+                +{{ formatNumber .Tokens }}
+              </td>
+              <td class="font-monospace text-emerald">
+                Rp {{ formatNumber .AmountIDR }}
+              </td>
+              <td>
+                <span class="badge-modern badge-gray font-monospace" style="font-size: 0.7rem;">
+                  {{ if .PaymentType }}{{ .PaymentType }}{{ else }}Online Snap{{ end }}
+                </span>
+              </td>
+              <td>
+                {{ if or (eq .Status "settlement") (eq .Status "paid") }}
+                  <span class="badge-modern badge-emerald"><i class="bi bi-check-circle-fill"></i> Settled / Paid</span>
+                {{ else if eq .Status "pending" }}
+                  <span class="badge-modern badge-amber"><i class="bi bi-hourglass-split"></i> Pending</span>
+                {{ else if eq .Status "expire" }}
+                  <span class="badge-modern badge-rose"><i class="bi bi-x-circle"></i> Expired</span>
+                {{ else }}
+                  <span class="badge-modern badge-gray">{{ .Status }}</span>
+                {{ end }}
+              </td>
+              <td class="text-end">
+                {{ if and (eq .Status "pending") .SnapToken }}
+                  <button class="btn-modern-ghost btn-sm py-1 px-2 text-warning btn-resume-snap" data-snap-token="{{ .SnapToken }}">
+                    Pay Now &rarr;
+                  </button>
+                {{ else }}
+                  <span class="text-dim small">-</span>
+                {{ end }}
+              </td>
+            </tr>
+          {{ end }}
+        {{ else }}
+          <tr>
+            <td colspan="{{ if .IsAdmin }}8{{ else }}7{{ end }}" class="text-center text-dim py-5">
+              <i class="bi bi-receipt fs-2 d-block mb-2 opacity-50"></i>
+              No transactions recorded yet.
+            </td>
+          </tr>
+        {{ end }}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal: Admin Manual Credit Tokens -->
+{{ if .IsAdmin }}
+  <div class="modal fade" id="manualCreditModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content modal-content-modern">
+        <form action="/api/billing/manual-credit" method="POST">
+          <div class="modal-header modal-header-modern">
+            <h5 class="modal-title fw-bold text-light d-flex align-items-center gap-2">
+              <i class="bi bi-plus-circle text-emerald"></i> Manual Credit User Tokens
+            </h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body p-4">
+            <div class="mb-3">
+              <label class="form-label small text-muted">Select User</label>
+              <select name="user_id" class="form-select form-select-modern" required>
+                <option value="" disabled selected>-- Choose User --</option>
+                {{ range .AllUsers }}
+                  <option value="{{ .ID }}">{{ .Name }} (@{{ .Username }}) - Quota: {{ formatNumber .TokenQuota }}</option>
+                {{ end }}
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label small text-muted">Tokens to Add</label>
+              <input type="number" name="tokens" class="form-control form-control-modern font-monospace" placeholder="e.g. 1000000" min="1000" step="10000" required value="1000000">
+            </div>
+          </div>
+          <div class="modal-footer modal-footer-modern">
+            <button type="button" class="btn-modern-ghost" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn-modern-primary"><i class="bi bi-check2"></i> Add Tokens</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+{{ end }}
+
+{{ end }}
+
+{{ define "scripts" }}
+<!-- Midtrans Snap Script -->
+<script src="{{ .MidtransSnapURL }}" data-client-key="{{ .MidtransClientKey }}"></script>
+<script>
+  document.querySelectorAll(".btn-checkout-snap").forEach(btn => {
+    btn.addEventListener("click", function() {
+      const packageId = this.getAttribute("data-package-id");
+      const packageName = this.getAttribute("data-package-name");
+      const price = this.getAttribute("data-price");
+
+      btn.disabled = true;
+      const originalText = btn.innerHTML;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Preparing...';
+
+      fetch("/api/billing/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ package_id: packageId })
+      })
+      .then(res => res.json())
+      .then(data => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+
+        if (data.error) {
+          alert("Payment Error: " + data.error);
+          return;
+        }
+
+        if (window.snap && data.snap_token) {
+          window.snap.pay(data.snap_token, {
+            onSuccess: function(result) {
+              window.location.href = "/billing?msg=Payment+successful!+Tokens+credited+to+your+account.";
+            },
+            onPending: function(result) {
+              window.location.href = "/billing?msg=Order+created.+Please+complete+your+payment.";
+            },
+            onError: function(result) {
+              alert("Payment failed: " + JSON.stringify(result));
+            },
+            onClose: function() {
+              window.location.reload();
+            }
+          });
+        } else if (data.redirect_url) {
+          window.location.href = data.redirect_url;
+        }
+      })
+      .catch(err => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        alert("Checkout network error: " + err.message);
+      });
+    });
+  });
+
+  document.querySelectorAll(".btn-resume-snap").forEach(btn => {
+    btn.addEventListener("click", function() {
+      const token = this.getAttribute("data-snap-token");
+      if (window.snap && token) {
+        window.snap.pay(token, {
+          onSuccess: function(result) {
+            window.location.href = "/billing?msg=Payment+successful!+Tokens+credited.";
+          },
+          onPending: function(result) {
+            window.location.reload();
+          },
+          onClose: function() {
+            window.location.reload();
+          }
+        });
+      }
+    });
+  });
+</script>
+{{ end }}

@@ -8,15 +8,19 @@ import (
 )
 
 type Config struct {
-	Port             int
-	Host             string
-	UpstreamURL      string
-	UpstreamAPIKey   string
-	DBPath           string
-	NineRouterDBPath string
-	AdminUsername    string
-	AdminPassword    string
-	SessionSecret    string
+	Port                 int
+	Host                 string
+	UpstreamURL          string
+	UpstreamAPIKey       string
+	DBPath               string
+	NineRouterDBPath     string
+	AdminUsername        string
+	AdminPassword        string
+	SessionSecret        string
+	MidtransServerKey    string
+	MidtransClientKey    string
+	MidtransIsProduction bool
+	MidtransMerchantID   string
 }
 
 func LoadConfig() *Config {
@@ -33,17 +37,35 @@ func LoadConfig() *Config {
 	adminPassword := getEnv("ADMIN_PASSWORD", "admin123")
 	sessionSecret := getEnv("SESSION_SECRET", "9router-secret-token-key-change-me")
 
+	midtransServerKey := getEnv("MIDTRANS_SERVER_KEY", "SB-Mid-server-demo-key")
+	midtransClientKey := getEnv("MIDTRANS_CLIENT_KEY", "SB-Mid-client-demo-key")
+	midtransIsProduction := getEnvAsBool("MIDTRANS_IS_PRODUCTION", false)
+	midtransMerchantID := getEnv("MIDTRANS_MERCHANT_ID", "")
+
 	return &Config{
-		Port:             port,
-		Host:             host,
-		UpstreamURL:      upstreamURL,
-		UpstreamAPIKey:   upstreamAPIKey,
-		DBPath:           dbPath,
-		NineRouterDBPath: nineRouterDBPath,
-		AdminUsername:    adminUsername,
-		AdminPassword:    adminPassword,
-		SessionSecret:    sessionSecret,
+		Port:                 port,
+		Host:                 host,
+		UpstreamURL:          upstreamURL,
+		UpstreamAPIKey:       upstreamAPIKey,
+		DBPath:               dbPath,
+		NineRouterDBPath:     nineRouterDBPath,
+		AdminUsername:        adminUsername,
+		AdminPassword:        adminPassword,
+		SessionSecret:        sessionSecret,
+		MidtransServerKey:    midtransServerKey,
+		MidtransClientKey:    midtransClientKey,
+		MidtransIsProduction: midtransIsProduction,
+		MidtransMerchantID:   midtransMerchantID,
 	}
+}
+
+func getEnvAsBool(key string, defaultVal bool) bool {
+	valStr := getEnv(key, "")
+	if valStr == "" {
+		return defaultVal
+	}
+	valStr = strings.ToLower(valStr)
+	return valStr == "true" || valStr == "1" || valStr == "yes"
 }
 
 func getEnv(key, defaultVal string) string {

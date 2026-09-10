@@ -150,7 +150,7 @@ func NewHandler(cfg *config.Config, repo repository.Repository, sync *syncer.Syn
 		},
 	}
 
-	pages := []string{"dashboard.html", "users.html", "keys.html", "logs.html", "models.html", "settings.html", "profile.html"}
+	pages := []string{"dashboard.html", "users.html", "keys.html", "logs.html", "models.html", "settings.html", "billing.html"}
 	for _, page := range pages {
 		tmpl, err := template.New("").Funcs(funcMap).ParseFS(embeds.FS, "templates/base.html", "templates/"+page)
 		if err != nil {

@@ -179,6 +179,41 @@ func (h *Handler) UpdatePasswordPost(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/settings?msg=Password+updated+successfully", http.StatusSeeOther)
 }
 
+func (h *Handler) UpdateMidtransPost(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	ctx := r.Context()
+	currentUser := GetUserFromContext(ctx)
+	if currentUser == nil || !currentUser.IsAdmin() {
+		http.Redirect(w, r, "/?error=Unauthorized", http.StatusSeeOther)
+		return
+	}
+
+	serverKey := strings.TrimSpace(r.FormValue("server_key"))
+	clientKey := strings.TrimSpace(r.FormValue("client_key"))
+	merchantID := strings.TrimSpace(r.FormValue("merchant_id"))
+	isProduction := (r.FormValue("is_production") == "true")
+
+	if serverKey != "" {
+		h.cfg.MidtransServerKey = serverKey
+	}
+	if clientKey != "" {
+		h.cfg.MidtransClientKey = clientKey
+	}
+	h.cfg.MidtransMerchantID = merchantID
+	h.cfg.MidtransIsProduction = isProduction
+
+	_ = h.repo.SaveSetting(ctx, "midtrans_server_key", h.cfg.MidtransServerKey)
+	_ = h.repo.SaveSetting(ctx, "midtrans_client_key", h.cfg.MidtransClientKey)
+	_ = h.repo.SaveSetting(ctx, "midtrans_merchant_id", h.cfg.MidtransMerchantID)
+	if isProduction {
+		_ = h.repo.SaveSetting(ctx, "midtrans_is_production", "true")
+	} else {
+		_ = h.repo.SaveSetting(ctx, "midtrans_is_production", "false")
+	}
+
+	http.Redirect(w, r, "/settings?msg=Midtrans+configuration+saved+successfully", http.StatusSeeOther)
+}
+
 func parseAllowedModels(raw string) []string {
 	var list []string
 	if strings.TrimSpace(raw) == "" {
