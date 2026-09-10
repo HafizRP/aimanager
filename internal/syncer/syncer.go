@@ -19,8 +19,13 @@ type Syncer struct {
 
 func NewSyncer(dbPath string) *Syncer {
 	machineID := "33b8f86c23c91fec"
-	// Try reading machineId from /home/b14/9router/data/machine-id
-	if bytes, err := os.ReadFile("/home/b14/9router/data/machine-id"); err == nil {
+	// Try reading machineId from 9router-gateway/data/core/machine-id, fallback to /home/b14/9router/data/machine-id
+	if bytes, err := os.ReadFile("/home/b14/9router-gateway/data/core/machine-id"); err == nil {
+		content := strings.TrimSpace(string(bytes))
+		if len(content) >= 16 {
+			machineID = content[:16]
+		}
+	} else if bytes, err := os.ReadFile("/home/b14/9router/data/machine-id"); err == nil {
 		content := strings.TrimSpace(string(bytes))
 		if len(content) >= 16 {
 			machineID = content[:16]

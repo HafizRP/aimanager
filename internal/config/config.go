@@ -32,7 +32,7 @@ func LoadConfig() *Config {
 	upstreamURL := getEnv("UPSTREAM_URL", "http://127.0.0.1:20128")
 	upstreamAPIKey := getEnv("UPSTREAM_API_KEY", "")
 	dbPath := getEnv("DB_PATH", "/home/b14/9router-gateway/data/gateway.db")
-	nineRouterDBPath := getEnv("NINEROUTER_DB_PATH", "/home/b14/9router/data/db/data.sqlite")
+	nineRouterDBPath := getEnv("NINEROUTER_DB_PATH", "/home/b14/9router-gateway/data/core/db/data.sqlite")
 	adminUsername := getEnv("ADMIN_USERNAME", "admin")
 	adminPassword := getEnv("ADMIN_PASSWORD", "admin123")
 	sessionSecret := getEnv("SESSION_SECRET", "9router-secret-token-key-change-me")

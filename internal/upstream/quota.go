@@ -144,10 +144,15 @@ func (m *QuotaManager) deriveCLIToken() string {
 	machineIDBytes, err1 := os.ReadFile(machineIDPath)
 	cliSecretBytes, err2 := os.ReadFile(cliSecretPath)
 	if err1 != nil || err2 != nil {
-		// Try default fallback
-		dataDir = "/home/b14/9router/data"
-		machineIDBytes, _ = os.ReadFile(filepath.Join(dataDir, "machine-id"))
-		cliSecretBytes, _ = os.ReadFile(filepath.Join(dataDir, "auth", "cli-secret"))
+		// Try default fallback to 9router-gateway/data/core then /home/b14/9router/data
+		dataDir = "/home/b14/9router-gateway/data/core"
+		machineIDBytes, err1 = os.ReadFile(filepath.Join(dataDir, "machine-id"))
+		cliSecretBytes, err2 = os.ReadFile(filepath.Join(dataDir, "auth", "cli-secret"))
+		if err1 != nil || err2 != nil {
+			dataDir = "/home/b14/9router/data"
+			machineIDBytes, _ = os.ReadFile(filepath.Join(dataDir, "machine-id"))
+			cliSecretBytes, _ = os.ReadFile(filepath.Join(dataDir, "auth", "cli-secret"))
+		}
 	}
 
 	machineID := strings.TrimSpace(string(machineIDBytes))

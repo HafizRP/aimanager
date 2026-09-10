@@ -53,7 +53,7 @@ func (pk *ProviderKeeper) checkAndReactivate() {
 
 	dbPath := pk.cfg.NineRouterDBPath
 	if dbPath == "" {
-		dbPath = "/home/b14/9router/data/db/data.sqlite"
+		dbPath = "/home/b14/9router-gateway/data/core/db/data.sqlite"
 	}
 
 	db, err := sql.Open("sqlite", dbPath+"?mode=ro")

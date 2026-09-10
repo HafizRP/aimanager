@@ -1,6 +1,21 @@
 version: '3.8'
 
 services:
+  core:
+    image: decolua/9router:latest
+    container_name: 9router
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:20128:20128"
+    environment:
+      - DATA_DIR=/app/data
+      - PORT=20128
+      - HOSTNAME=0.0.0.0
+      - INITIAL_PASSWORD=Kepoloe#123
+      - NEXT_TELEMETRY_DISABLED=1
+    volumes:
+      - ./data/core:/app/data
+
   gateway:
     build: .
     container_name: 9router_gateway
@@ -11,7 +26,10 @@ services:
       - HOST=0.0.0.0
       - UPSTREAM_URL=http://127.0.0.1:20128
       - DB_PATH=/app/data/gateway.db
+      - NINEROUTER_DB_PATH=/app/data/core/db/data.sqlite
     env_file:
       - .env
     volumes:
       - ./data:/app/data
+    depends_on:
+      - core
