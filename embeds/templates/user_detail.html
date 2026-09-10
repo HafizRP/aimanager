@@ -1,0 +1,632 @@
+{{ define "title" }}{{ .TargetUser.Name }} (@{{ .TargetUser.Username }}) - User Details - AI Manager{{ end }}
+
+{{ define "content" }}
+<div class="mb-3">
+  <a href="/users" class="btn-modern-ghost text-decoration-none py-1 px-3 d-inline-flex align-items-center gap-2 small text-dim">
+    <i class="bi bi-arrow-left"></i> Back to Users
+  </a>
+</div>
+
+{{ if .SuccessMsg }}
+  <div class="alert alert-success bg-opacity-10 border-success text-success d-flex align-items-center gap-2 mb-4 p-3 rounded-3" style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3);">
+    <i class="bi bi-check-circle-fill"></i> <div>{{ .SuccessMsg }}</div>
+  </div>
+{{ end }}
+{{ if .ErrorMsg }}
+  <div class="alert alert-danger bg-opacity-10 border-danger text-danger d-flex align-items-center gap-2 mb-4 p-3 rounded-3" style="background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3);">
+    <i class="bi bi-exclamation-triangle-fill"></i> <div>{{ .ErrorMsg }}</div>
+  </div>
+{{ end }}
+
+<!-- User Header Profile Card -->
+<div class="card-modern p-4 mb-4">
+  <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+    <div class="d-flex align-items-center gap-3">
+      <div class="kpi-icon {{ if .TargetUser.IsAdmin }}kpi-icon-indigo{{ else }}kpi-icon-cyan{{ end }}" style="width: 52px; height: 52px; font-size: 1.5rem;">
+        <i class="bi {{ if .TargetUser.IsAdmin }}bi-shield-shaded{{ else }}bi-person-fill{{ end }}"></i>
+      </div>
+      <div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <h4 class="fw-bold mb-0 text-light">{{ .TargetUser.Name }}</h4>
+          <span class="text-dim font-monospace small">@{{ .TargetUser.Username }}</span>
+          {{ if .TargetUser.IsAdmin }}
+            <span class="badge-modern badge-indigo"><i class="bi bi-shield-check"></i> Admin</span>
+          {{ else }}
+            <span class="badge-modern badge-gray"><i class="bi bi-person"></i> User</span>
+          {{ end }}
+          {{ if .TargetUser.IsActive }}
+            <span class="badge-modern badge-emerald"><i class="bi bi-check-circle"></i> Active</span>
+          {{ else }}
+            <span class="badge-modern badge-rose"><i class="bi bi-slash-circle"></i> Suspended</span>
+          {{ end }}
+        </div>
+        <p class="text-dim small mb-0 mt-1">
+          <i class="bi bi-calendar3 me-1"></i> Created: {{ formatDate .TargetUser.CreatedAt }}
+          {{ if .TargetUser.LastLoginAt }}
+            <span class="ms-3"><i class="bi bi-box-arrow-in-right me-1"></i> Last Login: {{ formatDate .TargetUser.LastLoginAt }}</span>
+          {{ end }}
+        </p>
+      </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <button class="btn-modern-primary d-inline-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#createKeyModal">
+        <i class="bi bi-plus-circle"></i> Add API Key
+      </button>
+
+      <button class="btn-modern-ghost py-1 px-3 d-inline-flex align-items-center gap-2 text-light" data-bs-toggle="modal" data-bs-target="#editUserModal">
+        <i class="bi bi-pencil"></i> Edit
+      </button>
+
+      <button class="btn-modern-ghost py-1 px-3 d-inline-flex align-items-center gap-2 text-warning" data-bs-toggle="modal" data-bs-target="#resetPasswordModal">
+        <i class="bi bi-key-fill"></i> Password
+      </button>
+
+      <form action="/users/{{ .TargetUser.ID }}/reset-usage?redirect=/users/{{ .TargetUser.ID }}" method="POST" class="d-inline m-0" onsubmit="return confirm('Reset token usage counter to 0 for {{ .TargetUser.Name }}?');">
+        <button type="submit" class="btn-modern-ghost py-1 px-3 d-inline-flex align-items-center gap-2 text-info" title="Reset Token Usage">
+          <i class="bi bi-arrow-counterclockwise"></i> Reset Usage
+        </button>
+      </form>
+
+      <form action="/users/{{ .TargetUser.ID }}/toggle?redirect=/users/{{ .TargetUser.ID }}" method="POST" class="d-inline m-0">
+        <button type="submit" class="btn-modern-ghost py-1 px-3 d-inline-flex align-items-center gap-2 {{ if .TargetUser.IsActive }}text-warning{{ else }}text-success{{ end }}">
+          <i class="bi {{ if .TargetUser.IsActive }}bi-pause-fill{{ else }}bi-play-fill{{ end }}"></i>
+          {{ if .TargetUser.IsActive }}Suspend{{ else }}Activate{{ end }}
+        </button>
+      </form>
+
+      <form action="/users/{{ .TargetUser.ID }}/delete" method="POST" class="d-inline m-0" onsubmit="return confirm('Are you sure you want to permanently delete this user and all associated API keys?');">
+        <button type="submit" class="btn-modern-ghost py-1 px-3 d-inline-flex align-items-center gap-2 text-danger" title="Delete User">
+          <i class="bi bi-trash"></i> Delete
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- KPI Metrics Row -->
+<div class="row g-3 mb-4">
+  <!-- Token Usage & Quota -->
+  <div class="col-sm-6 col-xl-3">
+    <div class="card-modern p-3 h-100">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <span class="kpi-title">Token Quota & Usage</span>
+        <div class="kpi-icon kpi-icon-indigo" style="width: 32px; height: 32px; font-size: 0.95rem;">
+          <i class="bi bi-pie-chart-fill"></i>
+        </div>
+      </div>
+      <div class="d-flex align-items-baseline gap-2 mb-1">
+        <span class="kpi-value fs-4 font-monospace">{{ formatNumber .TargetUser.TokensUsed }}</span>
+        <span class="text-dim small font-monospace">tok</span>
+      </div>
+      <div class="small text-dim mb-2 font-monospace">
+        {{ if eq .TargetUser.TokenQuota 0 }}
+          <span class="badge-modern badge-indigo" style="font-size: 0.7rem;">Unlimited Quota</span>
+        {{ else }}
+          {{ $p := .TargetUser.QuotaPercent }}
+          / {{ formatNumber .TargetUser.TokenQuota }} ({{ printf "%.1f" $p }}%)
+        {{ end }}
+      </div>
+      {{ if gt .TargetUser.TokenQuota 0 }}
+        {{ $p := .TargetUser.QuotaPercent }}
+        <div class="progress-modern">
+          <div class="progress-bar {{ if gt $p 90.0 }}progress-bar-danger{{ else if gt $p 75.0 }}progress-bar-warning{{ end }}" 
+               role="progressbar" style="width: {{ $p }}%;"></div>
+        </div>
+      {{ else }}
+        <div class="progress-modern">
+          <div class="progress-bar" role="progressbar" style="width: 100%;"></div>
+        </div>
+      {{ end }}
+    </div>
+  </div>
+
+  <!-- Total Requests -->
+  <div class="col-sm-6 col-xl-3">
+    <div class="card-modern p-3 h-100">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <span class="kpi-title">Total Requests</span>
+        <div class="kpi-icon kpi-icon-cyan" style="width: 32px; height: 32px; font-size: 0.95rem;">
+          <i class="bi bi-arrow-left-right"></i>
+        </div>
+      </div>
+      <div class="kpi-value fs-4 font-monospace mb-1">{{ formatNumber .Stats.TotalRequests }}</div>
+      <div class="text-dim small">
+        <span class="text-light fw-medium font-monospace">{{ formatNumber .Stats.TimeframeReqs }}</span> in last 30 days
+      </div>
+    </div>
+  </div>
+
+  <!-- Total Tokens Consumed -->
+  <div class="col-sm-6 col-xl-3">
+    <div class="card-modern p-3 h-100">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <span class="kpi-title">Lifetime Volume</span>
+        <div class="kpi-icon kpi-icon-emerald" style="width: 32px; height: 32px; font-size: 0.95rem;">
+          <i class="bi bi-cpu"></i>
+        </div>
+      </div>
+      <div class="kpi-value fs-4 font-monospace mb-1">{{ formatNumber .Stats.TotalTokens }}</div>
+      <div class="text-dim small">
+        <span class="text-light fw-medium font-monospace">{{ formatNumber .Stats.TimeframeVol }}</span> tokens (30d)
+      </div>
+    </div>
+  </div>
+
+  <!-- Active Keys -->
+  <div class="col-sm-6 col-xl-3">
+    <div class="card-modern p-3 h-100">
+      <div class="d-flex justify-content-between align-items-start mb-2">
+        <span class="kpi-title">API Credentials</span>
+        <div class="kpi-icon kpi-icon-amber" style="width: 32px; height: 32px; font-size: 0.95rem;">
+          <i class="bi bi-key-fill"></i>
+        </div>
+      </div>
+      <div class="kpi-value fs-4 font-monospace mb-1">{{ len .APIKeys }} Keys</div>
+      <div class="text-dim small">
+        <span class="text-light fw-medium font-monospace">{{ .Stats.ActiveKeys }}</span> active keys
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Secondary Details: Account Metadata & Model Permissions -->
+<div class="row g-3 mb-4">
+  <!-- Account Information -->
+  <div class="col-lg-6">
+    <div class="card-modern p-4 h-100">
+      <h6 class="fw-bold text-light mb-3 d-flex align-items-center gap-2">
+        <i class="bi bi-person-badge text-primary"></i> Account Profile & Metadata
+      </h6>
+
+      <div class="d-flex flex-column gap-3">
+        <div class="d-flex justify-content-between align-items-center py-2 border-bottom border-secondary border-opacity-10">
+          <span class="text-dim small">User ID</span>
+          <div class="d-flex align-items-center gap-2">
+            <code class="font-monospace text-light small" style="background: rgba(255, 255, 255, 0.04); padding: 0.15rem 0.45rem; border-radius: 4px;">{{ .TargetUser.ID }}</code>
+            <button type="button" class="btn-modern-ghost p-1 py-0 copy-btn" data-copy="{{ .TargetUser.ID }}" title="Copy User ID">
+              <i class="bi bi-clipboard"></i>
+            </button>
+          </div>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center py-2 border-bottom border-secondary border-opacity-10">
+          <span class="text-dim small">Display Name</span>
+          <span class="text-light fw-medium">{{ .TargetUser.Name }}</span>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center py-2 border-bottom border-secondary border-opacity-10">
+          <span class="text-dim small">Login Username</span>
+          <span class="font-monospace text-light">@{{ .TargetUser.Username }}</span>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center py-2 border-bottom border-secondary border-opacity-10">
+          <span class="text-dim small">Role & Authorization</span>
+          {{ if .TargetUser.IsAdmin }}
+            <span class="badge-modern badge-indigo"><i class="bi bi-shield-check"></i> Administrator</span>
+          {{ else }}
+            <span class="badge-modern badge-gray"><i class="bi bi-person"></i> Standard User</span>
+          {{ end }}
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center py-2 border-bottom border-secondary border-opacity-10">
+          <span class="text-dim small">Status</span>
+          {{ if .TargetUser.IsActive }}
+            <span class="badge-modern badge-emerald"><i class="bi bi-check-circle"></i> Active</span>
+          {{ else }}
+            <span class="badge-modern badge-rose"><i class="bi bi-slash-circle"></i> Suspended</span>
+          {{ end }}
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center py-2">
+          <span class="text-dim small">Last Profile Update</span>
+          <span class="text-dim small font-monospace">{{ formatDate .TargetUser.UpdatedAt }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Model Permissions -->
+  <div class="col-lg-6">
+    <div class="card-modern p-4 h-100">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="fw-bold text-light mb-0 d-flex align-items-center gap-2">
+          <i class="bi bi-cpu text-primary"></i> Model Access Whitelist
+        </h6>
+        <button type="button" class="btn-modern-ghost btn-sm py-0 px-2 text-primary" data-bs-toggle="modal" data-bs-target="#editUserModal">
+          <i class="bi bi-pencil"></i> Edit Access
+        </button>
+      </div>
+
+      {{ if .IsAllModels }}
+        <div class="p-3 rounded-3 mb-3" style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2);">
+          <div class="d-flex align-items-center gap-2 text-emerald fw-bold mb-1">
+            <i class="bi bi-asterisk"></i> All Models Allowed (*)
+          </div>
+          <p class="text-dim small mb-0">
+            This account has unrestricted access to all upstream AI models registered and active in 9router Core.
+          </p>
+        </div>
+      {{ else }}
+        <p class="text-dim small mb-2">Account is restricted to the following {{ len .AllowedModelsList }} whitelisted model(s):</p>
+        <div class="d-flex flex-wrap gap-2 mb-3" style="max-height: 180px; overflow-y: auto;">
+          {{ range .AllowedModelsList }}
+            <span class="model-pill">
+              <i class="bi bi-check2 text-primary me-1"></i>{{ . }}
+            </span>
+          {{ end }}
+        </div>
+      {{ end }}
+
+      {{ if .Stats.TopModels }}
+        <h6 class="fw-bold text-light mt-3 mb-2 small text-uppercase" style="letter-spacing: 0.06em;">Top Models Utilized</h6>
+        <div class="d-flex flex-column gap-2">
+          {{ range .Stats.TopModels }}
+            <div class="d-flex justify-content-between align-items-center small p-2 rounded-2" style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-subtle);">
+              <span class="font-monospace text-light text-truncate" style="max-width: 260px;">{{ .Model }}</span>
+              <div class="text-end">
+                <span class="text-light fw-medium font-monospace">{{ formatNumber .TotalTokens }} tok</span>
+                <span class="text-dim font-monospace small ms-1">({{ .Requests }} req)</span>
+              </div>
+            </div>
+          {{ end }}
+        </div>
+      {{ end }}
+    </div>
+  </div>
+</div>
+
+<!-- API Keys Section -->
+<div class="card-modern mb-4">
+  <div class="p-3 border-bottom border-secondary border-opacity-10 d-flex justify-content-between align-items-center">
+    <div>
+      <h5 class="fw-bold text-light mb-0 d-flex align-items-center gap-2">
+        <i class="bi bi-key-fill text-amber"></i> API Keys ({{ len .APIKeys }})
+      </h5>
+      <span class="text-dim small">Keys assigned to {{ .TargetUser.Name }} for accessing the OpenAI-compatible proxy.</span>
+    </div>
+    <button class="btn-modern-primary btn-sm d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#createKeyModal">
+      <i class="bi bi-plus-circle"></i> Create Key
+    </button>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-modern mb-0">
+      <thead>
+        <tr>
+          <th>Key Label</th>
+          <th>Secret Token</th>
+          <th>Status</th>
+          <th>Created</th>
+          <th>Last Used</th>
+          <th class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{ if .APIKeys }}
+          {{ range .APIKeys }}
+            <tr>
+              <td>
+                <span class="fw-bold text-light">{{ .Name }}</span>
+              </td>
+              <td>
+                <div class="d-flex align-items-center gap-2">
+                  <code class="font-monospace text-warning key-display" style="background: rgba(245, 158, 11, 0.08); padding: 0.2rem 0.5rem; border-radius: 6px; border: 1px solid rgba(245, 158, 11, 0.2);" data-full="{{ .Key }}">{{ maskKey .Key }}</code>
+                  <button type="button" class="btn-modern-ghost p-1 py-0 toggle-key-view" title="Show / Hide full key">
+                    <i class="bi bi-eye"></i>
+                  </button>
+                  <button type="button" class="btn-modern-ghost p-1 py-0 copy-btn" data-copy="{{ .Key }}" title="Copy to clipboard">
+                    <i class="bi bi-clipboard"></i>
+                  </button>
+                </div>
+              </td>
+              <td>
+                {{ if .IsActive }}
+                  <span class="badge-modern badge-emerald"><i class="bi bi-check-circle"></i> Active</span>
+                {{ else }}
+                  <span class="badge-modern badge-rose"><i class="bi bi-slash-circle"></i> Revoked</span>
+                {{ end }}
+              </td>
+              <td class="text-dim small font-monospace">{{ formatDate .CreatedAt }}</td>
+              <td class="text-dim small font-monospace">
+                {{ if .LastUsedAt }}
+                  {{ formatDate .LastUsedAt }}
+                {{ else }}
+                  <span class="text-secondary opacity-60">Never</span>
+                {{ end }}
+              </td>
+              <td class="text-end">
+                <div class="d-flex justify-content-end align-items-center gap-1">
+                  <!-- Toggle Status -->
+                  <form action="/keys/{{ .ID }}/toggle" method="POST" class="d-inline m-0">
+                    <input type="hidden" name="redirect" value="/users/{{ $.TargetUser.ID }}">
+                    <button type="submit" class="btn-modern-ghost py-1 px-2 {{ if .IsActive }}text-warning{{ else }}text-success{{ end }}" 
+                            title="{{ if .IsActive }}Suspend Key{{ else }}Reactivate Key{{ end }}">
+                      <i class="bi {{ if .IsActive }}bi-pause-fill{{ else }}bi-play-fill{{ end }}"></i>
+                    </button>
+                  </form>
+
+                  <!-- Delete Key -->
+                  <form action="/keys/{{ .ID }}/delete" method="POST" class="d-inline m-0" onsubmit="return confirm('Revoke and delete this API key permanently?');">
+                    <input type="hidden" name="redirect" value="/users/{{ $.TargetUser.ID }}">
+                    <button type="submit" class="btn-modern-ghost py-1 px-2 text-danger" title="Revoke & Delete Key">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          {{ end }}
+        {{ else }}
+          <tr>
+            <td colspan="6" class="text-center text-dim py-4">
+              <i class="bi bi-key fs-2 d-block mb-2 opacity-50"></i>
+              No API keys assigned to this user yet.
+            </td>
+          </tr>
+        {{ end }}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Recent Requests Section -->
+<div class="card-modern mb-4">
+  <div class="p-3 border-bottom border-secondary border-opacity-10 d-flex justify-content-between align-items-center">
+    <div>
+      <h5 class="fw-bold text-light mb-0 d-flex align-items-center gap-2">
+        <i class="bi bi-clock-history text-primary"></i> Recent Request Activity
+      </h5>
+      <span class="text-dim small">Showing the latest 15 requests processed for this account.</span>
+    </div>
+    <a href="/logs?user_id={{ .TargetUser.ID }}" class="btn-modern-ghost btn-sm text-decoration-none d-flex align-items-center gap-1">
+      View All in Logs <i class="bi bi-arrow-right"></i>
+    </a>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-modern mb-0">
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>Model</th>
+          <th>Tokens</th>
+          <th>Status</th>
+          <th>Duration</th>
+          <th>Client IP</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{ if .Logs }}
+          {{ range .Logs }}
+            <tr>
+              <td class="text-dim small font-monospace">{{ formatDate .CreatedAt }}</td>
+              <td>
+                <span class="model-pill">{{ .Model }}</span>
+              </td>
+              <td class="font-monospace small">
+                <span class="text-light fw-medium">{{ formatNumber .TotalTokens }}</span>
+                <span class="text-dim small">({{ formatNumber .PromptTokens }} / {{ formatNumber .CompletionTokens }})</span>
+              </td>
+              <td>
+                {{ if eq .StatusCode 200 }}
+                  <span class="badge-modern badge-emerald">{{ .StatusCode }} OK</span>
+                {{ else if lt .StatusCode 400 }}
+                  <span class="badge-modern badge-indigo">{{ .StatusCode }}</span>
+                {{ else if lt .StatusCode 500 }}
+                  <span class="badge-modern badge-amber">{{ .StatusCode }}</span>
+                {{ else }}
+                  <span class="badge-modern badge-rose">{{ .StatusCode }} ERR</span>
+                {{ end }}
+              </td>
+              <td class="text-dim small font-monospace">{{ .DurationMs }}ms</td>
+              <td class="text-dim small font-monospace">{{ .ClientIP }}</td>
+            </tr>
+          {{ end }}
+        {{ else }}
+          <tr>
+            <td colspan="6" class="text-center text-dim py-4">
+              <i class="bi bi-journal-text fs-2 d-block mb-2 opacity-50"></i>
+              No requests recorded yet for this user.
+            </td>
+          </tr>
+        {{ end }}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal: Edit User -->
+<div class="modal fade" id="editUserModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content modal-content-modern">
+      <form action="/users/{{ .TargetUser.ID }}/edit" method="POST">
+        <input type="hidden" name="redirect" value="/users/{{ .TargetUser.ID }}">
+        <div class="modal-header modal-header-modern">
+          <h5 class="modal-title fw-bold text-light d-flex align-items-center gap-2">
+            <i class="bi bi-pencil-square text-primary"></i> Edit User & Permissions
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4">
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label small text-muted">Display Name</label>
+              <input type="text" name="name" class="form-control form-control-modern" value="{{ .TargetUser.Name }}" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small text-muted">Login Username</label>
+              <input type="text" name="username" class="form-control form-control-modern font-monospace" value="{{ .TargetUser.Username }}" required>
+            </div>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label small text-muted">Account Role</label>
+              <select name="role" class="form-select form-select-modern">
+                <option value="user" {{ if eq .TargetUser.Role "user" }}selected{{ end }}>Standard User (Client Portal)</option>
+                <option value="admin" {{ if eq .TargetUser.Role "admin" }}selected{{ end }}>Administrator (Full Access)</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label small text-muted">Token Quota (0 for Unlimited)</label>
+              <input type="number" name="token_quota" class="form-control form-control-modern font-monospace" value="{{ .TargetUser.TokenQuota }}" min="0" step="10000">
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <div class="form-check mb-2 p-3 rounded-3" style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-subtle);">
+              <input class="form-check-input ms-0 me-2" type="checkbox" name="allow_all" id="editDetailAllowAllCheck" value="true" {{ if .IsAllModels }}checked{{ end }}>
+              <label class="form-check-label fw-bold text-emerald" for="editDetailAllowAllCheck">
+                <i class="bi bi-asterisk"></i> Allow All Upstream Models (*)
+              </label>
+            </div>
+
+            <div id="editDetailModelsChecklistContainer" class="p-3 rounded-3" style="background: #0b0d14; border: 1px solid var(--border-subtle); max-height: 200px; overflow-y: auto; {{ if .IsAllModels }}display: none;{{ end }}">
+              <input type="text" class="form-control form-control-modern form-control-sm mb-2" id="editDetailModelSearchInput" placeholder="Filter models...">
+              <div class="row g-2">
+                {{ range .AvailableModels }}
+                  <div class="col-md-6 model-check-item">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" name="models" value="{{ . }}" id="edm_{{ . }}">
+                      <label class="form-check-label font-monospace small text-truncate d-block text-light" for="edm_{{ . }}" title="{{ . }}">{{ . }}</label>
+                    </div>
+                  </div>
+                {{ end }}
+              </div>
+            </div>
+          </div>
+
+          <div class="form-check form-switch p-3 rounded-3" style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-subtle);">
+            <input class="form-check-input ms-0 me-2" type="checkbox" name="is_active" id="editDetailUserActive" value="true" {{ if .TargetUser.IsActive }}checked{{ end }}>
+            <label class="form-check-label text-light fw-medium" for="editDetailUserActive">User Account Active</label>
+          </div>
+        </div>
+        <div class="modal-footer modal-footer-modern">
+          <button type="button" class="btn-modern-ghost" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn-modern-primary"><i class="bi bi-check2"></i> Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Reset Password -->
+<div class="modal fade" id="resetPasswordModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content modal-content-modern">
+      <form action="/users/{{ .TargetUser.ID }}/password" method="POST">
+        <input type="hidden" name="redirect" value="/users/{{ .TargetUser.ID }}">
+        <div class="modal-header modal-header-modern">
+          <h5 class="modal-title fw-bold text-light d-flex align-items-center gap-2">
+            <i class="bi bi-key text-warning"></i> Reset User Password
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4">
+          <p class="text-dim small mb-3">Set a new login password for user <strong class="text-light">@{{ .TargetUser.Username }}</strong>:</p>
+          <div class="mb-3">
+            <label class="form-label small text-muted">New Password</label>
+            <div class="input-group">
+              <input type="text" name="new_password" id="resetNewPassDetailInput" class="form-control form-control-modern font-monospace" placeholder="Enter or generate..." required>
+              <button type="button" class="btn btn-modern-ghost" id="btnGenResetPasswordDetail"><i class="bi bi-magic"></i> Generate</button>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer modal-footer-modern">
+          <button type="button" class="btn-modern-ghost" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn-modern-primary"><i class="bi bi-check2"></i> Update Password</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Quick Create API Key -->
+<div class="modal fade" id="createKeyModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content modal-content-modern">
+      <form action="/keys" method="POST">
+        <input type="hidden" name="user_id" value="{{ .TargetUser.ID }}">
+        <input type="hidden" name="redirect" value="/users/{{ .TargetUser.ID }}">
+        <div class="modal-header modal-header-modern">
+          <h5 class="modal-title fw-bold text-light d-flex align-items-center gap-2">
+            <i class="bi bi-key text-warning"></i> Generate API Key
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4">
+          <div class="mb-3">
+            <label class="form-label small text-muted">User Account</label>
+            <input type="text" class="form-control form-control-modern text-muted" value="{{ .TargetUser.Name }} (@{{ .TargetUser.Username }})" readonly>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small text-muted">Key Identifier / Label</label>
+            <input type="text" name="name" class="form-control form-control-modern" placeholder="e.g. Cursor Pro, Hermes Dev, Cline" required value="Default Key">
+          </div>
+          <div class="mb-3">
+            <label class="form-label small text-muted">Custom Key (Optional)</label>
+            <input type="text" name="custom_key" class="form-control form-control-modern font-monospace" placeholder="Leave empty for auto sk-gw-...">
+            <div class="text-dim small mt-1">If blank, a secure <code>sk-gw-...</code> key will be generated and synced to 9router Core.</div>
+          </div>
+        </div>
+        <div class="modal-footer modal-footer-modern">
+          <button type="button" class="btn-modern-ghost" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn-modern-primary"><i class="bi bi-check2"></i> Generate & Sync</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{{ end }}
+
+{{ define "scripts" }}
+<script>
+  function randomStr(len) {
+    const chars = "abcdefghjkmnpqrstuvwxyz23456789";
+    let s = "";
+    for (let i = 0; i < len; i++) s += chars.charAt(Math.floor(Math.random() * chars.length));
+    return s;
+  }
+
+  // Toggle mask / unmask key
+  document.querySelectorAll(".toggle-key-view").forEach(btn => {
+    btn.addEventListener("click", function() {
+      const parent = this.closest("td");
+      const keySpan = parent.querySelector(".key-display");
+      const full = keySpan.getAttribute("data-full");
+      const icon = this.querySelector("i");
+
+      if (icon.classList.contains("bi-eye")) {
+        keySpan.textContent = full;
+        icon.classList.remove("bi-eye");
+        icon.classList.add("bi-eye-slash");
+      } else {
+        keySpan.textContent = full.substring(0, 8) + "..." + full.substring(full.length - 4);
+        icon.classList.remove("bi-eye-slash");
+        icon.classList.add("bi-eye");
+      }
+    });
+  });
+
+  document.getElementById("btnGenResetPasswordDetail")?.addEventListener("click", () => {
+    document.getElementById("resetNewPassDetailInput").value = randomStr(10);
+  });
+
+  const allowAllCheck = document.getElementById("editDetailAllowAllCheck");
+  const modelsContainer = document.getElementById("editDetailModelsChecklistContainer");
+  allowAllCheck?.addEventListener("change", function() {
+    modelsContainer.style.display = this.checked ? "none" : "block";
+  });
+
+  // Filter models in edit modal
+  document.getElementById("editDetailModelSearchInput")?.addEventListener("input", function(e) {
+    const term = e.target.value.toLowerCase();
+    document.querySelectorAll("#editDetailModelsChecklistContainer .model-check-item").forEach(item => {
+      const text = item.textContent.toLowerCase();
+      item.style.display = text.includes(term) ? "block" : "none";
+    });
+  });
+</script>
+{{ end }}

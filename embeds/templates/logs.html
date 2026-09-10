@@ -8,19 +8,26 @@
     </h4>
     <p class="text-dim small mb-0">Transparent real-time audit trail of all upstream LLM proxy calls, tokens, and errors.</p>
   </div>
-  <div>
-    <a href="/logs" class="btn-modern-ghost text-decoration-none d-inline-flex align-items-center gap-2">
-      <i class="bi bi-arrow-clockwise"></i> Refresh
-    </a>
+  <div class="d-flex align-items-center gap-2">
+    <div class="status-pill-live">
+      <span class="pulse-dot"></span>
+      <span id="liveLogCount">{{ len .Logs }}</span> Requests
+    </div>
+    <button type="button" id="toggleLiveBtn" class="btn-modern-ghost text-decoration-none d-inline-flex align-items-center gap-2" data-live="false">
+      <i class="bi bi-play-circle" id="liveIcon"></i> <span id="liveBtnLabel">Go Live</span>
+    </button>
+    <button type="button" id="refreshLogsBtn" class="btn-modern-ghost text-decoration-none d-inline-flex align-items-center gap-2">
+      <i class="bi bi-arrow-clockwise" id="refreshIcon"></i> Refresh
+    </button>
   </div>
 </div>
 
 <!-- Filters Card -->
 <div class="card-modern p-3 mb-4">
-  <form method="GET" action="/logs" class="row g-2 align-items-end">
+  <form method="GET" action="/logs" class="row g-2 align-items-end" id="logsFilterForm">
     <div class="col-md-3">
       <label class="form-label small text-muted mb-1">Filter by User</label>
-      <select name="user_id" class="form-select form-select-modern form-select-sm">
+      <select name="user_id" class="form-select form-select-modern form-select-sm" id="filterUser">
         <option value="">All Users</option>
         {{ range .Users }}
           <option value="{{ .ID }}" {{ if eq $.FilterUser .ID }}selected{{ end }}>{{ .Name }}</option>
@@ -29,11 +36,11 @@
     </div>
     <div class="col-md-3">
       <label class="form-label small text-muted mb-1">Filter by Model</label>
-      <input type="text" name="model" class="form-control form-control-modern form-control-sm" placeholder="e.g. gemini, claude" value="{{ .FilterModel }}">
+      <input type="text" name="model" class="form-control form-control-modern form-control-sm" placeholder="e.g. gemini, claude" value="{{ .FilterModel }}" id="filterModel">
     </div>
     <div class="col-md-3">
       <label class="form-label small text-muted mb-1">Status Code</label>
-      <select name="status" class="form-select form-select-modern form-select-sm">
+      <select name="status" class="form-select form-select-modern form-select-sm" id="filterStatus">
         <option value="0" {{ if eq $.FilterStatus 0 }}selected{{ end }}>All Statuses</option>
         <option value="200" {{ if eq $.FilterStatus 200 }}selected{{ end }}>200 OK</option>
         <option value="403" {{ if eq $.FilterStatus 403 }}selected{{ end }}>403 Forbidden (Blocked Model)</option>
@@ -51,7 +58,7 @@
 <!-- Logs Table -->
 <div class="card-modern mb-4">
   <div class="table-responsive">
-    <table class="table table-modern mb-0">
+    <table class="table table-modern mb-0" id="logsTable">
       <thead>
         <tr>
           <th>Time</th>
@@ -65,10 +72,10 @@
           <th>Client IP</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody id="logsTableBody">
         {{ if .Logs }}
           {{ range .Logs }}
-            <tr>
+            <tr data-log-id="{{ .ID }}">
               <td class="text-dim font-monospace small" style="font-size: 0.78rem;">{{ formatDate .CreatedAt }}</td>
               <td>
                 <div class="fw-bold text-light small">{{ .UserName }}</div>
@@ -116,7 +123,7 @@
             </tr>
           {{ end }}
         {{ else }}
-          <tr>
+          <tr id="noLogsRow">
             <td colspan="9" class="text-center text-dim py-5">
               <i class="bi bi-inbox fs-2 d-block mb-2 opacity-50"></i>
               No logs matched your criteria.
@@ -130,15 +137,15 @@
   <!-- Cursor-Based Pagination Controls -->
   <div class="d-flex flex-column flex-sm-row justify-content-between align-items-center gap-3 p-3 border-top border-secondary border-opacity-10 small text-dim">
     <div>
-      Showing <span class="text-light fw-medium">{{ len .Logs }}</span> of approx <span class="text-light fw-medium">{{ .PageInfo.TotalCount }}</span> requests
+      Showing <span class="text-light fw-medium" id="showingCount">{{ len .Logs }}</span> of approx <span class="text-light fw-medium" id="totalCount">{{ .PageInfo.TotalCount }}</span> requests
     </div>
-    <div class="d-flex align-items-center gap-2">
+    <div class="d-flex align-items-center gap-2" id="paginationControls">
       {{ if .PageInfo.HasPrev }}
-        <a href="/logs?cursor={{ .PageInfo.PrevCursor }}&dir=prev&user_id={{ .FilterUser }}&model={{ .FilterModel }}&status={{ .FilterStatus }}" class="btn-modern-ghost btn-sm text-decoration-none">
+        <a href="/logs?cursor={{ .PageInfo.PrevCursor }}&dir=prev&user_id={{ .FilterUser }}&model={{ .FilterModel }}&status={{ .FilterStatus }}" class="btn-modern-ghost btn-sm text-decoration-none" id="prevPageBtn">
           <i class="bi bi-chevron-left me-1"></i> Newer
         </a>
       {{ else }}
-        <button class="btn-modern-ghost btn-sm disabled opacity-40" disabled>
+        <button class="btn-modern-ghost btn-sm disabled opacity-40" disabled id="prevPageBtnDisabled">
           <i class="bi bi-chevron-left me-1"></i> Newer
         </button>
       {{ end }}
@@ -148,15 +155,204 @@
       </span>
 
       {{ if .PageInfo.HasNext }}
-        <a href="/logs?cursor={{ .PageInfo.NextCursor }}&dir=next&user_id={{ .FilterUser }}&model={{ .FilterModel }}&status={{ .FilterStatus }}" class="btn-modern-ghost btn-sm text-decoration-none">
+        <a href="/logs?cursor={{ .PageInfo.NextCursor }}&dir=next&user_id={{ .FilterUser }}&model={{ .FilterModel }}&status={{ .FilterStatus }}" class="btn-modern-ghost btn-sm text-decoration-none" id="nextPageBtn">
           Older <i class="bi bi-chevron-right ms-1"></i>
         </a>
       {{ else }}
-        <button class="btn-modern-ghost btn-sm disabled opacity-40" disabled>
+        <button class="btn-modern-ghost btn-sm disabled opacity-40" disabled id="nextPageBtnDisabled">
           Older <i class="bi bi-chevron-right ms-1"></i>
         </button>
       {{ end }}
     </div>
   </div>
 </div>
+
+<script>
+(function() {
+  let isLive = false;
+  let liveInterval = null;
+  const POLL_INTERVAL = 3000; // 3 seconds
+  let knownLogIds = new Set();
+  
+  // Initialize known log IDs
+  document.querySelectorAll('[data-log-id]').forEach(row => {
+    knownLogIds.add(row.getAttribute('data-log-id'));
+  });
+
+  function formatWIB(isoString) {
+    try {
+      const d = new Date(isoString);
+      return d.toLocaleString('id-ID', {
+        timeZone: 'Asia/Jakarta',
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      }) + ' WIB';
+    } catch (e) {
+      return isoString;
+    }
+  }
+
+  function formatNum(n) {
+    if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'K';
+    return n.toString();
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function renderLogRow(log) {
+    const statusBadge = log.status_code === 200 
+      ? '<span class="badge-modern badge-emerald">200 OK</span>'
+      : log.status_code === 403
+        ? `<span class="badge-modern badge-amber" title="${escapeHtml(log.error_message)}">403 Blocked</span>`
+        : log.status_code === 429
+          ? `<span class="badge-modern badge-rose" title="${escapeHtml(log.error_message)}">429 Quota</span>`
+          : `<span class="badge-modern badge-rose" title="${escapeHtml(log.error_message)}">${log.status_code}</span>`;
+
+    const typeBadge = log.is_stream
+      ? '<span class="badge-modern badge-indigo" style="font-size: 0.68rem;"><i class="bi bi-lightning-charge-fill"></i> Stream</span>'
+      : '<span class="badge-modern badge-gray" style="font-size: 0.68rem;">JSON</span>';
+
+    const modelPill = log.model
+      ? `<span class="model-pill">${escapeHtml(log.model)}</span>`
+      : '<span class="text-dim small">-</span>';
+
+    const tokensDisplay = log.total_tokens > 0
+      ? `<span class="text-dim">${log.prompt_tokens}</span> <span class="text-dim opacity-50">/</span> <span class="text-dim">${log.completion_tokens}</span> <span class="text-dim opacity-50">/</span> <span class="text-light fw-bold">${formatNum(log.total_tokens)}</span>`
+      : '<span class="text-dim">0</span>';
+
+    return `<tr data-log-id="${log.id}" style="animation: fadeInRow 0.5s ease-out;">
+              <td class="text-dim font-monospace small" style="font-size: 0.78rem;">${formatWIB(log.created_at)}</td>
+              <td>
+                <div class="fw-bold text-light small">${escapeHtml(log.user_name)}</div>
+                <span class="badge-modern badge-gray" style="font-size: 0.65rem; padding: 0.05rem 0.35rem;">${escapeHtml(log.key_name)}</span>
+              </td>
+              <td>${modelPill}</td>
+              <td class="font-monospace small text-dim">
+                <span class="text-info fw-medium">${escapeHtml(log.method)}</span> ${escapeHtml(log.path)}
+              </td>
+              <td>${typeBadge}</td>
+              <td class="font-monospace small">${tokensDisplay}</td>
+              <td>${statusBadge}</td>
+              <td class="text-dim small font-monospace">${log.duration_ms}ms</td>
+              <td class="text-dim small font-monospace">${escapeHtml(log.client_ip)}</td>
+            </tr>`;
+  }
+
+  async function fetchLogs() {
+    const refreshIcon = document.getElementById('refreshIcon');
+    if (refreshIcon) refreshIcon.classList.add('spin-animation');
+
+    try {
+      const params = new URLSearchParams();
+      const userId = document.getElementById('filterUser')?.value;
+      const model = document.getElementById('filterModel')?.value;
+      const status = document.getElementById('filterStatus')?.value;
+      
+      if (userId) params.set('user_id', userId);
+      if (model) params.set('model', model);
+      if (status && status !== '0') params.set('status', status);
+
+      const res = await fetch(`/api/logs?${params.toString()}`);
+      const data = await res.json();
+
+      const tbody = document.getElementById('logsTableBody');
+      const noLogsRow = document.getElementById('noLogsRow');
+      
+      if (noLogsRow) noLogsRow.remove();
+
+      // Prepend new logs (reverse order to show newest first)
+      const newLogs = (data.logs || []).reverse();
+      let hasNew = false;
+
+      for (const log of newLogs) {
+        const logId = String(log.id);
+        if (!knownLogIds.has(logId)) {
+          knownLogIds.add(logId);
+          tbody.insertAdjacentHTML('afterbegin', renderLogRow(log));
+          hasNew = true;
+        }
+      }
+
+      // Limit to latest 100 rows in DOM
+      const rows = tbody.querySelectorAll('[data-log-id]');
+      if (rows.length > 100) {
+        for (let i = 100; i < rows.length; i++) {
+          knownLogIds.delete(rows[i].getAttribute('data-log-id'));
+          rows[i].remove();
+        }
+      }
+
+      // Update counters
+      const count = tbody.querySelectorAll('[data-log-id]').length;
+      document.getElementById('liveLogCount').textContent = count;
+      document.getElementById('showingCount').textContent = count;
+      if (data.page_info?.total_count) {
+        document.getElementById('totalCount').textContent = data.page_info.total_count;
+      }
+
+    } catch (err) {
+      console.error('Failed to fetch logs:', err);
+    } finally {
+      if (refreshIcon) refreshIcon.classList.remove('spin-animation');
+    }
+  }
+
+  function toggleLive() {
+    isLive = !isLive;
+    const btn = document.getElementById('toggleLiveBtn');
+    const icon = document.getElementById('liveIcon');
+    const label = document.getElementById('liveBtnLabel');
+
+    if (isLive) {
+      btn.setAttribute('data-live', 'true');
+      btn.classList.add('btn-emerald');
+      icon.className = 'bi bi-pause-circle';
+      label.textContent = 'Live';
+      liveInterval = setInterval(fetchLogs, POLL_INTERVAL);
+      fetchLogs(); // immediate first fetch
+    } else {
+      btn.setAttribute('data-live', 'false');
+      btn.classList.remove('btn-emerald');
+      icon.className = 'bi bi-play-circle';
+      label.textContent = 'Go Live';
+      if (liveInterval) {
+        clearInterval(liveInterval);
+        liveInterval = null;
+      }
+    }
+  }
+
+  // Event listeners
+  document.getElementById('toggleLiveBtn')?.addEventListener('click', toggleLive);
+  document.getElementById('refreshLogsBtn')?.addEventListener('click', fetchLogs);
+})();
+</script>
+
+<style>
+@keyframes fadeInRow {
+  from { opacity: 0; transform: translateY(-4px); background: rgba(52, 211, 153, 0.15); }
+  to { opacity: 1; transform: translateY(0); background: transparent; }
+}
+.spin-animation {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.btn-emerald {
+  background: rgba(52, 211, 153, 0.15) !important;
+  border-color: rgba(52, 211, 153, 0.5) !important;
+  color: #34d399 !important;
+}
+</style>
 {{ end }}

@@ -23,6 +23,7 @@ import (
 	"9router-gateway/internal/models"
 	"9router-gateway/internal/repository"
 	"9router-gateway/internal/syncer"
+	"9router-gateway/internal/upstream"
 )
 
 type contextKey string
@@ -42,18 +43,20 @@ type UpstreamModelItem struct {
 }
 
 type Handler struct {
-	cfg       *config.Config
-	repo      repository.Repository
-	syncer    *syncer.Syncer
-	templates map[string]*template.Template
+	cfg          *config.Config
+	repo         repository.Repository
+	syncer       *syncer.Syncer
+	quotaManager *upstream.QuotaManager
+	templates    map[string]*template.Template
 }
 
-func NewHandler(cfg *config.Config, repo repository.Repository, sync *syncer.Syncer) (*Handler, error) {
+func NewHandler(cfg *config.Config, repo repository.Repository, sync *syncer.Syncer, quotaMgr *upstream.QuotaManager) (*Handler, error) {
 	h := &Handler{
-		cfg:       cfg,
-		repo:      repo,
-		syncer:    sync,
-		templates: make(map[string]*template.Template),
+		cfg:          cfg,
+		repo:         repo,
+		syncer:       sync,
+		quotaManager: quotaMgr,
+		templates:    make(map[string]*template.Template),
 	}
 
 	funcMap := template.FuncMap{
@@ -160,9 +163,28 @@ func NewHandler(cfg *config.Config, repo repository.Repository, sync *syncer.Syn
 			}
 			return na - nb
 		},
+		"formatFloat1": func(v float64) string {
+			return fmt.Sprintf("%.1f", v)
+		},
+		"pctColorClass": func(pct float64, status string) string {
+			if status == "exhausted" || (pct <= 0.5 && status != "unlimited") {
+				return "badge-rose text-danger"
+			} else if pct < 30.0 || status == "partial" {
+				return "badge-amber text-warning"
+			}
+			return "badge-emerald text-emerald"
+		},
+		"pctBarColor": func(pct float64, status string) string {
+			if status == "exhausted" || (pct <= 0.5 && status != "unlimited") {
+				return "bg-danger"
+			} else if pct < 30.0 || status == "partial" {
+				return "bg-warning"
+			}
+			return "bg-success"
+		},
 	}
 
-	pages := []string{"dashboard.html", "users.html", "keys.html", "logs.html", "models.html", "settings.html", "billing.html"}
+	pages := []string{"dashboard.html", "users.html", "user_detail.html", "keys.html", "logs.html", "models.html", "settings.html", "billing.html"}
 	for _, page := range pages {
 		tmpl, err := template.New("").Funcs(funcMap).ParseFS(embeds.FS, "templates/base.html", "templates/"+page)
 		if err != nil {

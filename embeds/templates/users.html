@@ -40,8 +40,8 @@
                     <i class="bi {{ if .IsAdmin }}bi-shield-shaded{{ else }}bi-person-fill{{ end }}"></i>
                   </div>
                   <div>
-                    <div class="fw-bold text-light">{{ .Name }}</div>
-                    <span class="text-dim font-monospace small" style="font-size: 0.75rem;">@{{ .Username }}</span>
+                    <a href="/users/{{ .ID }}" class="fw-bold text-light text-decoration-none" title="View user details">{{ .Name }}</a>
+                    <span class="text-dim font-monospace small d-block" style="font-size: 0.75rem;">@{{ .Username }}</span>
                   </div>
                 </div>
               </td>
@@ -98,11 +98,16 @@
               </td>
               <td class="text-dim small font-monospace">{{ formatDate .CreatedAt }}</td>
               <td class="text-end">
-                <div class="d-flex justify-content-end gap-1">
+                <div class="d-flex justify-content-end align-items-center gap-1">
+                  <!-- View Details Button -->
+                  <a href="/users/{{ .ID }}" class="btn-modern-ghost py-1 px-2 text-info" title="View User Details">
+                    <i class="bi bi-eye"></i>
+                  </a>
+
                   <!-- Add Key Button -->
                   <button class="btn-modern-ghost py-1 px-2 text-primary" data-bs-toggle="modal" data-bs-target="#createKeyModal" 
                           data-userid="{{ .ID }}" data-username="{{ .Name }}" title="Add API Key">
-                    <i class="bi bi-plus-circle"></i> Key
+                    <i class="bi bi-plus-circle"></i>
                   </button>
 
                   <!-- Edit Button -->

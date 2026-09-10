@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -34,6 +35,64 @@ func (h *Handler) UsersPage(w http.ResponseWriter, r *http.Request) {
 		"AvailableModels": availableModels,
 		"SuccessMsg":      successMsg,
 		"ErrorMsg":        errorMsg,
+	})
+}
+
+func (h *Handler) UserDetailPage(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	userID := chi.URLParam(r, "id")
+
+	user, err := h.repo.GetUserByID(ctx, userID)
+	if err != nil || user == nil {
+		http.Redirect(w, r, "/users?error=User+not+found", http.StatusSeeOther)
+		return
+	}
+
+	keys, err := h.repo.GetAPIKeysByUserID(ctx, userID)
+	if err != nil {
+		keys = []models.APIKey{}
+	}
+	for i := range keys {
+		keys[i].UserName = user.Name
+	}
+
+	logs, totalLogs, err := h.repo.GetRequestLogs(ctx, 15, 0, userID, "", 0)
+	if err != nil {
+		logs = []models.RequestLog{}
+		totalLogs = 0
+	}
+
+	stats, err := h.repo.GetUserDashboardStats(ctx, userID, "30d")
+	if err != nil {
+		stats = &models.DashboardStats{}
+	}
+
+	availableModels := h.FetchUpstreamModels(ctx)
+
+	var allowedModelsList []string
+	isAllModels := false
+	trimmed := strings.TrimSpace(user.AllowedModels)
+	if trimmed == `["*"]` || trimmed == "*" || strings.Contains(trimmed, `*`) {
+		isAllModels = true
+	} else {
+		_ = json.Unmarshal([]byte(trimmed), &allowedModelsList)
+	}
+
+	successMsg := r.URL.Query().Get("msg")
+	errorMsg := r.URL.Query().Get("error")
+
+	h.render(w, r, "user_detail.html", "base.html", map[string]interface{}{
+		"ActivePage":        "users",
+		"TargetUser":        user,
+		"APIKeys":           keys,
+		"Logs":              logs,
+		"TotalLogs":         totalLogs,
+		"Stats":             stats,
+		"AvailableModels":   availableModels,
+		"AllowedModelsList": allowedModelsList,
+		"IsAllModels":       isAllModels,
+		"SuccessMsg":        successMsg,
+		"ErrorMsg":          errorMsg,
 	})
 }
 
@@ -187,22 +246,31 @@ func (h *Handler) EditUser(w http.ResponseWriter, r *http.Request) {
 
 	user.IsActive = (r.FormValue("is_active") == "true")
 
+	redirectURL := r.FormValue("redirect")
+	if redirectURL == "" {
+		redirectURL = "/users"
+	}
+
 	if err := h.repo.UpdateUser(ctx, user); err != nil {
-		http.Redirect(w, r, "/users?error="+err.Error(), http.StatusSeeOther)
+		http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
 
-	http.Redirect(w, r, "/users?msg=User+updated+successfully", http.StatusSeeOther)
+	http.Redirect(w, r, redirectURL+"?msg=User+updated+successfully", http.StatusSeeOther)
 }
 
 func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	userID := chi.URLParam(r, "id")
 	ctx := r.Context()
+	redirectURL := r.FormValue("redirect")
+	if redirectURL == "" {
+		redirectURL = "/users"
+	}
 
 	user, err := h.repo.GetUserByID(ctx, userID)
 	if err != nil {
-		http.Redirect(w, r, "/users?error=User+not+found", http.StatusSeeOther)
+		http.Redirect(w, r, redirectURL+"?error=User+not+found", http.StatusSeeOther)
 		return
 	}
 
@@ -213,43 +281,58 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 
 	hash, err := HashPassword(newPassword)
 	if err != nil {
-		http.Redirect(w, r, "/users?error=Failed+to+hash+password", http.StatusSeeOther)
+		http.Redirect(w, r, redirectURL+"?error=Failed+to+hash+password", http.StatusSeeOther)
 		return
 	}
 
 	if err := h.repo.UpdateUserPassword(ctx, userID, hash); err != nil {
-		http.Redirect(w, r, "/users?error="+err.Error(), http.StatusSeeOther)
+		http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
 
 	msg := fmt.Sprintf("Password for '%s' reset to: %s", user.Username, newPassword)
-	http.Redirect(w, r, "/users?msg="+msg, http.StatusSeeOther)
+	http.Redirect(w, r, redirectURL+"?msg="+url.QueryEscape(msg), http.StatusSeeOther)
 }
 
 func (h *Handler) ResetUsage(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	ctx := r.Context()
+	redirectURL := r.URL.Query().Get("redirect")
+	if redirectURL == "" {
+		redirectURL = r.FormValue("redirect")
+	}
+	if redirectURL == "" {
+		redirectURL = "/users"
+	}
 
 	if err := h.repo.ResetUserUsage(ctx, userID); err != nil {
-		http.Redirect(w, r, "/users?error="+err.Error(), http.StatusSeeOther)
+		http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
 
-	http.Redirect(w, r, "/users?msg=Token+usage+counter+reset+to+0", http.StatusSeeOther)
+	http.Redirect(w, r, redirectURL+"?msg=Token+usage+counter+reset+to+0", http.StatusSeeOther)
 }
 
 func (h *Handler) ToggleUserStatus(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	ctx := r.Context()
+	redirectURL := r.URL.Query().Get("redirect")
+	if redirectURL == "" {
+		redirectURL = r.FormValue("redirect")
+	}
+	if redirectURL == "" {
+		redirectURL = "/users"
+	}
+
 	user, err := h.repo.GetUserByID(ctx, userID)
 	if err != nil {
-		http.Redirect(w, r, "/users?error=User+not+found", http.StatusSeeOther)
+		http.Redirect(w, r, redirectURL+"?error=User+not+found", http.StatusSeeOther)
 		return
 	}
 
 	newStatus := !user.IsActive
 	if err := h.repo.ToggleUserStatus(ctx, userID, newStatus); err != nil {
-		http.Redirect(w, r, "/users?error="+err.Error(), http.StatusSeeOther)
+		http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
 
@@ -265,7 +348,7 @@ func (h *Handler) ToggleUserStatus(w http.ResponseWriter, r *http.Request) {
 	if newStatus {
 		msg = "User reactivated"
 	}
-	http.Redirect(w, r, "/users?msg="+msg, http.StatusSeeOther)
+	http.Redirect(w, r, redirectURL+"?msg="+url.QueryEscape(msg), http.StatusSeeOther)
 }
 
 func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {

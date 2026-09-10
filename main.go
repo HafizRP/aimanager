@@ -27,6 +27,7 @@ import (
 	"9router-gateway/internal/proxy"
 	"9router-gateway/internal/repository"
 	"9router-gateway/internal/syncer"
+	"9router-gateway/internal/upstream"
 )
 
 func main() {
@@ -98,7 +99,8 @@ func main() {
 	}
 
 	// 6. Init Handlers & Proxy
-	h, err := handlers.NewHandler(cfg, repo, keySyncer)
+	quotaMgr := upstream.NewQuotaManager(cfg)
+	h, err := handlers.NewHandler(cfg, repo, keySyncer, quotaMgr)
 	if err != nil {
 		slog.Error("Failed to initialize web handlers", "err", err)
 		os.Exit(1)
@@ -194,6 +196,7 @@ func main() {
 		// Shared: Dashboard, Keys (self-scoped for user), Logs (self-scoped for user), Models (whitelist-scoped for user)
 		authRouter.Get("/", h.DashboardPage)
 		authRouter.Get("/api/stats", h.APIStats)
+		authRouter.Get("/api/upstream/quotas", h.APIUpstreamQuotas)
 
 		// Billing & Top-Up
 		authRouter.Get("/billing", h.BillingPage)
@@ -207,6 +210,7 @@ func main() {
 
 		// Logs, Models, Settings
 		authRouter.Get("/logs", h.LogsPage)
+		authRouter.Get("/api/logs", h.APILogs)
 		authRouter.Get("/models", h.ModelsPage)
 		authRouter.Get("/settings", h.SettingsPage)
 		authRouter.Post("/settings/password", h.UpdatePasswordPost)
@@ -216,6 +220,7 @@ func main() {
 			adminOnly.Use(h.RequireAdmin)
 
 			adminOnly.Get("/users", h.UsersPage)
+			adminOnly.Get("/users/{id}", h.UserDetailPage)
 			adminOnly.Post("/users", h.CreateUser)
 			adminOnly.Post("/users/{id}/edit", h.EditUser)
 			adminOnly.Post("/users/{id}/password", h.ResetPassword)

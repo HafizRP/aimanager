@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -94,8 +95,13 @@ func (h *Handler) CreateKey(w http.ResponseWriter, r *http.Request) {
 		IsActive: true,
 	}
 
+	redirectURL := r.FormValue("redirect")
+	if redirectURL == "" {
+		redirectURL = "/keys"
+	}
+
 	if err := h.repo.CreateAPIKey(ctx, apiKey); err != nil {
-		http.Redirect(w, r, "/keys?error="+err.Error(), http.StatusSeeOther)
+		http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
 
@@ -109,7 +115,7 @@ func (h *Handler) CreateKey(w http.ResponseWriter, r *http.Request) {
 		_ = h.syncer.SyncKey(apiKey, uName)
 	}
 
-	http.Redirect(w, r, "/keys?msg=Key+created+successfully!+Token:+"+finalKey, http.StatusSeeOther)
+	http.Redirect(w, r, redirectURL+"?msg=Key+created+successfully!+Token:+"+finalKey, http.StatusSeeOther)
 }
 
 func (h *Handler) ToggleKeyStatus(w http.ResponseWriter, r *http.Request) {
@@ -117,10 +123,18 @@ func (h *Handler) ToggleKeyStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	currentUser := GetUserFromContext(ctx)
 
+	redirectURL := r.URL.Query().Get("redirect")
+	if redirectURL == "" {
+		redirectURL = r.FormValue("redirect")
+	}
+	if redirectURL == "" {
+		redirectURL = "/keys"
+	}
+
 	// Find key to toggle
 	keys, err := h.repo.GetAllAPIKeys(ctx)
 	if err != nil {
-		http.Redirect(w, r, "/keys?error=Key+not+found", http.StatusSeeOther)
+		http.Redirect(w, r, redirectURL+"?error=Key+not+found", http.StatusSeeOther)
 		return
 	}
 
@@ -133,19 +147,19 @@ func (h *Handler) ToggleKeyStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if targetKey == nil {
-		http.Redirect(w, r, "/keys?error=Key+not+found", http.StatusSeeOther)
+		http.Redirect(w, r, redirectURL+"?error=Key+not+found", http.StatusSeeOther)
 		return
 	}
 
 	// Non-admin can only toggle their own keys
 	if currentUser != nil && !currentUser.IsAdmin() && targetKey.UserID != currentUser.ID {
-		http.Redirect(w, r, "/keys?error=Permission+denied", http.StatusSeeOther)
+		http.Redirect(w, r, redirectURL+"?error=Permission+denied", http.StatusSeeOther)
 		return
 	}
 
 	newStatus := !targetKey.IsActive
 	if err := h.repo.ToggleAPIKeyStatus(ctx, keyID, newStatus); err != nil {
-		http.Redirect(w, r, "/keys?error="+err.Error(), http.StatusSeeOther)
+		http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
 
@@ -158,7 +172,7 @@ func (h *Handler) ToggleKeyStatus(w http.ResponseWriter, r *http.Request) {
 	if newStatus {
 		msg = "API key reactivated"
 	}
-	http.Redirect(w, r, "/keys?msg="+msg, http.StatusSeeOther)
+	http.Redirect(w, r, redirectURL+"?msg="+url.QueryEscape(msg), http.StatusSeeOther)
 }
 
 func (h *Handler) DeleteKey(w http.ResponseWriter, r *http.Request) {
@@ -166,9 +180,17 @@ func (h *Handler) DeleteKey(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	currentUser := GetUserFromContext(ctx)
 
+	redirectURL := r.URL.Query().Get("redirect")
+	if redirectURL == "" {
+		redirectURL = r.FormValue("redirect")
+	}
+	if redirectURL == "" {
+		redirectURL = "/keys"
+	}
+
 	keys, err := h.repo.GetAllAPIKeys(ctx)
 	if err != nil {
-		http.Redirect(w, r, "/keys?error=Key+not+found", http.StatusSeeOther)
+		http.Redirect(w, r, redirectURL+"?error=Key+not+found", http.StatusSeeOther)
 		return
 	}
 
@@ -181,18 +203,18 @@ func (h *Handler) DeleteKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if targetKey == nil {
-		http.Redirect(w, r, "/keys?error=Key+not+found", http.StatusSeeOther)
+		http.Redirect(w, r, redirectURL+"?error=Key+not+found", http.StatusSeeOther)
 		return
 	}
 
 	// Non-admin can only delete their own keys
 	if currentUser != nil && !currentUser.IsAdmin() && targetKey.UserID != currentUser.ID {
-		http.Redirect(w, r, "/keys?error=Permission+denied", http.StatusSeeOther)
+		http.Redirect(w, r, redirectURL+"?error=Permission+denied", http.StatusSeeOther)
 		return
 	}
 
 	if err := h.repo.DeleteAPIKey(ctx, keyID); err != nil {
-		http.Redirect(w, r, "/keys?error="+err.Error(), http.StatusSeeOther)
+		http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
 
@@ -201,5 +223,5 @@ func (h *Handler) DeleteKey(w http.ResponseWriter, r *http.Request) {
 		_ = h.syncer.DeleteKey(keyID)
 	}
 
-	http.Redirect(w, r, "/keys?msg=API+key+revoked+and+deleted", http.StatusSeeOther)
+	http.Redirect(w, r, redirectURL+"?msg=API+key+revoked+and+deleted", http.StatusSeeOther)
 }

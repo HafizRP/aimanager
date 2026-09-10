@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"9router-gateway/internal/models"
+	"9router-gateway/internal/upstream"
 )
 
 func (h *Handler) DashboardPage(w http.ResponseWriter, r *http.Request) {
@@ -30,15 +31,21 @@ func (h *Handler) DashboardPage(w http.ResponseWriter, r *http.Request) {
 		stats = nil
 	}
 
+	var quotaReport *upstream.UpstreamQuotaReport
+	if h.quotaManager != nil {
+		quotaReport, _ = h.quotaManager.FetchAllQuotas(ctx, r.URL.Query().Get("refresh") == "true")
+	}
+
 	successMsg := r.URL.Query().Get("msg")
 	errorMsg := r.URL.Query().Get("error")
 
 	h.render(w, r, "dashboard.html", "base.html", map[string]interface{}{
-		"ActivePage": "dashboard",
-		"Stats":      stats,
-		"Timeframe":  timeframe,
-		"SuccessMsg": successMsg,
-		"ErrorMsg":   errorMsg,
+		"ActivePage":  "dashboard",
+		"Stats":       stats,
+		"Timeframe":   timeframe,
+		"QuotaReport": quotaReport,
+		"SuccessMsg":  successMsg,
+		"ErrorMsg":    errorMsg,
 	})
 }
 
@@ -66,4 +73,20 @@ func (h *Handler) APIStats(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(stats)
+}
+
+func (h *Handler) APIUpstreamQuotas(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	force := r.URL.Query().Get("refresh") == "true"
+	if h.quotaManager == nil {
+		http.Error(w, "Quota manager not initialized", http.StatusInternalServerError)
+		return
+	}
+	report, err := h.quotaManager.FetchAllQuotas(ctx, force)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(report)
 }

@@ -10,7 +10,13 @@ import (
 	"github.com/google/uuid"
 
 	"9router-gateway/internal/models"
+	"9router-gateway/internal/upstream"
 )
+
+type ModelViewItem struct {
+	UpstreamModelItem
+	Quota upstream.ModelQuotaSummary `json:"quota"`
+}
 
 func (h *Handler) ModelsPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -50,15 +56,33 @@ func (h *Handler) ModelsPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Fetch upstream quota report
+	var quotaReport *upstream.UpstreamQuotaReport
+	if h.quotaManager != nil {
+		quotaReport, _ = h.quotaManager.FetchAllQuotas(ctx, r.URL.Query().Get("refresh") == "true")
+	}
+
+	var modelViews []ModelViewItem
+	for _, m := range displayModels {
+		item := ModelViewItem{
+			UpstreamModelItem: m,
+		}
+		if h.quotaManager != nil && quotaReport != nil {
+			item.Quota = h.quotaManager.GetModelSummary(m.ID, quotaReport)
+		}
+		modelViews = append(modelViews, item)
+	}
+
 	var users []models.User
 	if currentUser != nil && currentUser.IsAdmin() {
 		users, _ = h.repo.GetAllUsers(ctx)
 	}
 
 	h.render(w, r, "models.html", "base.html", map[string]interface{}{
-		"ActivePage": "models",
-		"Models":     displayModels,
-		"Users":      users,
+		"ActivePage":  "models",
+		"Models":      modelViews,
+		"Users":       users,
+		"QuotaReport": quotaReport,
 	})
 }
 

@@ -3,7 +3,7 @@
 {{ define "content" }}
 {{ if not .IsAdmin }}
   <!-- Standard User Banner -->
-  <div class="mb-4 d-flex flex-column flex-md-row align-items-md-center justify-content-between p-3 card-modern" style="background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(16, 185, 129, 0.05));">
+  <div class="mb-4 d-flex flex-column flex-md-row align-items-md-center justify-content-between p-3 card-modern" style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(255, 255, 255, 0.02)); border-color: rgba(59, 130, 246, 0.2);">
     <div>
       <h5 class="fw-bold mb-1 text-light">Welcome back, {{ .CurrentUser.Name }}! 👋</h5>
       <p class="text-dim small mb-0">Here is your personal LLM API usage, active keys, and remaining token balance.</p>
@@ -121,6 +121,140 @@
         <span class="badge-modern badge-amber" style="font-size: 0.68rem;">Synced</span>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- Upstream Model Quotas & Provider Health -->
+<div class="card-modern p-4 mb-4">
+  <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
+    <div>
+      <div class="d-flex align-items-center gap-2">
+        <h6 class="fw-bold mb-0 text-light d-flex align-items-center gap-2">
+          <i class="bi bi-speedometer2 text-primary"></i> Upstream Model Quotas & Rolling Windows
+        </h6>
+        <span class="badge-modern badge-indigo" style="font-size: 0.65rem; padding: 0.15rem 0.45rem;">
+          WIB Timezone
+        </span>
+      </div>
+      <p class="text-dim small mb-0 mt-1" style="font-size: 0.78rem;">
+        Real-time quota tracking for active provider accounts (Antigravity & Kiro AI) connected to 9router Core.
+      </p>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <span class="text-dim small" style="font-size: 0.75rem;">
+        <i class="bi bi-clock-history me-1"></i> Updated: <span class="font-monospace text-light">{{ if .QuotaReport }}{{ .QuotaReport.FetchedAtWIB }}{{ else }}-{{ end }}</span>
+      </span>
+      <a href="/?refresh=true" class="btn-modern-ghost btn-sm text-decoration-none d-inline-flex align-items-center gap-1" style="font-size: 0.75rem; padding: 0.25rem 0.6rem;" title="Force refresh quota data from upstream">
+        <i class="bi bi-arrow-clockwise"></i> Refresh
+      </a>
+    </div>
+    <!-- Live Refresh Section -->
+    <div class="d-flex align-items-center gap-2 mt-2">
+      <span class="text-dim small" style="font-size: 0.7rem;">
+        <i class="bi bi-arrow-repeat me-1" id="liveRefreshIcon"></i>
+        Auto-Refresh <span id="liveRefreshCounter">5</span>s
+      </span>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    {{ if and .QuotaReport .QuotaReport.Accounts }}
+      {{ range .QuotaReport.Accounts }}
+        <div class="col-md-6 col-xl-4">
+          <div class="p-3 rounded-3 h-100" style="background: rgba(16, 20, 32, 0.7); border: 1px solid rgba(255, 255, 255, 0.05);">
+            <div class="d-flex align-items-start justify-content-between mb-2">
+              <div class="overflow-hidden me-2">
+                <div class="d-flex align-items-center gap-1 mb-0.5">
+                  <span class="fw-bold text-light" style="font-size: 0.82rem;">
+                    {{ if eq .Provider "antigravity" }}<i class="bi bi-google text-primary me-1"></i> Antigravity (Google)
+                    {{ else if eq .Provider "kiro" }}<i class="bi bi-robot text-warning me-1"></i> Kiro AI
+                    {{ else }}<i class="bi bi-cpu text-info me-1"></i> {{ .DisplayProvider }}
+                    {{ end }}
+                  </span>
+                  <span class="badge-modern {{ if eq .Status "exhausted" }}badge-rose text-danger{{ else if eq .Status "ready" }}badge-emerald text-emerald{{ else }}badge-amber text-warning{{ end }}" style="font-size: 0.62rem; padding: 0.1rem 0.35rem;">
+                    {{ if eq .Status "exhausted" }}Limit Reached{{ else if eq .Status "ready" }}Ready{{ else }}{{ .Status }}{{ end }}
+                  </span>
+                </div>
+                <div class="text-dim small text-truncate" style="font-size: 0.72rem;" title="{{ if .Email }}{{ .Email }}{{ else }}{{ .Name }}{{ end }}">
+                  {{ if .Email }}{{ .Email }}{{ else }}{{ .Name }}{{ end }}
+                </div>
+              </div>
+              <span class="badge-modern badge-gray font-monospace" style="font-size: 0.62rem; white-space: nowrap;">{{ .Plan }}</span>
+            </div>
+
+            <div class="pt-2 border-top border-secondary border-opacity-10">
+              {{ if eq .Provider "antigravity" }}
+                {{ with .FlashQuota }}
+                  <div class="mb-2">
+                    <div class="d-flex justify-content-between text-dim small mb-1" style="font-size: 0.72rem;">
+                      <span>Gemini Flash High:</span>
+                      <span class="fw-semibold {{ if le .RemainingPercentage 0.5 }}text-danger{{ else if lt .RemainingPercentage 30.0 }}text-warning{{ else }}text-emerald{{ end }}">
+                        {{ formatFloat1 .RemainingPercentage }}%
+                      </span>
+                    </div>
+                    <div class="progress" style="height: 5px; background: rgba(255,255,255,0.06); border-radius: 4px;">
+                      <div class="progress-bar {{ if le .RemainingPercentage 0.5 }}bg-danger{{ else if lt .RemainingPercentage 30.0 }}bg-warning{{ else }}bg-success{{ end }}" style="width: {{ .RemainingPercentage }}%;"></div>
+                    </div>
+                    <div class="d-flex justify-content-between text-dim mt-1" style="font-size: 0.68rem;">
+                      <span><i class="bi bi-clock me-1"></i>{{ .ResetAtWIB }}</span>
+                      <span>{{ .ResetIn }}</span>
+                    </div>
+                  </div>
+                {{ end }}
+
+                {{ with .ClaudeQuota }}
+                  <div>
+                    <div class="d-flex justify-content-between text-dim small mb-1" style="font-size: 0.72rem;">
+                      <span>Claude Sonnet 4.6:</span>
+                      <span class="fw-semibold {{ if le .RemainingPercentage 0.5 }}text-danger{{ else }}text-emerald{{ end }}">
+                        {{ formatFloat1 .RemainingPercentage }}%
+                      </span>
+                    </div>
+                    <div class="progress" style="height: 5px; background: rgba(255,255,255,0.06); border-radius: 4px;">
+                      <div class="progress-bar {{ if le .RemainingPercentage 0.5 }}bg-danger{{ else }}bg-success{{ end }}" style="width: {{ .RemainingPercentage }}%;"></div>
+                    </div>
+                    <div class="d-flex justify-content-between text-dim mt-1" style="font-size: 0.68rem;">
+                      <span><i class="bi bi-clock me-1"></i>{{ .ResetAtWIB }}</span>
+                      <span>{{ .ResetIn }}</span>
+                    </div>
+                  </div>
+                {{ end }}
+
+              {{ else if eq .Provider "kiro" }}
+                {{ with .KiroCredit }}
+                  <div>
+                    <div class="d-flex justify-content-between text-dim small mb-1" style="font-size: 0.72rem;">
+                      <span>Credit Pool:</span>
+                      <span class="fw-semibold {{ if le .Remaining 0.01 }}text-danger{{ else }}text-emerald{{ end }}">
+                        {{ formatFloat1 .Remaining }} / {{ formatFloat1 .Total }} Cr
+                      </span>
+                    </div>
+                    <div class="progress" style="height: 5px; background: rgba(255,255,255,0.06); border-radius: 4px;">
+                      <div class="progress-bar {{ if le .Remaining 0.01 }}bg-danger{{ else }}bg-success{{ end }}" style="width: {{ .RemainingPercentage }}%;"></div>
+                    </div>
+                    <div class="d-flex justify-content-between text-dim mt-1" style="font-size: 0.68rem;">
+                      <span><i class="bi bi-clock me-1"></i>{{ .ResetAtWIB }}</span>
+                      <span>{{ .ResetIn }}</span>
+                    </div>
+                  </div>
+                {{ else }}
+                  <div class="text-dim small py-1" style="font-size: 0.72rem;">Credits not reported</div>
+                {{ end }}
+
+              {{ else }}
+                <div class="text-dim small py-1" style="font-size: 0.72rem;">
+                  <i class="bi bi-check-circle text-emerald me-1"></i> Connected & Ready
+                </div>
+              {{ end }}
+            </div>
+          </div>
+        </div>
+      {{ end }}
+    {{ else }}
+      <div class="col-12 text-center text-dim py-3 small">
+        No active upstream provider accounts detected.
+      </div>
+    {{ end }}
   </div>
 </div>
 
@@ -365,8 +499,8 @@
   if (canvas) {
     const ctx = canvas.getContext('2d');
     const gradient = ctx.createLinearGradient(0, 0, 0, 260);
-    gradient.addColorStop(0, 'rgba(99, 102, 241, 0.35)');
-    gradient.addColorStop(1, 'rgba(99, 102, 241, 0.00)');
+    gradient.addColorStop(0, 'rgba(59, 130, 246, 0.25)');
+    gradient.addColorStop(1, 'rgba(59, 130, 246, 0.00)');
 
     const chartInstance = new Chart(ctx, {
       type: 'line',
@@ -375,13 +509,13 @@
         datasets: [{
           label: 'Tokens Used',
           data: dailyData.length ? dailyData : [0],
-          borderColor: '#6366f1',
-          borderWidth: 2.5,
+          borderColor: '#3b82f6',
+          borderWidth: 2,
           backgroundColor: gradient,
           fill: true,
-          tension: 0.35,
-          pointBackgroundColor: '#6366f1',
-          pointBorderColor: '#090a10',
+          tension: 0.3,
+          pointBackgroundColor: '#3b82f6',
+          pointBorderColor: '#09090b',
           pointBorderWidth: 2,
           pointRadius: 4,
           pointHoverRadius: 6,
@@ -397,13 +531,13 @@
         scales: {
           x: {
             grid: { color: 'rgba(255, 255, 255, 0.04)' },
-            ticks: { color: '#64748b', font: { family: 'Inter', size: 11 } }
+            ticks: { color: '#71717a', font: { family: 'Geist', size: 11 } }
           },
           y: {
             grid: { color: 'rgba(255, 255, 255, 0.04)' },
             ticks: { 
-              color: '#64748b', 
-              font: { family: 'Inter', size: 11 },
+              color: '#71717a', 
+              font: { family: 'Geist', size: 11 },
               callback: function(value) {
                 if (value >= 1000000) return (value / 1000000) + 'M';
                 if (value >= 1000) return (value / 1000) + 'k';
@@ -416,15 +550,15 @@
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: '#111420',
-            titleColor: '#f8fafc',
-            bodyColor: '#a5b4fc',
+            backgroundColor: '#18181b',
+            titleColor: '#fafafa',
+            bodyColor: '#93c5fd',
             borderColor: 'rgba(255, 255, 255, 0.1)',
             borderWidth: 1,
             padding: 10,
             displayColors: false,
-            titleFont: { family: 'Inter', weight: '600' },
-            bodyFont: { family: 'JetBrains Mono', weight: '500' }
+            titleFont: { family: 'Geist', weight: '600' },
+            bodyFont: { family: 'Geist Mono', weight: '500' }
           }
         }
       }

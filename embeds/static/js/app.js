@@ -71,7 +71,7 @@ function initApp() {
     }
 
     const toast = document.createElement("div");
-    toast.style.cssText = "background: #161b2a; border: 1px solid rgba(16, 185, 129, 0.4); color: #f8fafc; padding: 10px 16px; border-radius: 8px; font-size: 0.82rem; font-family: Inter, sans-serif; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 8px; animation: fadeIn 0.2s ease;";
+    toast.style.cssText = "background: #18181b; border: 1px solid rgba(16, 185, 129, 0.4); color: #fafafa; padding: 10px 16px; border-radius: 8px; font-size: 0.82rem; font-family: 'Geist', sans-serif; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 8px; animation: fadeIn 0.2s ease;";
     toast.innerHTML = `<i class="bi bi-check-circle-fill text-success"></i> <span>${msg || "Copied to clipboard!"}</span>`;
     
     container.appendChild(toast);
