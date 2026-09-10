@@ -42,6 +42,8 @@ type LoginResult struct {
 	ExpiresAt time.Time
 }
 
+// AuthService implements the authentication and session use cases:
+// login, session lifecycle, CSRF signing, and password verification.
 type AuthService struct {
 	store         Store
 	sessionSecret string
@@ -185,6 +187,8 @@ func CheckPasswordHash(password, hash string) bool {
 
 // ---- User use cases ----
 
+// UserService implements user management use cases: create, update, delete,
+// password resets, status toggling and usage reset.
 type UserService struct {
 	store Store
 	sync  KeySyncer
@@ -425,6 +429,8 @@ func (s *UserService) ResetUsage(ctx context.Context, userID string) error {
 
 // ---- API key use cases ----
 
+// KeyService implements API key use cases: creation with validation, toggling,
+// deletion, rotation and expiry cleanup.
 type KeyService struct {
 	store Store
 	sync  KeySyncer

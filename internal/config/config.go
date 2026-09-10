@@ -1,3 +1,4 @@
+// Package config loads application configuration from environment variables and .env files.
 package config
 
 import (
@@ -9,6 +10,7 @@ import (
 	"sync"
 )
 
+// Config holds all runtime configuration for the 9router Gateway.
 type Config struct {
 	mu                   sync.RWMutex
 	Port                 int
@@ -27,6 +29,7 @@ type Config struct {
 	MidtransMerchantID   string
 }
 
+// LoadConfig reads environment variables and returns a populated Config.
 func LoadConfig() *Config {
 	// Try loading from .env if present
 	loadDotEnv(".env")

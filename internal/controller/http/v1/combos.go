@@ -5,6 +5,7 @@ import (
 	"net/http"
 )
 
+// CombosPage renders the provider combo/fallback management page.
 func (h *Handler) CombosPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	combos, err := h.coreClient.GetCombos(ctx)
@@ -21,6 +22,7 @@ func (h *Handler) CombosPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// APICombosCreate creates a provider combo in 9router Core.
 func (h *Handler) APICombosCreate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req struct {
@@ -41,6 +43,7 @@ func (h *Handler) APICombosCreate(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
 
+// APICombosUpdate updates an existing provider combo.
 func (h *Handler) APICombosUpdate(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req struct {
@@ -62,6 +65,7 @@ func (h *Handler) APICombosUpdate(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
 
+// APICombosDelete deletes a provider combo.
 func (h *Handler) APICombosDelete(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	id := r.URL.Query().Get("id")

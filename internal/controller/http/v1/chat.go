@@ -5,6 +5,7 @@ import (
 	"net/http"
 )
 
+// ChatPage renders the chat playground page.
 func (h *Handler) ChatPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	currentUser := GetUserFromContext(ctx)

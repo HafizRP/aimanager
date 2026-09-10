@@ -1,3 +1,4 @@
+// Package proxy implements the OpenAI/Anthropic-compatible reverse proxy gateway.
 package proxy
 
 import (
@@ -17,6 +18,7 @@ import (
 	"9router-gateway/internal/repository"
 )
 
+// GatewayProxy authenticates requests and forwards them to the 9router upstream.
 type GatewayProxy struct {
 	cfg         *config.Config
 	repo        repository.Repository
@@ -25,6 +27,7 @@ type GatewayProxy struct {
 	cache       *ResponseCache
 }
 
+// NewGatewayProxy builds a GatewayProxy with rate limiting and response caching enabled.
 func NewGatewayProxy(cfg *config.Config, repo repository.Repository) *GatewayProxy {
 	return &GatewayProxy{
 		cfg:  cfg,
@@ -37,6 +40,7 @@ func NewGatewayProxy(cfg *config.Config, repo repository.Repository) *GatewayPro
 	}
 }
 
+// ServeHTTP handles OpenAI/Anthropic-compatible API requests.
 func (p *GatewayProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
 	clientIP := GetClientIP(r)

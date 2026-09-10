@@ -20,6 +20,7 @@ var (
 	validUsernameRegex   = regexp.MustCompile(`^[a-z0-9_.-]{3,32}$`)
 )
 
+// UsersPage renders the user management page (admin).
 func (h *Handler) UsersPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	users, err := h.repo.GetAllUsers(ctx)
@@ -41,6 +42,7 @@ func (h *Handler) UsersPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// UserDetailPage renders a single user's detail page (admin).
 func (h *Handler) UserDetailPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	userID := chi.URLParam(r, "id")
@@ -99,6 +101,7 @@ func (h *Handler) UserDetailPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// CreateUser creates a user and optionally an API key (admin).
 func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 
@@ -141,6 +144,7 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/users?msg="+url.QueryEscape(msg), http.StatusSeeOther)
 }
 
+// EditUser updates a user's profile fields (admin).
 func (h *Handler) EditUser(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	userID := chi.URLParam(r, "id")
@@ -181,6 +185,7 @@ func (h *Handler) EditUser(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirectURL+"?msg=User+updated+successfully", http.StatusSeeOther)
 }
 
+// ResetPassword assigns a new password to a user (admin).
 func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	userID := chi.URLParam(r, "id")
@@ -203,6 +208,7 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirectURL+"?msg="+url.QueryEscape(msg), http.StatusSeeOther)
 }
 
+// ResetUsage zeroes a user's token usage counters (admin).
 func (h *Handler) ResetUsage(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	ctx := r.Context()
@@ -218,6 +224,7 @@ func (h *Handler) ResetUsage(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirectURL+"?msg=Token+usage+counter+reset+to+0", http.StatusSeeOther)
 }
 
+// ToggleUserStatus activates/deactivates a user account (admin).
 func (h *Handler) ToggleUserStatus(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	ctx := r.Context()
@@ -239,6 +246,7 @@ func (h *Handler) ToggleUserStatus(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirectURL+"?msg="+url.QueryEscape(msg), http.StatusSeeOther)
 }
 
+// DeleteUser removes a user and their API keys (admin).
 func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	ctx := r.Context()

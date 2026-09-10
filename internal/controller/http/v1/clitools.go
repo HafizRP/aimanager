@@ -5,6 +5,7 @@ import (
 	"net/http"
 )
 
+// CLIToolsPage renders the CLI tools setup page.
 func (h *Handler) CLIToolsPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	currentUser := GetUserFromContext(ctx)

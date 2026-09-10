@@ -390,6 +390,7 @@ func (h *Handler) RequireAdmin(next http.Handler) http.Handler {
 
 // Auth Handlers
 
+// LoginPage renders the login form.
 func (h *Handler) LoginPage(w http.ResponseWriter, r *http.Request) {
 	if user := h.getSessionUser(r); user != nil {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -401,6 +402,7 @@ func (h *Handler) LoginPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// LoginPost authenticates the submitted credentials and starts a session.
 func (h *Handler) LoginPost(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	username := strings.TrimSpace(r.FormValue("username"))
@@ -421,11 +423,13 @@ func (h *Handler) LoginPost(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
+// LogoutPost ends the current session and clears the cookie.
 func (h *Handler) LogoutPost(w http.ResponseWriter, r *http.Request) {
 	h.clearSessionCookie(w, r)
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 
+// FetchUpstreamModels returns the cached list of upstream model IDs.
 func (h *Handler) FetchUpstreamModels(ctx context.Context) []string {
 	items, err := h.fetchUpstreamModels(ctx)
 	if err != nil {

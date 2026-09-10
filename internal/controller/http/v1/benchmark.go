@@ -11,6 +11,7 @@ import (
 	"time"
 )
 
+// BenchmarkResult holds the outcome of a single benchmark run.
 type BenchmarkResult struct {
 	Model      string  `json:"model"`
 	LatencyMs  int64   `json:"latency_ms"`
@@ -22,6 +23,7 @@ type BenchmarkResult struct {
 	ErrorMsg   string  `json:"error_msg,omitempty"`
 }
 
+// BenchmarkPage renders the speed benchmark page.
 func (h *Handler) BenchmarkPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	models, _ := h.fetchUpstreamModels(ctx)
@@ -32,6 +34,7 @@ func (h *Handler) BenchmarkPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// APIBenchmarkRun runs a latency benchmark against the upstream providers.
 func (h *Handler) APIBenchmarkRun(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var req struct {

@@ -5,6 +5,7 @@ import (
 	"net/http"
 )
 
+// TokenSaverPage renders the token saver settings page.
 func (h *Handler) TokenSaverPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	settings, err := h.coreClient.GetSettings(ctx)
@@ -18,6 +19,7 @@ func (h *Handler) TokenSaverPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// APITokenSaverSave persists token saver settings to 9router Core.
 func (h *Handler) APITokenSaverSave(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	var payload map[string]interface{}

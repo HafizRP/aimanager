@@ -17,11 +17,13 @@ import (
 	"9router-gateway/internal/usecase"
 )
 
+// ModelViewItem is a model descriptor for the models page.
 type ModelViewItem struct {
 	UpstreamModelItem
 	Quota upstream.ModelQuotaSummary `json:"quota"`
 }
 
+// ModelsPage renders the model whitelist/alias settings page.
 func (h *Handler) ModelsPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	currentUser := GetUserFromContext(ctx)
@@ -81,6 +83,7 @@ func (h *Handler) ModelsPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// SettingsPage renders the gateway settings page.
 func (h *Handler) SettingsPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	currentUser := GetUserFromContext(ctx)
@@ -156,6 +159,7 @@ func (h *Handler) SettingsPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// UpdatePasswordPost changes the current user's password.
 func (h *Handler) UpdatePasswordPost(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	ctx := r.Context()
@@ -194,6 +198,7 @@ func (h *Handler) UpdatePasswordPost(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/settings?msg=Password+updated+successfully", http.StatusSeeOther)
 }
 
+// UpdateMidtransPost saves Midtrans gateway keys (admin).
 func (h *Handler) UpdateMidtransPost(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	ctx := r.Context()
@@ -218,6 +223,7 @@ func (h *Handler) UpdateMidtransPost(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/settings?msg=Midtrans+configuration+saved+successfully", http.StatusSeeOther)
 }
 
+// UpdateUpstreamPost saves the 9router Core upstream settings (admin).
 func (h *Handler) UpdateUpstreamPost(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	ctx := r.Context()
@@ -250,6 +256,7 @@ func (h *Handler) UpdateUpstreamPost(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/settings?msg=Upstream+9router+Core+configuration+updated+successfully", http.StatusSeeOther)
 }
 
+// TestUpstreamConnection pings the configured upstream and reports latency.
 func (h *Handler) TestUpstreamConnection(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()

@@ -47,6 +47,7 @@ func parseExpiryInput(raw string) (time.Time, error) {
 	return parsed, nil
 }
 
+// KeysPage renders the API key management page.
 func (h *Handler) KeysPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	currentUser := GetUserFromContext(ctx)
@@ -99,6 +100,7 @@ func (h *Handler) KeysPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// CreateKey creates a new API key for the current or target user.
 func (h *Handler) CreateKey(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	ctx := r.Context()
@@ -146,6 +148,7 @@ func (h *Handler) CreateKey(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirectURL+"?msg="+url.QueryEscape("Key created successfully! Token: "+key.Key), http.StatusSeeOther)
 }
 
+// ToggleKeyStatus activates/deactivates an API key.
 func (h *Handler) ToggleKeyStatus(w http.ResponseWriter, r *http.Request) {
 	keyID := chi.URLParam(r, "id")
 	ctx := r.Context()
@@ -185,6 +188,7 @@ func (h *Handler) ToggleKeyStatus(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirectURL+"?msg="+url.QueryEscape(msg), http.StatusSeeOther)
 }
 
+// DeleteKey deletes an API key.
 func (h *Handler) DeleteKey(w http.ResponseWriter, r *http.Request) {
 	keyID := chi.URLParam(r, "id")
 	ctx := r.Context()

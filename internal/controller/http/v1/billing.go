@@ -15,6 +15,7 @@ import (
 	"9router-gateway/internal/usecase"
 )
 
+// BillingPage renders the token package purchase page.
 func (h *Handler) BillingPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	currentUser := GetUserFromContext(ctx)
@@ -48,6 +49,7 @@ func (h *Handler) BillingPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// CheckoutSnap starts a Midtrans Snap checkout and records a pending order.
 func (h *Handler) CheckoutSnap(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	currentUser := GetUserFromContext(ctx)
@@ -98,6 +100,7 @@ func (h *Handler) CheckoutSnap(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// MidtransWebhook handles Midtrans payment notifications (idempotent).
 func (h *Handler) MidtransWebhook(w http.ResponseWriter, r *http.Request) {
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -164,6 +167,7 @@ func (h *Handler) MidtransWebhook(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(`{"status":"ok"}`))
 }
 
+// ManualCreditTokens credits tokens to a user manually (admin).
 func (h *Handler) ManualCreditTokens(w http.ResponseWriter, r *http.Request) {
 	_ = r.ParseForm()
 	ctx := r.Context()

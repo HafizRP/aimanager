@@ -1,3 +1,8 @@
+// Package entity defines the core domain entities of the gateway.
+//
+// These are the structures the business logic (internal/usecase) operates on.
+// They hold no infrastructure concerns (no SQL, no HTTP) and can be
+// serialized to JSON for the dashboard and API responses.
 package entity
 
 import (
@@ -6,6 +11,10 @@ import (
 	"time"
 )
 
+// User is an application account that can own API keys and consume tokens.
+//
+// TokenQuota of 0 means unlimited. AllowedModels is a JSON array string
+// (or comma separated) of model IDs, "*" grants access to all models.
 type User struct {
 	ID            string     `json:"id"`
 	Username      string     `json:"username"`
@@ -26,10 +35,12 @@ type User struct {
 	KeyCount int `json:"key_count,omitempty"`
 }
 
+// IsAdmin reports whether the user has the admin role.
 func (u *User) IsAdmin() bool {
 	return u.Role == "admin" || u.Role == "superadmin"
 }
 
+// QuotaPercent returns the used quota ratio (0-100), clamped at 100.
 func (u *User) QuotaPercent() float64 {
 	if u.TokenQuota <= 0 {
 		return 0
@@ -41,14 +52,19 @@ func (u *User) QuotaPercent() float64 {
 	return p
 }
 
+// GetAllowedModels returns the parsed allowed model list.
 func (u *User) GetAllowedModels() []string {
 	return ParseAllowedModels(u.AllowedModels)
 }
 
+// HasModelAccess reports whether a model is allowed for this user.
 func (u *User) HasModelAccess(model string) bool {
 	return IsModelAllowed(model, u.GetAllowedModels())
 }
 
+// APIKey is a credential used to call the gateway proxy endpoints.
+// It belongs to a single user and may be scoped to a subset of models
+// and expire after ExpiresAt.
 type APIKey struct {
 	ID            string     `json:"id"`
 	UserID        string     `json:"user_id"`
@@ -65,6 +81,7 @@ type APIKey struct {
 	UserName string `json:"user_name,omitempty"`
 }
 
+// IsExpired reports whether the key has passed its expiry.
 func (k *APIKey) IsExpired() bool {
 	if k == nil || k.ExpiresAt == nil {
 		return false
@@ -72,6 +89,7 @@ func (k *APIKey) IsExpired() bool {
 	return !k.ExpiresAt.IsZero() && time.Now().After(*k.ExpiresAt)
 }
 
+// GetAllowedModels returns the parsed allowed model list; nil means unrestricted.
 func (k *APIKey) GetAllowedModels() []string {
 	if strings.TrimSpace(k.AllowedModels) == "" {
 		return nil
@@ -79,6 +97,7 @@ func (k *APIKey) GetAllowedModels() []string {
 	return ParseAllowedModels(k.AllowedModels)
 }
 
+// HasModelAccess reports whether a model is allowed for this key.
 func (k *APIKey) HasModelAccess(model string) bool {
 	allowed := k.GetAllowedModels()
 	if len(allowed) == 0 {
@@ -87,6 +106,7 @@ func (k *APIKey) HasModelAccess(model string) bool {
 	return IsModelAllowed(model, allowed)
 }
 
+// RequestLog records a single proxied LLM request for usage tracking.
 type RequestLog struct {
 	ID               int64     `json:"id"`
 	UserID           string    `json:"user_id"`
@@ -109,12 +129,14 @@ type RequestLog struct {
 	KeyName  string `json:"key_name,omitempty"`
 }
 
+// DailyUsage aggregates token and request totals for one day.
 type DailyUsage struct {
 	Date        string `json:"date"`
 	TotalTokens int64  `json:"total_tokens"`
 	Requests    int64  `json:"requests"`
 }
 
+// TopUserStat ranks a user by token usage over a timeframe.
 type TopUserStat struct {
 	UserID     string `json:"user_id"`
 	UserName   string `json:"user_name"`
@@ -122,12 +144,14 @@ type TopUserStat struct {
 	Requests   int64  `json:"requests"`
 }
 
+// TopModelStat ranks a model by request and token counts.
 type TopModelStat struct {
 	Model       string `json:"model"`
 	Requests    int64  `json:"requests"`
 	TotalTokens int64  `json:"total_tokens"`
 }
 
+// DashboardStats is the aggregate statistics payload for the dashboard.
 type DashboardStats struct {
 	TotalRequests  int64          `json:"total_requests"`
 	TotalTokens    int64          `json:"total_tokens"`
@@ -148,6 +172,7 @@ type DashboardStats struct {
 	RecentLogs     []RequestLog   `json:"recent_logs"`
 }
 
+// CursorPageInfo carries pagination metadata for cursor-based log queries.
 type CursorPageInfo struct {
 	HasNext    bool   `json:"has_next"`
 	HasPrev    bool   `json:"has_prev"`
@@ -157,6 +182,7 @@ type CursorPageInfo struct {
 	TotalCount int    `json:"total_count"`
 }
 
+// TokenPackage is a purchasable token bundle sold via Midtrans.
 type TokenPackage struct {
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`
@@ -168,6 +194,7 @@ type TokenPackage struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+// Transaction is a Midtrans payment record (order) for a token package.
 type Transaction struct {
 	ID           string     `json:"id"` // order_id
 	UserID       string     `json:"user_id"`

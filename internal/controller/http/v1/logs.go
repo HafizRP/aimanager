@@ -13,6 +13,7 @@ import (
 	"9router-gateway/internal/usecase"
 )
 
+// LogsPage renders the request logs page.
 func (h *Handler) LogsPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	currentUser := GetUserFromContext(ctx)

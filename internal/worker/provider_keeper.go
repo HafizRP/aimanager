@@ -1,3 +1,4 @@
+// Package worker runs background jobs such as periodic provider health checks.
 package worker
 
 import (
@@ -11,6 +12,7 @@ import (
 	"9router-gateway/internal/upstream"
 )
 
+// ProviderKeeper periodically tests and reactivates idle upstream provider accounts.
 type ProviderKeeper struct {
 	cfg        *config.Config
 	coreClient *upstream.CoreClient
@@ -18,6 +20,7 @@ type ProviderKeeper struct {
 	stopChan   chan struct{}
 }
 
+// NewProviderKeeper creates a ProviderKeeper wired to the given config and core client.
 func NewProviderKeeper(cfg *config.Config, coreClient *upstream.CoreClient, quotaMgr *upstream.QuotaManager) *ProviderKeeper {
 	return &ProviderKeeper{
 		cfg:        cfg,
@@ -27,6 +30,7 @@ func NewProviderKeeper(cfg *config.Config, coreClient *upstream.CoreClient, quot
 	}
 }
 
+// Start launches the background goroutine that periodically checks provider health.
 func (pk *ProviderKeeper) Start() {
 	log.Info().Msg("Starting Provider Auto-Reactivation Worker...")
 	go func() {
@@ -44,6 +48,7 @@ func (pk *ProviderKeeper) Start() {
 	}()
 }
 
+// Stop signals the background goroutine to shut down.
 func (pk *ProviderKeeper) Stop() {
 	close(pk.stopChan)
 }
