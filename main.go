@@ -28,6 +28,7 @@ import (
 	"9router-gateway/internal/repository"
 	"9router-gateway/internal/syncer"
 	"9router-gateway/internal/upstream"
+	"9router-gateway/internal/worker"
 )
 
 func main() {
@@ -211,15 +212,18 @@ func main() {
 		// Logs, Models, Settings
 		authRouter.Get("/logs", h.LogsPage)
 		authRouter.Get("/api/logs", h.APILogs)
+		authRouter.Get("/api/logs/export", h.ExportLogs)
 		authRouter.Get("/models", h.ModelsPage)
 		authRouter.Get("/api/models/alias", h.APIModelAliasesGet)
 		authRouter.Get("/settings", h.SettingsPage)
 		authRouter.Post("/settings/password", h.UpdatePasswordPost)
 
-		// Workspace: Chat Playground & CLI Tools Setup Hub
+		// Workspace: Chat Playground & CLI Tools Setup Hub & Speed Benchmark
 		authRouter.Get("/chat", h.ChatPage)
 		authRouter.Get("/playground", h.ChatPage)
 		authRouter.Get("/cli-tools", h.CLIToolsPage)
+		authRouter.Get("/benchmark", h.BenchmarkPage)
+		authRouter.Post("/api/benchmark/run", h.APIBenchmarkRun)
 
 		// Admin-Only Routes (User Management & Administrative Overrides)
 		authRouter.Group(func(adminOnly chi.Router) {
@@ -273,6 +277,11 @@ func main() {
 			adminOnly.Get("/api/upstream/test", h.TestUpstreamConnection)
 		})
 	})
+
+	// 9.5 Background Provider Keeper (Auto-reactivate quota-reset accounts)
+	coreClient := upstream.NewCoreClient(cfg)
+	keeper := worker.NewProviderKeeper(cfg, coreClient, quotaMgr)
+	go keeper.Start()
 
 	// 10. Start Server with Graceful Shutdown
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)

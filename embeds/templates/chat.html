@@ -29,12 +29,36 @@
     </div>
 
     <div class="d-flex align-items-center gap-2">
+      <button type="button" class="btn-modern-ghost btn-sm py-1.5 px-2.5 d-inline-flex align-items-center gap-1.5" data-bs-toggle="offcanvas" data-bs-target="#chatHistoryOffcanvas">
+        <i class="bi bi-clock-history"></i> <span class="d-none d-md-inline">History</span>
+      </button>
+      <button type="button" class="btn-modern-ghost btn-sm py-1.5 px-2.5 d-inline-flex align-items-center gap-1.5" onclick="exportMarkdown()" title="Export current chat as Markdown">
+        <i class="bi bi-download"></i> <span class="d-none d-md-inline">Export MD</span>
+      </button>
       <button type="button" class="btn-modern-ghost btn-sm py-1.5 px-2.5 d-inline-flex align-items-center gap-1.5" data-bs-toggle="collapse" data-bs-target="#systemPromptCollapse">
-        <i class="bi bi-sliders"></i> <span class="d-none d-md-inline">System Prompt</span>
+        <i class="bi bi-sliders"></i> <span class="d-none d-md-inline">System</span>
       </button>
-      <button type="button" class="btn-modern-ghost btn-sm py-1.5 px-2.5 text-danger border-0 d-inline-flex align-items-center gap-1.5" onclick="clearChat()">
-        <i class="bi bi-trash"></i> <span class="d-none d-md-inline">Clear</span>
+      <button type="button" class="btn-modern-ghost btn-sm py-1.5 px-2.5 text-primary border-0 d-inline-flex align-items-center gap-1.5" onclick="startNewSession()" title="Start New Conversation">
+        <i class="bi bi-plus-lg"></i> <span class="d-none d-md-inline">New Chat</span>
       </button>
+    </div>
+  </div>
+
+  <!-- Chat History Offcanvas -->
+  <div class="offcanvas offcanvas-start card-modern p-0" tabindex="-1" id="chatHistoryOffcanvas" style="background: var(--bg-surface); border-right: 1px solid var(--border-subtle); width: 320px;">
+    <div class="offcanvas-header border-bottom border-secondary border-opacity-10 p-3">
+      <h6 class="offcanvas-title fw-bold text-light d-flex align-items-center gap-2">
+        <i class="bi bi-clock-history text-primary"></i> Chat Sessions
+      </h6>
+      <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
+    </div>
+    <div class="p-3 border-bottom border-secondary border-opacity-10">
+      <button type="button" class="btn-modern-primary w-100 py-1.5 d-inline-flex align-items-center justify-content-center gap-2" onclick="startNewSession(); bootstrap.Offcanvas.getInstance(document.getElementById('chatHistoryOffcanvas')).hide();">
+        <i class="bi bi-plus-lg"></i> New Conversation
+      </button>
+    </div>
+    <div class="offcanvas-body p-2 d-flex flex-column gap-1" id="savedSessionsContainer" style="overflow-y: auto;">
+      <!-- Populated via JS -->
     </div>
   </div>
 
@@ -107,6 +131,126 @@ let chatMessages = [];
 let isGenerating = false;
 let abortController = null;
 const userApiKey = "{{ .UserKey }}";
+
+let currentSessionId = 'session_' + Date.now();
+let savedSessions = [];
+
+function initSessions() {
+  try {
+    const raw = localStorage.getItem('aimanager_chat_sessions');
+    if (raw) savedSessions = JSON.parse(raw);
+  } catch (e) {}
+  if (!Array.isArray(savedSessions)) savedSessions = [];
+  renderSessionList();
+}
+
+function saveSessions() {
+  try {
+    localStorage.setItem('aimanager_chat_sessions', JSON.stringify(savedSessions));
+  } catch (e) {}
+  renderSessionList();
+}
+
+function renderSessionList() {
+  const container = document.getElementById('savedSessionsContainer');
+  if (!container) return;
+  if (savedSessions.length === 0) {
+    container.innerHTML = '<div class="text-dim small text-center py-4">No saved chats yet.</div>';
+    return;
+  }
+  container.innerHTML = '';
+  savedSessions.forEach(s => {
+    const item = document.createElement('div');
+    const isActive = s.id === currentSessionId;
+    item.className = `p-2 rounded-3 d-flex align-items-center justify-content-between cursor-pointer ${isActive ? 'bg-primary bg-opacity-20 border border-primary border-opacity-30' : 'btn-modern-ghost'}`;
+    item.style.cursor = 'pointer';
+    item.innerHTML = `
+      <div class="overflow-hidden flex-grow-1 me-2" onclick="switchSession('${s.id}')">
+        <div class="small fw-medium text-light text-truncate">${escapeHtml(s.title || 'Untitled Chat')}</div>
+        <div class="text-dim font-monospace" style="font-size: 0.65rem;">${s.model || 'main'} &bull; ${s.messages ? s.messages.length : 0} msgs</div>
+      </div>
+      <button type="button" class="btn btn-sm btn-link p-0 text-muted" onclick="deleteSession('${s.id}', event)" title="Delete session">
+        <i class="bi bi-trash" style="font-size: 0.75rem;"></i>
+      </button>
+    `;
+    container.appendChild(item);
+  });
+}
+
+function startNewSession() {
+  currentSessionId = 'session_' + Date.now();
+  chatMessages = [];
+  clearChat();
+  renderSessionList();
+}
+
+function switchSession(id) {
+  const sess = savedSessions.find(s => s.id === id);
+  if (!sess) return;
+  currentSessionId = sess.id;
+  chatMessages = sess.messages || [];
+
+  const container = document.getElementById('messagesList');
+  container.innerHTML = '';
+  if (chatMessages.length === 0) {
+    clearChat();
+  } else {
+    chatMessages.forEach(m => {
+      appendMessageBubble(m.role, m.content, sess.model);
+    });
+  }
+  if (sess.model) {
+    document.getElementById('chatModelSelect').value = sess.model;
+  }
+  renderSessionList();
+  const offcanvas = bootstrap.Offcanvas.getInstance(document.getElementById('chatHistoryOffcanvas'));
+  if (offcanvas) offcanvas.hide();
+}
+
+function deleteSession(id, e) {
+  if (e) e.stopPropagation();
+  savedSessions = savedSessions.filter(s => s.id !== id);
+  saveSessions();
+  if (currentSessionId === id) {
+    startNewSession();
+  }
+}
+
+function autoPersistCurrentSession(lastUserMsg, modelName) {
+  let sess = savedSessions.find(s => s.id === currentSessionId);
+  if (!sess) {
+    sess = {
+      id: currentSessionId,
+      title: lastUserMsg ? lastUserMsg.substring(0, 32) : 'Chat',
+      model: modelName,
+      createdAt: new Date().toISOString(),
+      messages: chatMessages
+    };
+    savedSessions.unshift(sess);
+  } else {
+    sess.messages = chatMessages;
+    sess.model = modelName;
+  }
+  saveSessions();
+}
+
+function exportMarkdown() {
+  if (chatMessages.length === 0) {
+    alert('No messages to export.');
+    return;
+  }
+  let md = `# AI Manager Chat Transcript\n*Model:* \`${document.getElementById('chatModelSelect').value}\`\n*Date:* ${new Date().toLocaleString()}\n\n---\n\n`;
+  chatMessages.forEach(m => {
+    md += `### ${m.role === 'user' ? 'User' : 'Assistant'}\n\n${m.content}\n\n`;
+  });
+  const blob = new Blob([md], { type: 'text/markdown' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `chat_transcript_${Date.now()}.md`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 function autoResizeTextarea(el) {
   el.style.height = 'auto';
@@ -255,6 +399,7 @@ async function handleSendChat(e) {
     const elapsed = Math.round(performance.now() - startTime);
     badgeSpan.innerHTML = `<span class="badge-modern badge-gray font-monospace" style="font-size: 0.68rem;"><i class="bi bi-clock me-1"></i>${elapsed}ms</span>`;
     chatMessages.push({ role: 'assistant', content: fullResponse });
+    autoPersistCurrentSession(userText, model);
 
   } catch (err) {
     if (err.name === 'AbortError') {
@@ -335,5 +480,8 @@ function renderMarkdownInto(element, rawText) {
 
   element.innerHTML = html;
 }
+
+// Initialize sessions on page load
+initSessions();
 </script>
 {{ end }}

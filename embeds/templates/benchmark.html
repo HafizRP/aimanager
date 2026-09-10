@@ -1,0 +1,159 @@
+{{ define "title" }}Model Benchmark & Speed Test - AI Manager{{ end }}
+
+{{ define "content" }}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+  <div>
+    <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
+      <i class="bi bi-speedometer text-warning"></i> Model Benchmark & Speed Test
+    </h4>
+    <p class="text-dim small mb-0">Measure round-trip response latency, Time-To-First-Token (TTFT), and throughput across upstream models and combos simultaneously.</p>
+  </div>
+  <div class="d-flex align-items-center gap-2">
+    <button type="button" class="btn-modern-primary d-inline-flex align-items-center gap-2" id="btnRunBenchmark" onclick="runBenchmark()">
+      <i class="bi bi-lightning-charge-fill"></i> Run Speed Test
+    </button>
+  </div>
+</div>
+
+<!-- Benchmark Configuration & Selectors -->
+<div class="card-modern p-3 mb-4">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+    <div>
+      <span class="small text-muted mb-1 d-block font-monospace">TEST SUITE MODELS</span>
+      <div class="d-flex flex-wrap gap-2" id="benchmarkModelChips">
+        <label class="btn-modern-ghost btn-sm font-monospace d-inline-flex align-items-center gap-1.5 active">
+          <input type="checkbox" class="form-check-input m-0" value="main" checked>
+          <span>main (combo)</span>
+        </label>
+        <label class="btn-modern-ghost btn-sm font-monospace d-inline-flex align-items-center gap-1.5 active">
+          <input type="checkbox" class="form-check-input m-0" value="free-only" checked>
+          <span>free-only</span>
+        </label>
+        <label class="btn-modern-ghost btn-sm font-monospace d-inline-flex align-items-center gap-1.5 active">
+          <input type="checkbox" class="form-check-input m-0" value="ag/gemini-3.8-flash-high" checked>
+          <span>ag/gemini-3.8-flash-high</span>
+        </label>
+      </div>
+    </div>
+    <div class="text-dim small font-monospace">
+      Standardized prompt: <code class="text-primary">"Respond with PONG"</code>
+    </div>
+  </div>
+</div>
+
+<!-- Benchmark Leaderboard Card -->
+<div class="card-modern mb-4">
+  <div class="table-responsive">
+    <table class="table table-modern mb-0" id="benchmarkTable">
+      <thead>
+        <tr>
+          <th>Rank</th>
+          <th>Model Identifier</th>
+          <th>Round-Trip Latency</th>
+          <th>Speed Class</th>
+          <th>Status</th>
+          <th class="text-end">Sample Output</th>
+        </tr>
+      </thead>
+      <tbody id="benchmarkTbody">
+        <tr>
+          <td colspan="6" class="text-center text-dim py-5" id="benchmarkEmptyState">
+            <i class="bi bi-stopwatch fs-2 d-block mb-2 opacity-50"></i>
+            Click <strong>"Run Speed Test"</strong> above to benchmark latency across models in real-time.
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+async function runBenchmark() {
+  const btn = document.getElementById('btnRunBenchmark');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Benchmarking...';
+
+  const checkboxes = document.querySelectorAll('#benchmarkModelChips input[type="checkbox"]:checked');
+  const selectedModels = Array.from(checkboxes).map(cb => cb.value);
+
+  const tbody = document.getElementById('benchmarkTbody');
+  tbody.innerHTML = `
+    <tr>
+      <td colspan="6" class="text-center text-dim py-5">
+        <div class="spinner-border text-warning mb-2" role="status"></div>
+        <div>Firing simultaneous requests to upstream models...</div>
+      </td>
+    </tr>
+  `;
+
+  try {
+    const res = await fetch('/api/benchmark/run', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ models: selectedModels })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Benchmark failed');
+
+    renderLeaderboard(data.results || []);
+  } catch (err) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6" class="text-center text-danger py-4">
+          <i class="bi bi-exclamation-triangle me-1"></i> Error: ${err.message}
+        </td>
+      </tr>
+    `;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-lightning-charge-fill"></i> Run Speed Test';
+  }
+}
+
+function renderLeaderboard(results) {
+  const tbody = document.getElementById('benchmarkTbody');
+  if (!results || results.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-dim py-4">No results returned.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = '';
+  results.forEach((r, idx) => {
+    const tr = document.createElement('tr');
+
+    let rankBadge = `<span class="badge-modern badge-gray font-monospace">#${idx + 1}</span>`;
+    if (idx === 0 && r.success) rankBadge = '<span class="badge-modern badge-amber text-warning font-monospace"><i class="bi bi-trophy-fill me-1"></i>#1 Fastest</span>';
+    else if (idx === 1 && r.success) rankBadge = '<span class="badge-modern badge-gray font-monospace"><i class="bi bi-award-fill me-1"></i>#2</span>';
+    else if (idx === 2 && r.success) rankBadge = '<span class="badge-modern badge-gray font-monospace">#3</span>';
+
+    let speedClass = '<span class="badge-modern badge-rose text-danger">Slow (>4s)</span>';
+    if (!r.success) speedClass = '<span class="badge-modern badge-rose text-danger">Failed</span>';
+    else if (r.latency_ms < 1000) speedClass = '<span class="badge-modern badge-emerald text-emerald">Ultra Fast (<1s)</span>';
+    else if (r.latency_ms < 2500) speedClass = '<span class="badge-modern badge-indigo text-primary">Fast (<2.5s)</span>';
+
+    tr.innerHTML = `
+      <td>${rankBadge}</td>
+      <td>
+        <span class="font-monospace fw-bold text-light">${r.model}</span>
+      </td>
+      <td>
+        <div class="d-flex align-items-center gap-2">
+          <span class="font-monospace fw-bold ${r.latency_ms < 1500 ? 'text-emerald' : 'text-light'}">${r.latency_ms} ms</span>
+        </div>
+      </td>
+      <td>${speedClass}</td>
+      <td>
+        ${r.success 
+          ? '<span class="badge-modern badge-emerald"><i class="bi bi-check-circle me-1"></i> 200 OK</span>' 
+          : `<span class="badge-modern badge-rose text-danger"><i class="bi bi-x-circle me-1"></i> ${r.error_msg || 'Error'}</span>`
+        }
+      </td>
+      <td class="text-end font-monospace text-dim small">
+        <code>${r.output_text ? r.output_text.substring(0, 30) : '-'}</code>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+</script>
+{{ end }}

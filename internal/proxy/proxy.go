@@ -17,9 +17,11 @@ import (
 )
 
 type GatewayProxy struct {
-	cfg        *config.Config
-	repo       repository.Repository
-	httpClient *http.Client
+	cfg         *config.Config
+	repo        repository.Repository
+	httpClient  *http.Client
+	rateLimiter *RateLimiter
+	cache       *ResponseCache
 }
 
 func NewGatewayProxy(cfg *config.Config, repo repository.Repository) *GatewayProxy {
@@ -29,6 +31,8 @@ func NewGatewayProxy(cfg *config.Config, repo repository.Repository) *GatewayPro
 		httpClient: &http.Client{
 			Timeout: 0, // No global timeout for streaming SSE requests
 		},
+		rateLimiter: NewRateLimiter(),
+		cache:       NewResponseCache(),
 	}
 }
 
@@ -50,7 +54,7 @@ func (p *GatewayProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 1. Authenticate Request
 	rawKey := extractAPIKey(r)
 	if rawKey == "" {
-		p.writeJSONError(w, http.StatusUnauthorized, "API key required. Provide 'Authorization: Bearer <key>' or 'x-api-key: <key>' header.", "invalid_request_error")
+		p.writeJSONError(w, http.StatusUnauthorized, "API key required. Provide 'Authorization: Bearer ***' or 'x-api-key: *** header.", "invalid_request_error")
 		return
 	}
 
@@ -65,6 +69,24 @@ func (p *GatewayProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil || !user.IsActive {
 		p.writeJSONError(w, http.StatusForbidden, "User account is suspended or inactive", "permission_denied")
 		return
+	}
+
+	// 1b. Rate Limiting Check (Key-level & User-level)
+	if key.RateLimitRPM > 0 {
+		allowed, msg := p.rateLimiter.Allow("key:"+key.ID, key.RateLimitRPM, 0, 0)
+		if !allowed {
+			w.Header().Set("Retry-After", "60")
+			p.writeJSONError(w, http.StatusTooManyRequests, msg, "rate_limit_exceeded")
+			return
+		}
+	}
+	if user.RateLimitRPM > 0 || user.RateLimitTPM > 0 {
+		allowed, msg := p.rateLimiter.Allow("user:"+user.ID, user.RateLimitRPM, user.RateLimitTPM, 200)
+		if !allowed {
+			w.Header().Set("Retry-After", "60")
+			p.writeJSONError(w, http.StatusTooManyRequests, msg, "rate_limit_exceeded")
+			return
+		}
 	}
 
 	// 2. Check Token Quota (Admins are exempt from quota lockout)
@@ -200,6 +222,59 @@ func (p *GatewayProxy) handleForwardRequest(w http.ResponseWriter, r *http.Reque
 			})
 			return
 		}
+
+		// Key-level Model Whitelist Check
+		if key.AllowedModels != "" && key.AllowedModels != "[]" && key.AllowedModels != "[\"*\"]" {
+			keyAllowed := parseAllowedModels(key.AllowedModels)
+			if !hasWildcard(keyAllowed) && !isModelAllowed(requestedModel, keyAllowed) {
+				duration := time.Since(startTime).Milliseconds()
+				errMsg := fmt.Sprintf("Model '%s' is not allowed for this specific API key. Allowed key models: %v", requestedModel, keyAllowed)
+				p.writeJSONError(w, http.StatusForbidden, errMsg, "permission_denied")
+
+				_ = p.repo.CreateRequestLog(r.Context(), &models.RequestLog{
+					UserID:       user.ID,
+					APIKeyID:     key.ID,
+					Path:         r.URL.Path,
+					Method:       r.Method,
+					Model:        requestedModel,
+					IsStream:     isStreamRequested,
+					StatusCode:   http.StatusForbidden,
+					DurationMs:   duration,
+					ClientIP:     clientIP,
+					ErrorMessage: errMsg,
+				})
+				return
+			}
+		}
+	}
+
+	// Exact Response Cache Check (Non-streaming completions)
+	var cacheKey string
+	if !isStreamRequested && reqBodyMap != nil && r.Method == http.MethodPost {
+		temp := 0.7
+		if t, ok := reqBodyMap["temperature"].(float64); ok {
+			temp = t
+		}
+		cacheKey = p.cache.GenerateKey(requestedModel, reqBodyMap["messages"], temp)
+		if cached, found := p.cache.Get(cacheKey); found {
+			w.Header().Set("Content-Type", cached.ContentType)
+			w.Header().Set("X-Cache", "HIT")
+			w.WriteHeader(cached.StatusCode)
+			_, _ = w.Write(cached.Body)
+
+			_ = p.repo.CreateRequestLog(r.Context(), &models.RequestLog{
+				UserID:       user.ID,
+				APIKeyID:     key.ID,
+				Path:         r.URL.Path,
+				Method:       r.Method,
+				Model:        requestedModel,
+				IsStream:     false,
+				StatusCode:   cached.StatusCode,
+				DurationMs:   1,
+				ClientIP:     clientIP,
+			})
+			return
+		}
 	}
 
 	// Prepare outbound upstream request
@@ -255,7 +330,7 @@ func (p *GatewayProxy) handleForwardRequest(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Non-streaming response
-	p.handleNonStreamingResponse(w, r, resp, user, key, requestedModel, startTime, clientIP, len(bodyBytes))
+	p.handleNonStreamingResponse(w, r, resp, user, key, requestedModel, startTime, clientIP, len(bodyBytes), cacheKey)
 }
 
 func (p *GatewayProxy) handleStreamingResponse(w http.ResponseWriter, r *http.Request, resp *http.Response, user *models.User, key *models.APIKey, model string, startTime time.Time, clientIP string) {
@@ -354,7 +429,7 @@ func (p *GatewayProxy) handleStreamingResponse(w http.ResponseWriter, r *http.Re
 	})
 }
 
-func (p *GatewayProxy) handleNonStreamingResponse(w http.ResponseWriter, r *http.Request, resp *http.Response, user *models.User, key *models.APIKey, model string, startTime time.Time, clientIP string, reqBodyLen int) {
+func (p *GatewayProxy) handleNonStreamingResponse(w http.ResponseWriter, r *http.Request, resp *http.Response, user *models.User, key *models.APIKey, model string, startTime time.Time, clientIP string, reqBodyLen int, cacheKey string) {
 	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		p.writeJSONError(w, http.StatusInternalServerError, "Failed to read upstream response", "gateway_error")
@@ -395,6 +470,11 @@ func (p *GatewayProxy) handleNonStreamingResponse(w http.ResponseWriter, r *http
 		// Deduct tokens
 		_ = p.repo.DeductTokens(context.Background(), user.ID, totalTokens)
 		_ = p.repo.UpdateKeyLastUsed(context.Background(), key.ID)
+
+		// Save response to Exact Match Cache
+		if cacheKey != "" && len(respBytes) > 0 {
+			p.cache.Set(cacheKey, respBytes, resp.StatusCode, resp.Header.Get("Content-Type"), totalTokens, model, 15*time.Minute)
+		}
 	}
 
 	// Copy headers

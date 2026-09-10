@@ -13,6 +13,15 @@
       <span class="pulse-dot"></span>
       <span id="liveLogCount">{{ len .Logs }}</span> Requests
     </div>
+    <div class="dropdown">
+      <button class="btn-modern-ghost text-decoration-none d-inline-flex align-items-center gap-2 dropdown-toggle" type="button" data-bs-toggle="dropdown">
+        <i class="bi bi-download"></i> Export
+      </button>
+      <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end" style="background: var(--bg-surface); border: 1px solid var(--border-subtle);">
+        <li><a class="dropdown-item small d-flex align-items-center gap-2" href="#" onclick="exportLogs('csv'); return false;"><i class="bi bi-filetype-csv text-emerald"></i> Export as CSV</a></li>
+        <li><a class="dropdown-item small d-flex align-items-center gap-2" href="#" onclick="exportLogs('json'); return false;"><i class="bi bi-filetype-json text-primary"></i> Export as JSON</a></li>
+      </ul>
+    </div>
     <button type="button" id="toggleLiveBtn" class="btn-modern-ghost text-decoration-none d-inline-flex align-items-center gap-2" data-live="false">
       <i class="bi bi-play-circle" id="liveIcon"></i> <span id="liveBtnLabel">Go Live</span>
     </button>
@@ -335,6 +344,14 @@
   document.getElementById('toggleLiveBtn')?.addEventListener('click', toggleLive);
   document.getElementById('refreshLogsBtn')?.addEventListener('click', fetchLogs);
 })();
+
+function exportLogs(format) {
+  const user = document.getElementById('filterUser')?.value || '';
+  const model = document.getElementById('filterModel')?.value || '';
+  const status = document.getElementById('filterStatus')?.value || '';
+  const url = `/api/logs/export?format=${format}&user_id=${encodeURIComponent(user)}&model=${encodeURIComponent(model)}&status=${encodeURIComponent(status)}`;
+  window.location.href = url;
+}
 </script>
 
 <style>

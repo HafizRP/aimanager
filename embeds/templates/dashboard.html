@@ -124,6 +124,45 @@
   </div>
 </div>
 
+<!-- FinOps & Cost Savings Banner -->
+<div class="card-modern p-3 p-md-4 mb-4" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(99, 102, 241, 0.05) 100%); border: 1px solid rgba(16, 185, 129, 0.2);">
+  <div class="row align-items-center g-3">
+    <div class="col-12 col-md-7">
+      <div class="d-flex align-items-center gap-3">
+        <div class="kpi-icon kpi-icon-emerald" style="width: 44px; height: 44px; font-size: 1.3rem; border-radius: 12px;">
+          <i class="bi bi-piggy-bank-fill"></i>
+        </div>
+        <div>
+          <div class="d-flex align-items-center gap-2">
+            <h6 class="fw-bold text-light mb-0">FinOps Cost Savings Tracker</h6>
+            <span class="badge-modern badge-emerald text-emerald font-monospace" style="font-size: 0.68rem;">+100% FREE TIER</span>
+          </div>
+          <p class="text-dim small mb-0 mt-0.5" style="font-size: 0.78rem;">
+            Calculated against commercial retail pricing ($5/1M tokens) plus 9router RTK -40% prompt compression savings.
+          </p>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-5">
+      <div class="d-flex align-items-center justify-content-md-end gap-3">
+        <div class="text-start text-md-end">
+          <span class="text-dim small text-uppercase tracking-wider font-monospace" style="font-size: 0.65rem;">Total Saved</span>
+          <div class="fw-bold text-emerald fs-5 font-monospace">
+            ${{ printf "%.2f" .Stats.CostSavedUSD }} <span class="text-dim small fs-6">/ Rp {{ formatNumber .Stats.CostSavedIDR }}</span>
+          </div>
+        </div>
+        <div class="vr bg-secondary opacity-25 d-none d-md-block" style="height: 35px;"></div>
+        <div class="text-start text-md-end">
+          <span class="text-dim small text-uppercase tracking-wider font-monospace" style="font-size: 0.65rem;">RTK Pruned</span>
+          <div class="fw-bold text-indigo fs-5 font-monospace">
+            ~{{ formatNumber .Stats.RTKTokensSaved }} <span class="text-dim small fs-6">Toks</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Upstream Model Quotas & Provider Health -->
 <div class="card-modern p-4 mb-4">
   <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">

@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -48,6 +50,8 @@ func (h *Handler) KeysPage(w http.ResponseWriter, r *http.Request) {
 		users = []models.User{*currentUser}
 	}
 
+	allModels, _ := h.fetchUpstreamModels(ctx)
+
 	successMsg := r.URL.Query().Get("msg")
 	errorMsg := r.URL.Query().Get("error")
 
@@ -55,6 +59,7 @@ func (h *Handler) KeysPage(w http.ResponseWriter, r *http.Request) {
 		"ActivePage": "keys",
 		"Keys":       keys,
 		"Users":      users,
+		"Models":     allModels,
 		"SuccessMsg": successMsg,
 		"ErrorMsg":   errorMsg,
 	})
@@ -73,6 +78,8 @@ func (h *Handler) CreateKey(w http.ResponseWriter, r *http.Request) {
 
 	name := strings.TrimSpace(r.FormValue("name"))
 	customKey := strings.TrimSpace(r.FormValue("custom_key"))
+	allowedModelsRaw := strings.TrimSpace(r.FormValue("allowed_models"))
+	rateLimitRPM, _ := strconv.Atoi(r.FormValue("rate_limit_rpm"))
 
 	if userID == "" {
 		http.Redirect(w, r, "/keys?error=User+must+be+selected", http.StatusSeeOther)
@@ -87,12 +94,32 @@ func (h *Handler) CreateKey(w http.ResponseWriter, r *http.Request) {
 		finalKey = GenerateSecureAPIKey("sk-gw-")
 	}
 
+	allowedModels := ""
+	if allowedModelsRaw != "" && allowedModelsRaw != "*" {
+		if strings.HasPrefix(allowedModelsRaw, "[") {
+			allowedModels = allowedModelsRaw
+		} else {
+			parts := strings.Split(allowedModelsRaw, ",")
+			var clean []string
+			for _, p := range parts {
+				p = strings.TrimSpace(p)
+				if p != "" {
+					clean = append(clean, p)
+				}
+			}
+			b, _ := json.Marshal(clean)
+			allowedModels = string(b)
+		}
+	}
+
 	apiKey := &models.APIKey{
-		ID:       uuid.New().String(),
-		UserID:   userID,
-		Key:      finalKey,
-		Name:     name,
-		IsActive: true,
+		ID:            uuid.New().String(),
+		UserID:        userID,
+		Key:           finalKey,
+		Name:          name,
+		AllowedModels: allowedModels,
+		RateLimitRPM:  rateLimitRPM,
+		IsActive:      true,
 	}
 
 	redirectURL := r.FormValue("redirect")

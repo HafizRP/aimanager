@@ -21,8 +21,10 @@
       <thead>
         <tr>
           <th>User</th>
-          <th>Key Label</th>
+          <th>Name / Label</th>
           <th>API Key Token</th>
+          <th>Model Scope</th>
+          <th>RPM</th>
           <th>Status</th>
           <th>Created</th>
           <th>Last Used</th>
@@ -49,6 +51,20 @@
                     <i class="bi bi-clipboard"></i>
                   </button>
                 </div>
+              </td>
+              <td>
+                {{ if and .AllowedModels (ne .AllowedModels "") (ne .AllowedModels "[]") }}
+                  <span class="badge-modern badge-indigo font-monospace" style="font-size: 0.68rem;" title="{{ .AllowedModels }}">Scoped</span>
+                {{ else }}
+                  <span class="badge-modern badge-gray text-dim" style="font-size: 0.68rem;">All Allowed</span>
+                {{ end }}
+              </td>
+              <td>
+                {{ if gt .RateLimitRPM 0 }}
+                  <span class="badge-modern badge-amber font-monospace" style="font-size: 0.68rem;">{{ .RateLimitRPM }}/m</span>
+                {{ else }}
+                  <span class="text-dim font-monospace small" style="font-size: 0.72rem;">&infin;</span>
+                {{ end }}
               </td>
               <td>
                 {{ if .IsActive }}
@@ -126,6 +142,15 @@
           <div class="mb-3">
             <label class="form-label small text-muted">Key Identifier / Purpose</label>
             <input type="text" name="name" class="form-control form-control-modern" placeholder="e.g. Cursor Pro, Hermes local, Cline CLI" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small text-muted">Model Scope (Optional)</label>
+            <input type="text" name="allowed_models" class="form-control form-control-modern font-monospace" placeholder="e.g. main, ag/gemini-3.8-flash-high (Leave blank for all)">
+            <div class="text-dim small mt-1">Restrict this key to specific models. Leave blank to inherit user's whitelist.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small text-muted">Rate Limit RPM (Requests / Minute)</label>
+            <input type="number" name="rate_limit_rpm" class="form-control form-control-modern font-monospace" placeholder="0 = Unlimited" value="0" min="0" max="1000">
           </div>
           <div class="mb-3">
             <label class="form-label small text-muted">Custom API Key Token (Optional)</label>

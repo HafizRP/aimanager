@@ -13,6 +13,8 @@ type User struct {
 	TokenQuota    int64      `json:"token_quota"` // 0 = unlimited
 	TokensUsed    int64      `json:"tokens_used"`
 	AllowedModels string     `json:"allowed_models"` // JSON array string e.g. ["*"] or ["ag/gemini-3.8-flash-low"]
+	RateLimitRPM  int        `json:"rate_limit_rpm"`
+	RateLimitTPM  int64      `json:"rate_limit_tpm"`
 	IsActive      bool       `json:"is_active"`
 	CreatedAt     time.Time  `json:"created_at"`
 	UpdatedAt     time.Time  `json:"updated_at"`
@@ -38,13 +40,15 @@ func (u *User) QuotaPercent() float64 {
 }
 
 type APIKey struct {
-	ID         string     `json:"id"`
-	UserID     string     `json:"user_id"`
-	Key        string     `json:"key"`
-	Name       string     `json:"name"`
-	IsActive   bool       `json:"is_active"`
-	CreatedAt  time.Time  `json:"created_at"`
-	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+	ID            string     `json:"id"`
+	UserID        string     `json:"user_id"`
+	Key           string     `json:"key"`
+	Name          string     `json:"name"`
+	AllowedModels string     `json:"allowed_models"` // Optional model scope
+	RateLimitRPM  int        `json:"rate_limit_rpm"`
+	IsActive      bool       `json:"is_active"`
+	CreatedAt     time.Time  `json:"created_at"`
+	LastUsedAt    *time.Time `json:"last_used_at,omitempty"`
 
 	// Virtual field for UI
 	UserName string `json:"user_name,omitempty"`
@@ -92,20 +96,23 @@ type TopModelStat struct {
 }
 
 type DashboardStats struct {
-	TotalRequests int64          `json:"total_requests"`
-	TotalTokens   int64          `json:"total_tokens"`
-	ActiveUsers   int64          `json:"active_users"`
-	TotalUsers    int64          `json:"total_users"`
-	ActiveKeys    int64          `json:"active_keys"`
-	Timeframe     string         `json:"timeframe"`
-	TimeframeVol  int64          `json:"timeframe_vol"`
-	TimeframeReqs int64          `json:"timeframe_reqs"`
-	PeakTokens    int64          `json:"peak_tokens"`
-	CandleSize    string         `json:"candle_size"`
-	DailyUsage    []DailyUsage   `json:"daily_usage"`
-	TopUsers      []TopUserStat  `json:"top_users"`
-	TopModels     []TopModelStat `json:"top_models"`
-	RecentLogs    []RequestLog   `json:"recent_logs"`
+	TotalRequests  int64          `json:"total_requests"`
+	TotalTokens    int64          `json:"total_tokens"`
+	CostSavedUSD   float64        `json:"cost_saved_usd"`
+	CostSavedIDR   int64          `json:"cost_saved_idr"`
+	RTKTokensSaved int64          `json:"rtk_tokens_saved"`
+	ActiveUsers    int64          `json:"active_users"`
+	TotalUsers     int64          `json:"total_users"`
+	ActiveKeys     int64          `json:"active_keys"`
+	Timeframe      string         `json:"timeframe"`
+	TimeframeVol   int64          `json:"timeframe_vol"`
+	TimeframeReqs  int64          `json:"timeframe_reqs"`
+	PeakTokens     int64          `json:"peak_tokens"`
+	CandleSize     string         `json:"candle_size"`
+	DailyUsage     []DailyUsage   `json:"daily_usage"`
+	TopUsers       []TopUserStat  `json:"top_users"`
+	TopModels      []TopModelStat `json:"top_models"`
+	RecentLogs     []RequestLog   `json:"recent_logs"`
 }
 
 type CursorPageInfo struct {
