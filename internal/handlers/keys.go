@@ -2,16 +2,51 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	"9router-gateway/internal/models"
 )
+
+// parseExpiryInput parses a datetime-local / RFC3339 value into a time.Time.
+// It assumes the browser submits a local datetime in WIB (Asia/Jakarta).
+func parseExpiryInput(raw string) (time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}, nil
+	}
+
+	layouts := []string{
+		"2006-01-02T15:04",
+		time.RFC3339,
+		"2006-01-02 15:04",
+		"2006-01-02",
+	}
+
+	loc, err := time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+		loc = time.FixedZone("WIB", 7*3600)
+	}
+
+	var parsed time.Time
+	for _, l := range layouts {
+		if t, err := time.ParseInLocation(l, raw, loc); err == nil {
+			parsed = t
+			break
+		}
+	}
+	if parsed.IsZero() {
+		return time.Time{}, fmt.Errorf("unrecognized datetime format: %s", raw)
+	}
+	return parsed, nil
+}
 
 func (h *Handler) KeysPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
@@ -83,6 +118,17 @@ func (h *Handler) CreateKey(w http.ResponseWriter, r *http.Request) {
 
 	redirectURL := safeRedirectURL(r.FormValue("redirect"), "/keys")
 
+	// Optional expiry datetime (RFC3339 or "YYYY-MM-DDTHH:MM")
+	var expiresAt *time.Time
+	if rawExp := strings.TrimSpace(r.FormValue("expires_at")); rawExp != "" {
+		parsed, err := parseExpiryInput(rawExp)
+		if err != nil {
+			http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape("Invalid expires_at: "+err.Error()), http.StatusSeeOther)
+			return
+		}
+		expiresAt = &parsed
+	}
+
 	if userID == "" {
 		http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape("User must be selected"), http.StatusSeeOther)
 		return
@@ -137,6 +183,7 @@ func (h *Handler) CreateKey(w http.ResponseWriter, r *http.Request) {
 		AllowedModels: allowedModels,
 		RateLimitRPM:  rateLimitRPM,
 		IsActive:      true,
+		ExpiresAt:     expiresAt,
 	}
 
 	if err := h.repo.CreateAPIKey(ctx, apiKey); err != nil {

@@ -50,6 +50,7 @@ type Handler struct {
 	syncer       *syncer.Syncer
 	quotaManager *upstream.QuotaManager
 	coreClient   *upstream.CoreClient
+	cache        *proxy.ResponseCache
 	templates    map[string]*template.Template
 	httpClient   *http.Client
 }
@@ -61,6 +62,7 @@ func NewHandler(cfg *config.Config, repo repository.Repository, sync *syncer.Syn
 		syncer:       sync,
 		quotaManager: quotaMgr,
 		coreClient:   upstream.NewCoreClient(cfg),
+		cache:        proxy.NewResponseCache(),
 		templates:    make(map[string]*template.Template),
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
@@ -195,7 +197,7 @@ func NewHandler(cfg *config.Config, repo repository.Repository, sync *syncer.Syn
 	pages := []string{
 		"dashboard.html", "users.html", "user_detail.html", "keys.html", "logs.html", "models.html",
 		"settings.html", "billing.html", "providers.html", "combos.html", "token_saver.html",
-		"chat.html", "cli_tools.html", "proxy_pools.html", "benchmark.html",
+		"chat.html", "cli_tools.html", "proxy_pools.html", "benchmark.html", "cache_analytics.html",
 	}
 	for _, page := range pages {
 		tmpl, err := template.New("").Funcs(funcMap).ParseFS(web.FS, "templates/base.html", "templates/"+page)

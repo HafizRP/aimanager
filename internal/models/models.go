@@ -59,9 +59,17 @@ type APIKey struct {
 	IsActive      bool       `json:"is_active"`
 	CreatedAt     time.Time  `json:"created_at"`
 	LastUsedAt    *time.Time `json:"last_used_at,omitempty"`
+	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
 
 	// Virtual field for UI
 	UserName string `json:"user_name,omitempty"`
+}
+
+func (k *APIKey) IsExpired() bool {
+	if k == nil || k.ExpiresAt == nil {
+		return false
+	}
+	return !k.ExpiresAt.IsZero() && time.Now().After(*k.ExpiresAt)
 }
 
 func (k *APIKey) GetAllowedModels() []string {

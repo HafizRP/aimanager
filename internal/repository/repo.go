@@ -258,15 +258,16 @@ func (r *SQLiteRepo) DeductTokens(ctx context.Context, userID string, tokens int
 // API Key methods
 
 func (r *SQLiteRepo) GetAPIKeyByKey(ctx context.Context, key string) (*models.APIKey, error) {
-	query := `SELECT k.id, k.user_id, k.key, k.name, COALESCE(k.allowed_models, ''), COALESCE(k.rate_limit_rpm, 0), k.is_active, k.created_at, k.last_used_at, u.name 
+	query := `SELECT k.id, k.user_id, k.key, k.name, COALESCE(k.allowed_models, ''), COALESCE(k.rate_limit_rpm, 0), k.is_active, k.created_at, k.last_used_at, k.expires_at, u.name 
 	          FROM api_keys k 
 	          JOIN users u ON k.user_id = u.id 
 	          WHERE k.key = ?`
 	var k models.APIKey
 	var createdAt string
 	var lastUsed sql.NullString
+	var expiresAt sql.NullString
 	err := r.db.QueryRowContext(ctx, query, key).Scan(
-		&k.ID, &k.UserID, &k.Key, &k.Name, &k.AllowedModels, &k.RateLimitRPM, &k.IsActive, &createdAt, &lastUsed, &k.UserName,
+		&k.ID, &k.UserID, &k.Key, &k.Name, &k.AllowedModels, &k.RateLimitRPM, &k.IsActive, &createdAt, &lastUsed, &expiresAt, &k.UserName,
 	)
 	if err != nil {
 		return nil, err
@@ -278,11 +279,17 @@ func (r *SQLiteRepo) GetAPIKeyByKey(ctx context.Context, key string) (*models.AP
 			k.LastUsedAt = &t
 		}
 	}
+	if expiresAt.Valid {
+		t := parseTimeFlexible(expiresAt.String)
+		if !t.IsZero() {
+			k.ExpiresAt = &t
+		}
+	}
 	return &k, nil
 }
 
 func (r *SQLiteRepo) GetAPIKeysByUserID(ctx context.Context, userID string) ([]models.APIKey, error) {
-	query := `SELECT id, user_id, key, name, COALESCE(allowed_models, ''), COALESCE(rate_limit_rpm, 0), is_active, created_at, last_used_at 
+	query := `SELECT id, user_id, key, name, COALESCE(allowed_models, ''), COALESCE(rate_limit_rpm, 0), is_active, created_at, last_used_at, expires_at 
 	          FROM api_keys WHERE user_id = ? ORDER BY created_at DESC`
 	rows, err := r.db.QueryContext(ctx, query, userID)
 	if err != nil {
@@ -295,7 +302,8 @@ func (r *SQLiteRepo) GetAPIKeysByUserID(ctx context.Context, userID string) ([]m
 		var k models.APIKey
 		var createdAt string
 		var lastUsed sql.NullString
-		if err := rows.Scan(&k.ID, &k.UserID, &k.Key, &k.Name, &k.AllowedModels, &k.RateLimitRPM, &k.IsActive, &createdAt, &lastUsed); err != nil {
+		var expiresAt sql.NullString
+		if err := rows.Scan(&k.ID, &k.UserID, &k.Key, &k.Name, &k.AllowedModels, &k.RateLimitRPM, &k.IsActive, &createdAt, &lastUsed, &expiresAt); err != nil {
 			return nil, err
 		}
 		k.CreatedAt = parseTimeFlexible(createdAt)
@@ -305,13 +313,19 @@ func (r *SQLiteRepo) GetAPIKeysByUserID(ctx context.Context, userID string) ([]m
 				k.LastUsedAt = &t
 			}
 		}
+		if expiresAt.Valid {
+			t := parseTimeFlexible(expiresAt.String)
+			if !t.IsZero() {
+				k.ExpiresAt = &t
+			}
+		}
 		keys = append(keys, k)
 	}
 	return keys, nil
 }
 
 func (r *SQLiteRepo) GetAllAPIKeys(ctx context.Context) ([]models.APIKey, error) {
-	query := `SELECT k.id, k.user_id, k.key, k.name, COALESCE(k.allowed_models, ''), COALESCE(k.rate_limit_rpm, 0), k.is_active, k.created_at, k.last_used_at, u.name 
+	query := `SELECT k.id, k.user_id, k.key, k.name, COALESCE(k.allowed_models, ''), COALESCE(k.rate_limit_rpm, 0), k.is_active, k.created_at, k.last_used_at, k.expires_at, u.name 
 	          FROM api_keys k 
 	          JOIN users u ON k.user_id = u.id 
 	          ORDER BY k.created_at DESC`
@@ -326,7 +340,8 @@ func (r *SQLiteRepo) GetAllAPIKeys(ctx context.Context) ([]models.APIKey, error)
 		var k models.APIKey
 		var createdAt string
 		var lastUsed sql.NullString
-		if err := rows.Scan(&k.ID, &k.UserID, &k.Key, &k.Name, &k.AllowedModels, &k.RateLimitRPM, &k.IsActive, &createdAt, &lastUsed, &k.UserName); err != nil {
+		var expiresAt sql.NullString
+		if err := rows.Scan(&k.ID, &k.UserID, &k.Key, &k.Name, &k.AllowedModels, &k.RateLimitRPM, &k.IsActive, &createdAt, &lastUsed, &expiresAt, &k.UserName); err != nil {
 			return nil, err
 		}
 		k.CreatedAt = parseTimeFlexible(createdAt)
@@ -336,16 +351,29 @@ func (r *SQLiteRepo) GetAllAPIKeys(ctx context.Context) ([]models.APIKey, error)
 				k.LastUsedAt = &t
 			}
 		}
+		if expiresAt.Valid {
+			t := parseTimeFlexible(expiresAt.String)
+			if !t.IsZero() {
+				k.ExpiresAt = &t
+			}
+		}
 		keys = append(keys, k)
 	}
 	return keys, nil
 }
 
 func (r *SQLiteRepo) CreateAPIKey(ctx context.Context, k *models.APIKey) error {
-	query := `INSERT INTO api_keys (id, user_id, key, name, allowed_models, rate_limit_rpm, is_active, created_at) 
-	          VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`
-	_, err := r.db.ExecContext(ctx, query, k.ID, k.UserID, k.Key, k.Name, k.AllowedModels, k.RateLimitRPM, k.IsActive)
+	query := `INSERT INTO api_keys (id, user_id, key, name, allowed_models, rate_limit_rpm, is_active, expires_at, created_at) 
+	          VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+	_, err := r.db.ExecContext(ctx, query, k.ID, k.UserID, k.Key, k.Name, k.AllowedModels, k.RateLimitRPM, k.IsActive, formatNullableTime(k.ExpiresAt))
 	return err
+}
+
+func formatNullableTime(t *time.Time) interface{} {
+	if t == nil || t.IsZero() {
+		return nil
+	}
+	return t.UTC().Format("2006-01-02 15:04:05")
 }
 
 func (r *SQLiteRepo) ToggleAPIKeyStatus(ctx context.Context, id string, isActive bool) error {
