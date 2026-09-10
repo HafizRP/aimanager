@@ -11,7 +11,7 @@ services:
       - DATA_DIR=/app/data
       - PORT=20128
       - HOSTNAME=0.0.0.0
-      - INITIAL_PASSWORD=Kepoloe#123
+      - INITIAL_PASSWORD=${INITIAL_PASSWORD:-admin123}
       - NEXT_TELEMETRY_DISABLED=1
     volumes:
       - ./data/core:/app/data
