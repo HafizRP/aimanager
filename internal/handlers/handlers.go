@@ -16,7 +16,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
 	"9router-gateway/embeds"
@@ -110,6 +109,19 @@ func NewHandler(cfg *config.Config, repo repository.Repository, sync *syncer.Syn
 		},
 		"toInt64": func(v int) int64 {
 			return int64(v)
+		},
+		"calcPct": func(val, max int64) int {
+			if max <= 0 {
+				return 0
+			}
+			p := int(float64(val) / float64(max) * 100.0)
+			if p > 100 {
+				return 100
+			}
+			if p < 0 {
+				return 0
+			}
+			return p
 		},
 		"containsWildcard": func(raw string) bool {
 			return strings.Contains(raw, "*")
@@ -211,23 +223,39 @@ func (h *Handler) render(w http.ResponseWriter, r *http.Request, tmplName, layou
 
 // Session Auth Helper
 
-const sessionCookieName = "gw_admin_session"
+const sessionCookieName = "gw_session"
 
-func (h *Handler) setSessionCookie(w http.ResponseWriter, user *models.User) {
-	payload := fmt.Sprintf("%s:%s:%s", user.ID, user.Username, user.Role)
-	sig := h.signSession(payload)
-	cookieVal := payload + ":" + sig
+func (h *Handler) setSessionCookie(w http.ResponseWriter, r *http.Request, user *models.User) {
+	tokenBytes := make([]byte, 32)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		slog.Error("Failed to generate session token", "err", err)
+		return
+	}
+	token := hex.EncodeToString(tokenBytes)
+
+	expiresAt := time.Now().Add(7 * 24 * time.Hour)
+	ctx := r.Context()
+	if err := h.repo.CreateSession(ctx, token, user.ID, expiresAt); err != nil {
+		slog.Error("Failed to store session in database", "err", err)
+		return
+	}
+
+	isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
-		Value:    cookieVal,
+		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   isSecure,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   86400 * 7, // 7 days
 	})
 }
 
-func (h *Handler) clearSessionCookie(w http.ResponseWriter) {
+func (h *Handler) clearSessionCookie(w http.ResponseWriter, r *http.Request) {
+	if cookie, err := r.Cookie(sessionCookieName); err == nil && cookie.Value != "" {
+		_ = h.repo.DeleteSession(r.Context(), cookie.Value)
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    "",
@@ -243,50 +271,13 @@ func (h *Handler) getSessionUser(r *http.Request) *models.User {
 	if err != nil || cookie.Value == "" {
 		return nil
 	}
-	parts := strings.Split(cookie.Value, ":")
-	if len(parts) < 2 {
+
+	user, err := h.repo.GetSessionUser(r.Context(), cookie.Value)
+	if err != nil || user == nil || !user.IsActive {
 		return nil
 	}
 
-	// Handle 4-part cookie (userID:username:role:signature)
-	if len(parts) == 4 {
-		userID := parts[0]
-		payload := fmt.Sprintf("%s:%s:%s", parts[0], parts[1], parts[2])
-		expectedSig := h.signSession(payload)
-		if !hmac.Equal([]byte(parts[3]), []byte(expectedSig)) {
-			return nil
-		}
-		u, err := h.repo.GetUserByID(r.Context(), userID)
-		if err == nil && u != nil && u.IsActive {
-			return u
-		}
-		return nil
-	}
-
-	// Legacy 2-part cookie (username:signature)
-	if len(parts) == 2 {
-		username := parts[0]
-		expectedSig := h.signSession(username)
-		if !hmac.Equal([]byte(parts[1]), []byte(expectedSig)) {
-			return nil
-		}
-		u, err := h.repo.GetUserByUsername(r.Context(), username)
-		if err == nil && u != nil && u.IsActive {
-			return u
-		}
-		// Fallback admin
-		if username == "admin" || username == h.cfg.AdminUsername {
-			return &models.User{
-				ID:       "admin",
-				Username: "admin",
-				Name:     "Administrator",
-				Role:     "admin",
-				IsActive: true,
-			}
-		}
-	}
-
-	return nil
+	return user
 }
 
 func (h *Handler) signSession(data string) string {
@@ -338,65 +329,57 @@ func (h *Handler) LoginPost(w http.ResponseWriter, r *http.Request) {
 	username := strings.TrimSpace(r.FormValue("username"))
 	password := strings.TrimSpace(r.FormValue("password"))
 
+	clientIP := r.RemoteAddr
+	if cfIP := r.Header.Get("CF-Connecting-IP"); cfIP != "" {
+		clientIP = cfIP
+	} else if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		clientIP = strings.Split(xff, ",")[0]
+	}
+	clientIP = strings.TrimSpace(strings.Split(clientIP, ":")[0])
+
+	ctx := r.Context()
+
+	// Rate limiting: max 5 failed attempts in 15 minutes
+	recentFails, _ := h.repo.GetRecentLoginAttempts(ctx, clientIP, 15)
+	if recentFails >= 5 {
+		http.Redirect(w, r, "/login?error=Too+many+failed+login+attempts.+Please+wait+15+minutes.", http.StatusSeeOther)
+		return
+	}
+
 	if username == "" || password == "" {
 		http.Redirect(w, r, "/login?error=Username+and+password+are+required", http.StatusSeeOther)
 		return
 	}
 
-	ctx := r.Context()
-
-	// 1. Check user in database
+	// 1. Authenticate strictly via database user and bcrypt hash
 	user, err := h.repo.GetUserByUsername(ctx, username)
-	if err == nil && user != nil {
-		if !user.IsActive {
-			http.Redirect(w, r, "/login?error=Account+is+suspended.+Please+contact+administrator.", http.StatusSeeOther)
-			return
-		}
-
-		valid := CheckPasswordHash(password, user.PasswordHash)
-		// Auto-migrate blank password for existing users with standard initial password
-		if !valid && user.PasswordHash == "" && (password == h.cfg.AdminPassword || password == "password123" || password == user.Username) {
-			valid = true
-			newHash, _ := HashPassword(password)
-			_ = h.repo.UpdateUserPassword(ctx, user.ID, newHash)
-		}
-
-		if valid {
-			_ = h.repo.UpdateUserLastLogin(ctx, user.ID)
-			h.setSessionCookie(w, user)
-			http.Redirect(w, r, "/", http.StatusSeeOther)
-			return
-		}
-	}
-
-	// 2. Check bootstrap admin fallback
-	if (username == h.cfg.AdminUsername || username == "admin") && password == h.cfg.AdminPassword {
-		adminUser, _ := h.repo.GetUserByUsername(ctx, "admin")
-		if adminUser == nil {
-			hash, _ := HashPassword(h.cfg.AdminPassword)
-			adminUser = &models.User{
-				ID:            uuid.New().String(),
-				Username:      "admin",
-				Name:          "System Administrator",
-				PasswordHash:  hash,
-				Role:          "admin",
-				TokenQuota:    0,
-				AllowedModels: `["*"]`,
-				IsActive:      true,
-			}
-			_ = h.repo.CreateUser(ctx, adminUser)
-		}
-		_ = h.repo.UpdateUserLastLogin(ctx, adminUser.ID)
-		h.setSessionCookie(w, adminUser)
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+	if err != nil || user == nil {
+		_ = h.repo.RecordLoginAttempt(ctx, clientIP)
+		http.Redirect(w, r, "/login?error=Invalid+username+or+password", http.StatusSeeOther)
 		return
 	}
 
-	http.Redirect(w, r, "/login?error=Invalid+username+or+password", http.StatusSeeOther)
+	if !user.IsActive {
+		http.Redirect(w, r, "/login?error=Account+is+suspended.+Please+contact+administrator.", http.StatusSeeOther)
+		return
+	}
+
+	valid := CheckPasswordHash(password, user.PasswordHash)
+	if !valid {
+		_ = h.repo.RecordLoginAttempt(ctx, clientIP)
+		http.Redirect(w, r, "/login?error=Invalid+username+or+password", http.StatusSeeOther)
+		return
+	}
+
+	// Clear failed login attempts and create session
+	_ = h.repo.ClearLoginAttempts(ctx, clientIP)
+	_ = h.repo.UpdateUserLastLogin(ctx, user.ID)
+	h.setSessionCookie(w, r, user)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func (h *Handler) LogoutPost(w http.ResponseWriter, r *http.Request) {
-	h.clearSessionCookie(w)
+	h.clearSessionCookie(w, r)
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 }
 

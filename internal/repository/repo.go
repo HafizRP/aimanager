@@ -39,8 +39,8 @@ type Repository interface {
 	GetRequestLogsCursor(ctx context.Context, limit int, cursor, direction, userID, modelFilter string, statusFilter int) ([]models.RequestLog, *models.CursorPageInfo, error)
 
 	// Stats
-	GetDashboardStats(ctx context.Context) (*models.DashboardStats, error)
-	GetUserDashboardStats(ctx context.Context, userID string) (*models.DashboardStats, error)
+	GetDashboardStats(ctx context.Context, days int) (*models.DashboardStats, error)
+	GetUserDashboardStats(ctx context.Context, userID string, days int) (*models.DashboardStats, error)
 
 	// Billing & Midtrans Transactions
 	GetActivePackages(ctx context.Context) ([]models.TokenPackage, error)
@@ -55,6 +55,17 @@ type Repository interface {
 	// Settings
 	SaveSetting(ctx context.Context, key, value string) error
 	GetSetting(ctx context.Context, key string) (string, error)
+
+	// Server-Side Sessions
+	CreateSession(ctx context.Context, token, userID string, expiresAt time.Time) error
+	GetSessionUser(ctx context.Context, token string) (*models.User, error)
+	DeleteSession(ctx context.Context, token string) error
+	CleanExpiredSessions(ctx context.Context) error
+
+	// Login Rate Limiting
+	RecordLoginAttempt(ctx context.Context, ip string) error
+	GetRecentLoginAttempts(ctx context.Context, ip string, windowMinutes int) (int, error)
+	ClearLoginAttempts(ctx context.Context, ip string) error
 }
 
 type SQLiteRepo struct {
@@ -564,7 +575,12 @@ func (r *SQLiteRepo) GetRequestLogsCursor(ctx context.Context, limit int, cursor
 
 // Dashboard statistics
 
-func (r *SQLiteRepo) GetDashboardStats(ctx context.Context) (*models.DashboardStats, error) {
+func (r *SQLiteRepo) GetDashboardStats(ctx context.Context, days int) (*models.DashboardStats, error) {
+	if days <= 0 {
+		days = 14
+	}
+	daysModifier := fmt.Sprintf("-%d days", days)
+
 	stats := &models.DashboardStats{}
 
 	// Totals
@@ -573,16 +589,16 @@ func (r *SQLiteRepo) GetDashboardStats(ctx context.Context) (*models.DashboardSt
 	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM users WHERE is_active = 1").Scan(&stats.ActiveUsers)
 	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM api_keys WHERE is_active = 1").Scan(&stats.ActiveKeys)
 
-	// Daily Usage (last 14 days)
+	// Daily Usage (configurable days)
 	dailyQuery := `
 		SELECT strftime('%Y-%m-%d', created_at) as log_date, 
 		       COALESCE(SUM(total_tokens), 0) as tokens, 
 		       COUNT(*) as reqs
 		FROM request_logs
-		WHERE created_at >= datetime('now', '-14 days')
+		WHERE created_at >= datetime('now', ?)
 		GROUP BY log_date
 		ORDER BY log_date ASC`
-	dailyRows, err := r.db.QueryContext(ctx, dailyQuery)
+	dailyRows, err := r.db.QueryContext(ctx, dailyQuery, daysModifier)
 	if err == nil {
 		defer dailyRows.Close()
 		for dailyRows.Next() {
@@ -593,14 +609,14 @@ func (r *SQLiteRepo) GetDashboardStats(ctx context.Context) (*models.DashboardSt
 		}
 	}
 
-	// Top Users
+	// Top Users ordered by tokens_used DESC (per user request)
 	topUsersQuery := `
-		SELECT u.id, u.name, COALESCE(SUM(l.total_tokens), 0) as total_tok, COUNT(l.id) as req_count
+		SELECT u.id, u.name, COALESCE(u.tokens_used, 0) as total_tok, COUNT(l.id) as req_count
 		FROM users u
 		LEFT JOIN request_logs l ON u.id = l.user_id
-		GROUP BY u.id, u.name
+		GROUP BY u.id, u.name, u.tokens_used
 		ORDER BY total_tok DESC
-		LIMIT 5`
+		LIMIT 10`
 	tuRows, err := r.db.QueryContext(ctx, topUsersQuery)
 	if err == nil {
 		defer tuRows.Close()
@@ -638,23 +654,28 @@ func (r *SQLiteRepo) GetDashboardStats(ctx context.Context) (*models.DashboardSt
 	return stats, nil
 }
 
-func (r *SQLiteRepo) GetUserDashboardStats(ctx context.Context, userID string) (*models.DashboardStats, error) {
+func (r *SQLiteRepo) GetUserDashboardStats(ctx context.Context, userID string, days int) (*models.DashboardStats, error) {
+	if days <= 0 {
+		days = 14
+	}
+	daysModifier := fmt.Sprintf("-%d days", days)
+
 	stats := &models.DashboardStats{}
 
 	// User-specific Totals
 	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*), COALESCE(SUM(total_tokens), 0) FROM request_logs WHERE user_id = ?", userID).Scan(&stats.TotalRequests, &stats.TotalTokens)
 	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM api_keys WHERE user_id = ? AND is_active = 1", userID).Scan(&stats.ActiveKeys)
 
-	// User Daily Usage (last 14 days)
+	// User Daily Usage (configurable days)
 	dailyQuery := `
 		SELECT strftime('%Y-%m-%d', created_at) as log_date, 
 		       COALESCE(SUM(total_tokens), 0) as tokens, 
 		       COUNT(*) as reqs
 		FROM request_logs
-		WHERE user_id = ? AND created_at >= datetime('now', '-14 days')
+		WHERE user_id = ? AND created_at >= datetime('now', ?)
 		GROUP BY log_date
 		ORDER BY log_date ASC`
-	dailyRows, err := r.db.QueryContext(ctx, dailyQuery, userID)
+	dailyRows, err := r.db.QueryContext(ctx, dailyQuery, userID, daysModifier)
 	if err == nil {
 		defer dailyRows.Close()
 		for dailyRows.Next() {
@@ -891,4 +912,69 @@ func (r *SQLiteRepo) GetSetting(ctx context.Context, key string) (string, error)
 	var val string
 	err := r.db.QueryRowContext(ctx, "SELECT value FROM settings WHERE key = ?", key).Scan(&val)
 	return val, err
+}
+
+// Server-Side Sessions Implementation
+
+func (r *SQLiteRepo) CreateSession(ctx context.Context, token, userID string, expiresAt time.Time) error {
+	query := `INSERT INTO sessions (token, user_id, created_at, expires_at) VALUES (?, ?, datetime('now'), ?)`
+	_, err := r.db.ExecContext(ctx, query, token, userID, expiresAt.UTC().Format("2006-01-02 15:04:05"))
+	return err
+}
+
+func (r *SQLiteRepo) GetSessionUser(ctx context.Context, token string) (*models.User, error) {
+	query := `
+		SELECT u.id, u.name, COALESCE(u.username, ''), COALESCE(u.password_hash, ''), 
+		       u.role, u.token_quota, u.tokens_used, u.allowed_models, u.is_active, 
+		       u.created_at, u.updated_at
+		FROM sessions s
+		JOIN users u ON s.user_id = u.id
+		WHERE s.token = ? AND s.expires_at > datetime('now') AND u.is_active = 1`
+
+	var u models.User
+	var createdAt, updatedAt string
+	var isActive int
+	err := r.db.QueryRowContext(ctx, query, token).Scan(
+		&u.ID, &u.Name, &u.Username, &u.PasswordHash,
+		&u.Role, &u.TokenQuota, &u.TokensUsed, &u.AllowedModels, &isActive,
+		&createdAt, &updatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	u.IsActive = (isActive == 1)
+	u.CreatedAt = parseTimeFlexible(createdAt)
+	u.UpdatedAt = parseTimeFlexible(updatedAt)
+	return &u, nil
+}
+
+func (r *SQLiteRepo) DeleteSession(ctx context.Context, token string) error {
+	_, err := r.db.ExecContext(ctx, "DELETE FROM sessions WHERE token = ?", token)
+	return err
+}
+
+func (r *SQLiteRepo) CleanExpiredSessions(ctx context.Context) error {
+	_, err := r.db.ExecContext(ctx, "DELETE FROM sessions WHERE expires_at <= datetime('now')")
+	return err
+}
+
+// Login Rate Limiting Implementation
+
+func (r *SQLiteRepo) RecordLoginAttempt(ctx context.Context, ip string) error {
+	query := `INSERT INTO login_attempts (ip, attempt_time) VALUES (?, datetime('now'))`
+	_, err := r.db.ExecContext(ctx, query, ip)
+	return err
+}
+
+func (r *SQLiteRepo) GetRecentLoginAttempts(ctx context.Context, ip string, windowMinutes int) (int, error) {
+	modifier := fmt.Sprintf("-%d minutes", windowMinutes)
+	query := `SELECT COUNT(*) FROM login_attempts WHERE ip = ? AND attempt_time >= datetime('now', ?)`
+	var count int
+	err := r.db.QueryRowContext(ctx, query, ip, modifier).Scan(&count)
+	return count, err
+}
+
+func (r *SQLiteRepo) ClearLoginAttempts(ctx context.Context, ip string) error {
+	_, err := r.db.ExecContext(ctx, "DELETE FROM login_attempts WHERE ip = ?", ip)
+	return err
 }

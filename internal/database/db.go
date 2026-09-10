@@ -121,6 +121,21 @@ func migrate(db *sql.DB) error {
 	CREATE INDEX IF NOT EXISTS idx_tx_user_id ON transactions(user_id);
 	CREATE INDEX IF NOT EXISTS idx_tx_status ON transactions(status);
 	CREATE INDEX IF NOT EXISTS idx_tx_created_at ON transactions(created_at);
+
+	CREATE TABLE IF NOT EXISTS sessions (
+		token TEXT PRIMARY KEY,
+		user_id TEXT NOT NULL,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		expires_at DATETIME NOT NULL,
+		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+	);
+	CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+
+	CREATE TABLE IF NOT EXISTS login_attempts (
+		ip TEXT NOT NULL,
+		attempt_time DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+	CREATE INDEX IF NOT EXISTS idx_login_attempts_ip_time ON login_attempts(ip, attempt_time);
 	`
 
 	if _, err := db.Exec(schema); err != nil {

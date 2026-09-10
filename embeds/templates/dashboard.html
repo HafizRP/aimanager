@@ -129,16 +129,24 @@
   <!-- Chart: Daily Token Usage -->
   <div class="col-lg-8">
     <div class="card-modern p-4 h-100">
-      <div class="d-flex align-items-center justify-content-between mb-3">
+      <div class="d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-2 mb-3">
         <div>
           <h6 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
             <i class="bi bi-graph-up text-primary"></i> Token Usage Trends
           </h6>
-          <p class="text-dim small mb-0">Daily aggregated token consumption over the last 14 days</p>
+          <p class="text-dim small mb-0">Daily aggregated token consumption (<span id="timeframeDisplayLabel">last {{ if .Timeframe }}{{ .Timeframe }}{{ else }}14{{ end }} days</span>)</p>
         </div>
-        <span class="badge-modern badge-gray">
-          <span class="pulse-dot"></span> Live Sync
-        </span>
+        <div class="d-flex align-items-center gap-2">
+          <div class="btn-group btn-group-sm" role="group" id="timeframeButtonGroup">
+            <button type="button" class="btn btn-modern-ghost py-1 px-2 tf-btn {{ if eq .Timeframe 7 }}active border-primary{{ end }}" data-days="7">7D</button>
+            <button type="button" class="btn btn-modern-ghost py-1 px-2 tf-btn {{ if or (eq .Timeframe 14) (not .Timeframe) }}active border-primary{{ end }}" data-days="14">14D</button>
+            <button type="button" class="btn btn-modern-ghost py-1 px-2 tf-btn {{ if eq .Timeframe 30 }}active border-primary{{ end }}" data-days="30">30D</button>
+            <button type="button" class="btn btn-modern-ghost py-1 px-2 tf-btn {{ if eq .Timeframe 90 }}active border-primary{{ end }}" data-days="90">90D</button>
+          </div>
+          <span class="badge-modern badge-gray d-none d-md-inline-flex">
+            <span class="pulse-dot"></span> Live
+          </span>
+        </div>
       </div>
       <div style="height: 270px; position: relative;">
         <canvas id="usageChart"></canvas>
@@ -196,17 +204,20 @@
 
         {{ if .Stats.TopUsers }}
           <div class="d-flex flex-column gap-3">
-            {{ range .Stats.TopUsers }}
+            {{ range $idx, $u := .Stats.TopUsers }}
               <div>
                 <div class="d-flex justify-content-between align-items-center small mb-1">
-                  <span class="fw-medium text-light">{{ .UserName }}</span>
-                  <span class="text-dim font-monospace">{{ formatNumber .TokensUsed }} tok</span>
+                  <div class="d-flex align-items-center gap-2">
+                    <span class="badge-modern {{ if eq $idx 0 }}badge-amber{{ else if eq $idx 1 }}badge-indigo{{ else }}badge-gray{{ end }}" style="font-size: 0.65rem; padding: 0.1rem 0.35rem;">#{{ add $idx 1 }}</span>
+                    <span class="fw-medium text-light">{{ $u.UserName }}</span>
+                  </div>
+                  <span class="text-light fw-bold font-monospace">{{ formatNumber $u.TokensUsed }} tok</span>
                 </div>
                 <div class="progress-modern">
-                  <div class="progress-bar" role="progressbar" style="width: 100%;"></div>
+                  <div class="progress-bar" role="progressbar" style="width: {{ calcPct $u.TokensUsed (index $.Stats.TopUsers 0).TokensUsed }}%;"></div>
                 </div>
                 <div class="text-dim small mt-1 text-end" style="font-size: 0.72rem;">
-                  {{ .Requests }} requests logged
+                  {{ $u.Requests }} requests logged
                 </div>
               </div>
             {{ end }}
@@ -348,7 +359,7 @@
     gradient.addColorStop(0, 'rgba(99, 102, 241, 0.35)');
     gradient.addColorStop(1, 'rgba(99, 102, 241, 0.00)');
 
-    new Chart(ctx, {
+    const chartInstance = new Chart(ctx, {
       type: 'line',
       data: {
         labels: dailyLabels.length ? dailyLabels : ['Today'],
@@ -408,6 +419,34 @@
           }
         }
       }
+    });
+
+    // Timeframe Switcher
+    const tfButtons = document.querySelectorAll('#timeframeButtonGroup .tf-btn');
+    const tfLabel = document.getElementById('timeframeDisplayLabel');
+
+    tfButtons.forEach(btn => {
+      btn.addEventListener('click', function() {
+        const days = this.getAttribute('data-days');
+        tfButtons.forEach(b => b.classList.remove('active', 'border-primary'));
+        this.classList.add('active', 'border-primary');
+        if (tfLabel) {
+          tfLabel.textContent = `last ${days} days`;
+        }
+
+        fetch(`/api/stats?timeframe=${days}d`)
+          .then(res => res.json())
+          .then(data => {
+            if (data && data.daily_usage) {
+              const newLabels = data.daily_usage.map(d => d.date);
+              const newData = data.daily_usage.map(d => d.total_tokens);
+              chartInstance.data.labels = newLabels.length ? newLabels : ['Today'];
+              chartInstance.data.datasets[0].data = newData.length ? newData : [0];
+              chartInstance.update();
+            }
+          })
+          .catch(err => console.error("Error fetching stats:", err));
+      });
     });
   }
 </script>

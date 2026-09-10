@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -114,9 +116,15 @@ func main() {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.GetHead)
 
-	// Automatic HTTPS redirect & HSTS for public domains behind reverse proxy/Cloudflare
+	// Security Headers Middleware
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+			w.Header().Set("X-Frame-Options", "DENY")
+			w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+			w.Header().Set("Permissions-Policy", "geolocation=(), camera=(), microphone=()")
+			w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://app.midtrans.com https://app.sandbox.midtrans.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: https:; connect-src 'self' https://app.midtrans.com https://app.sandbox.midtrans.com; frame-src https://app.midtrans.com https://app.sandbox.midtrans.com;")
+
 			proto := r.Header.Get("X-Forwarded-Proto")
 			host := r.Host
 			isLocal := strings.HasPrefix(host, "localhost") ||
@@ -133,8 +141,8 @@ func main() {
 			}
 
 			// Enforce HSTS for HTTPS connections
-			if proto == "https" {
-				w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+			if proto == "https" || r.TLS != nil {
+				w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
 			}
 
 			next.ServeHTTP(w, r)
@@ -337,15 +345,23 @@ func reconcileExistingUsers(repo repository.Repository, cfg *config.Config) {
 			updated = true
 		}
 		if u.PasswordHash == "" {
-			pass := "password123"
-			if u.Username == "admin" || u.Role == "admin" {
-				pass = cfg.AdminPassword
-			}
+			passBytes := make([]byte, 12)
+			_, _ = rand.Read(passBytes)
+			pass := hex.EncodeToString(passBytes)
 			hash, err := handlers.HashPassword(pass)
 			if err == nil {
 				u.PasswordHash = hash
 				_ = repo.UpdateUserPassword(ctx, u.ID, hash)
 			}
+		}
+		// Security hardening: Force replacement of default admin:admin or weak passwords
+		if u.Username == "admin" && (handlers.CheckPasswordHash("admin", u.PasswordHash) || handlers.CheckPasswordHash("admin123", u.PasswordHash)) {
+			adminPassBytes := make([]byte, 16)
+			_, _ = rand.Read(adminPassBytes)
+			newAdminPass := hex.EncodeToString(adminPassBytes)
+			newHash, _ := handlers.HashPassword(newAdminPass)
+			_ = repo.UpdateUserPassword(ctx, u.ID, newHash)
+			slog.Warn("SECURITY HARDENING: Default admin password was rotated to secure random key", "username", "admin", "new_secure_password", newAdminPass)
 		}
 		if updated {
 			_ = repo.UpdateUser(ctx, &u)
