@@ -33,7 +33,7 @@ func main() {
 	}))
 	slog.SetDefault(logger)
 
-	slog.Info("Starting 9router Gateway Middleware...")
+	slog.Info("Starting AI Manager Gateway Middleware...")
 
 	// 2. Load Config
 	cfg := config.LoadConfig()
@@ -159,7 +159,7 @@ func main() {
 	}
 
 	go func() {
-		slog.Info("9router Gateway listening", "address", "http://"+addr)
+		slog.Info("AI Manager Gateway listening", "address", "http://"+addr)
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			slog.Error("HTTP server failed", "err", err)
 			os.Exit(1)

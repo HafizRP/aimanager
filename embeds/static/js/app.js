@@ -5,49 +5,63 @@ document.addEventListener("DOMContentLoaded", function () {
     return new bootstrap.Tooltip(tooltipTriggerEl);
   });
 
-  // Robust Copy Function with HTTP/Tailscale Insecure Context Fallback
+  // Bulletproof Copy Function (Tested for Chrome & Safari on macOS/iOS over plain HTTP/Tailscale)
   function copyTextToClipboard(text) {
+    if (!text) return Promise.reject(new Error("Empty text"));
+
+    // 1. Try modern async Clipboard API if secure
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text).catch(() => {
+        return execCommandFallback(text);
+      });
+    }
+
+    // 2. Direct execCommand fallback for non-secure HTTP (Tailscale IP)
+    return execCommandFallback(text);
+  }
+
+  function execCommandFallback(text) {
     return new Promise((resolve, reject) => {
-      // 1. Modern API (only works in HTTPS or localhost)
-      if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(text)
-          .then(() => resolve(true))
-          .catch(() => fallbackCopy(text, resolve, reject));
-      } else {
-        // 2. Fallback for HTTP over Tailscale IP
-        fallbackCopy(text, resolve, reject);
+      // Must be inside viewport and not hidden for Safari/WebKit security rules
+      const el = document.createElement("textarea");
+      el.value = text;
+      el.setAttribute("readonly", "");
+      el.style.position = "fixed";
+      el.style.top = "0";
+      el.style.left = "0";
+      el.style.width = "2em";
+      el.style.height = "2em";
+      el.style.padding = "0";
+      el.style.border = "none";
+      el.style.outline = "none";
+      el.style.boxShadow = "none";
+      el.style.background = "transparent";
+      el.style.opacity = "0.01";
+      el.style.zIndex = "-1";
+
+      document.body.appendChild(el);
+      
+      // Selection handling across mobile & desktop
+      el.focus();
+      el.select();
+      el.setSelectionRange(0, el.value.length);
+
+      try {
+        const successful = document.execCommand("copy");
+        document.body.removeChild(el);
+        if (successful) {
+          resolve(true);
+        } else {
+          reject(new Error("execCommand returned false"));
+        }
+      } catch (err) {
+        document.body.removeChild(el);
+        reject(err);
       }
     });
   }
 
-  function fallbackCopy(text, resolve, reject) {
-    try {
-      const textArea = document.createElement("textarea");
-      textArea.value = text;
-      textArea.style.position = "fixed";
-      textArea.style.left = "-9999px";
-      textArea.style.top = "-9999px";
-      textArea.setAttribute("readonly", "");
-      document.body.appendChild(textArea);
-      
-      textArea.focus();
-      textArea.select();
-      textArea.setSelectionRange(0, 99999); // For mobile devices
-
-      const successful = document.execCommand("copy");
-      document.body.removeChild(textArea);
-
-      if (successful) {
-        resolve(true);
-      } else {
-        reject(new Error("document.execCommand failed"));
-      }
-    } catch (err) {
-      reject(err);
-    }
-  }
-
-  // Toast Notification Helper
+  // Floating Toast Notification
   function showCopyToast(msg) {
     let container = document.getElementById("toast-container");
     if (!container) {
@@ -58,7 +72,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     const toast = document.createElement("div");
-    toast.style.cssText = "background: #161b2a; border: 1px solid rgba(16, 185, 129, 0.4); color: #f8fafc; padding: 10px 16px; border-radius: 8px; font-size: 0.82rem; font-family: Inter, sans-serif; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 8px; animation: fadeIn 0.2s ease;";
+    toast.style.cssText = "background: #161b2a; border: 1px solid rgba(16, 185, 129, 0.4); color: #f8fafc; padding: 10px 16px; border-radius: 8px; font-size: 0.82rem; font-family: Inter, sans-serif; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 8px;";
     toast.innerHTML = `<i class="bi bi-check-circle-fill text-success"></i> <span>${msg || "Copied to clipboard!"}</span>`;
     
     container.appendChild(toast);
@@ -75,7 +89,17 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!btn) return;
 
     e.preventDefault();
-    const text = btn.getAttribute("data-copy");
+    let text = btn.getAttribute("data-copy");
+
+    // If data-target is specified (e.g. data-target="#codeBlock")
+    const targetSelector = btn.getAttribute("data-target");
+    if (!text && targetSelector) {
+      const targetEl = document.querySelector(targetSelector);
+      if (targetEl) {
+        text = targetEl.textContent.trim();
+      }
+    }
+
     if (!text) return;
 
     copyTextToClipboard(text).then(() => {
@@ -90,12 +114,12 @@ document.addEventListener("DOMContentLoaded", function () {
         btn.classList.remove("text-success");
       }, 2000);
     }).catch(err => {
-      console.error("Failed to copy:", err);
+      console.warn("Fallback to prompt:", err);
       window.prompt("Copy to clipboard: Ctrl+C, Enter", text);
     });
   });
 
-  // Direct Click on Key Code element
+  // Direct Click on Key Display
   document.addEventListener("click", function(e) {
     const keyDisplay = e.target.closest(".key-display");
     if (!keyDisplay) return;
@@ -103,8 +127,6 @@ document.addEventListener("DOMContentLoaded", function () {
     if (fullKey) {
       copyTextToClipboard(fullKey).then(() => {
         showCopyToast("API Key copied to clipboard!");
-      }).catch(() => {
-        window.prompt("Copy to clipboard: Ctrl+C, Enter", fullKey);
       });
     }
   });

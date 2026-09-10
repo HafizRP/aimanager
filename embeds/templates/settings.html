@@ -1,4 +1,4 @@
-{{ define "title" }}Quick Setup & Settings - 9router Gateway{{ end }}
+{{ define "title" }}Quick Setup & Settings - AI Manager{{ end }}
 
 {{ define "content" }}
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
@@ -118,14 +118,9 @@
         <div class="tab-pane fade" id="tab-hermes">
           <div class="d-flex justify-content-between align-items-center mb-1">
             <span class="small text-dim">In <code>~/.hermes/config.yaml</code> under <code>custom_providers</code>:</span>
-            <button class="btn-modern-ghost btn-sm py-0 px-2 copy-btn" data-copy="custom_providers:
-  - name: 9router Gateway
-    base_url: http://localhost:20129/v1
-    key_env: GATEWAY_API_KEY
-    model: ag/gemini-3.8-flash-high
-    api_mode: chat_completions">Copy YAML</button>
+            <button class="btn-modern-ghost btn-sm py-0 px-2 copy-btn" data-target="#hermesYamlCode">Copy YAML</button>
           </div>
-          <pre class="code-box-modern mb-2"><code>custom_providers:
+          <pre class="code-box-modern mb-2"><code id="hermesYamlCode">custom_providers:
   - name: 9router Gateway
     base_url: http://localhost:20129/v1
     key_env: GATEWAY_API_KEY
@@ -137,12 +132,9 @@
         <div class="tab-pane fade" id="tab-curl">
           <div class="d-flex justify-content-between align-items-center mb-1">
             <span class="small text-dim">Test Curl Command:</span>
-            <button class="btn-modern-ghost btn-sm py-1 px-2 copy-btn" data-copy='curl -X POST http://100.108.204.127:20129/v1/chat/completions \
-  -H "Authorization: Bearer sk-gw-..." \
-  -H "Content-Type: application/json" \
-  -d "{\"model\": \"ag/gemini-3.8-flash-high\", \"messages\": [{\"role\": \"user\", \"content\": \"Hello!\"}], \"stream\": true}"'>Copy</button>
+            <button class="btn-modern-ghost btn-sm py-1 px-2 copy-btn" data-target="#curlCodeBlock">Copy</button>
           </div>
-          <pre class="code-box-modern"><code>curl -X POST http://100.108.204.127:20129/v1/chat/completions \
+          <pre class="code-box-modern"><code id="curlCodeBlock">curl -X POST http://100.108.204.127:20129/v1/chat/completions \
   -H "Authorization: Bearer sk-gw-..." \
   -H "Content-Type: application/json" \
   -d '{
