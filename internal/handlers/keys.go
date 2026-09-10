@@ -75,6 +75,16 @@ func (h *Handler) CreateKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Sync to 9router Core
+	if h.syncer != nil {
+		u, _ := h.repo.GetUserByID(ctx, userID)
+		uName := ""
+		if u != nil {
+			uName = u.Name
+		}
+		_ = h.syncer.SyncKey(apiKey, uName)
+	}
+
 	http.Redirect(w, r, "/keys?msg=Key+created+successfully!+Token:+"+finalKey, http.StatusSeeOther)
 }
 
@@ -108,6 +118,11 @@ func (h *Handler) ToggleKeyStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Sync toggle to 9router Core
+	if h.syncer != nil {
+		_ = h.syncer.ToggleKey(keyID, newStatus)
+	}
+
 	msg := "API key suspended"
 	if newStatus {
 		msg = "API key reactivated"
@@ -121,6 +136,11 @@ func (h *Handler) DeleteKey(w http.ResponseWriter, r *http.Request) {
 	if err := h.repo.DeleteAPIKey(ctx, keyID); err != nil {
 		http.Redirect(w, r, "/keys?error="+err.Error(), http.StatusSeeOther)
 		return
+	}
+
+	// Sync delete to 9router Core
+	if h.syncer != nil {
+		_ = h.syncer.DeleteKey(keyID)
 	}
 
 	http.Redirect(w, r, "/keys?msg=API+key+revoked+and+deleted", http.StatusSeeOther)

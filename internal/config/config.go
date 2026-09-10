@@ -8,14 +8,15 @@ import (
 )
 
 type Config struct {
-	Port           int
-	Host           string
-	UpstreamURL    string
-	UpstreamAPIKey string
-	DBPath         string
-	AdminUsername  string
-	AdminPassword  string
-	SessionSecret  string
+	Port             int
+	Host             string
+	UpstreamURL      string
+	UpstreamAPIKey   string
+	DBPath           string
+	NineRouterDBPath string
+	AdminUsername    string
+	AdminPassword    string
+	SessionSecret    string
 }
 
 func LoadConfig() *Config {
@@ -27,19 +28,21 @@ func LoadConfig() *Config {
 	upstreamURL := getEnv("UPSTREAM_URL", "http://127.0.0.1:20128")
 	upstreamAPIKey := getEnv("UPSTREAM_API_KEY", "")
 	dbPath := getEnv("DB_PATH", "/home/b14/9router-gateway/data/gateway.db")
+	nineRouterDBPath := getEnv("NINEROUTER_DB_PATH", "/home/b14/9router/data/db/data.sqlite")
 	adminUsername := getEnv("ADMIN_USERNAME", "admin")
 	adminPassword := getEnv("ADMIN_PASSWORD", "admin123")
 	sessionSecret := getEnv("SESSION_SECRET", "9router-secret-token-key-change-me")
 
 	return &Config{
-		Port:           port,
-		Host:           host,
-		UpstreamURL:    upstreamURL,
-		UpstreamAPIKey: upstreamAPIKey,
-		DBPath:         dbPath,
-		AdminUsername:  adminUsername,
-		AdminPassword:  adminPassword,
-		SessionSecret:  sessionSecret,
+		Port:             port,
+		Host:             host,
+		UpstreamURL:      upstreamURL,
+		UpstreamAPIKey:   upstreamAPIKey,
+		DBPath:           dbPath,
+		NineRouterDBPath: nineRouterDBPath,
+		AdminUsername:    adminUsername,
+		AdminPassword:    adminPassword,
+		SessionSecret:    sessionSecret,
 	}
 }
 

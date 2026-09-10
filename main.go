@@ -23,6 +23,7 @@ import (
 	"9router-gateway/internal/models"
 	"9router-gateway/internal/proxy"
 	"9router-gateway/internal/repository"
+	"9router-gateway/internal/syncer"
 )
 
 func main() {
@@ -52,12 +53,22 @@ func main() {
 	slog.Info("SQLite database initialized successfully")
 
 	repo := repository.NewSQLiteRepo(db)
+	keySyncer := syncer.NewSyncer(cfg.NineRouterDBPath)
 
 	// 4. Seed initial user and API key if table is empty
-	seedInitialData(repo)
+	seedInitialData(repo, keySyncer)
 
-	// 5. Init Handlers & Proxy
-	h, err := handlers.NewHandler(cfg, repo)
+	// 5. Backfill/Sync all keys to 9router Core
+	if existingKeys, err := repo.GetAllAPIKeys(context.Background()); err == nil && len(existingKeys) > 0 {
+		if err := keySyncer.BackfillAll(existingKeys); err != nil {
+			slog.Warn("Failed to backfill keys to 9router", "err", err)
+		} else {
+			slog.Info("Successfully synchronized API keys with 9router core", "count", len(existingKeys))
+		}
+	}
+
+	// 6. Init Handlers & Proxy
+	h, err := handlers.NewHandler(cfg, repo, keySyncer)
 	if err != nil {
 		slog.Error("Failed to initialize web handlers", "err", err)
 		os.Exit(1)
@@ -171,7 +182,7 @@ func main() {
 	slog.Info("9router Gateway exited cleanly")
 }
 
-func seedInitialData(repo repository.Repository) {
+func seedInitialData(repo repository.Repository, sync *syncer.Syncer) {
 	ctx := context.Background()
 	users, err := repo.GetAllUsers(ctx)
 	if err != nil || len(users) > 0 {
@@ -194,13 +205,17 @@ func seedInitialData(repo repository.Repository) {
 	_ = repo.CreateUser(ctx, adminUser)
 
 	adminKey := handlers.GenerateSecureAPIKey("sk-gw-admin-")
-	_ = repo.CreateAPIKey(ctx, &models.APIKey{
+	adminAPIKey := &models.APIKey{
 		ID:       uuid.New().String(),
 		UserID:   adminID,
 		Key:      adminKey,
 		Name:     "Admin Master Key",
 		IsActive: true,
-	})
+	}
+	_ = repo.CreateAPIKey(ctx, adminAPIKey)
+	if sync != nil {
+		_ = sync.SyncKey(adminAPIKey, "Default Admin")
+	}
 
 	// 2. Demo User with quota & whitelist
 	demoID := uuid.New().String()
@@ -216,13 +231,17 @@ func seedInitialData(repo repository.Repository) {
 	_ = repo.CreateUser(ctx, demoUser)
 
 	demoKey := handlers.GenerateSecureAPIKey("sk-gw-user-")
-	_ = repo.CreateAPIKey(ctx, &models.APIKey{
+	demoAPIKey := &models.APIKey{
 		ID:       uuid.New().String(),
 		UserID:   demoID,
 		Key:      demoKey,
 		Name:     "Cursor Key",
 		IsActive: true,
-	})
+	}
+	_ = repo.CreateAPIKey(ctx, demoAPIKey)
+	if sync != nil {
+		_ = sync.SyncKey(demoAPIKey, "Standard User")
+	}
 
 	slog.Info("Initial data seeded", "admin_key", adminKey, "demo_key", demoKey)
 }

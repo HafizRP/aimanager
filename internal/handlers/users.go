@@ -85,6 +85,9 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 			IsActive: true,
 		}
 		_ = h.repo.CreateAPIKey(ctx, apiKey)
+		if h.syncer != nil {
+			_ = h.syncer.SyncKey(apiKey, user.Name)
+		}
 		http.Redirect(w, r, "/users?msg=User+and+API+key+created+successfully!+Key:+"+generatedKey, http.StatusSeeOther)
 		return
 	}
@@ -152,6 +155,14 @@ func (h *Handler) ToggleUserStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Also toggle status of user keys in 9router
+	if h.syncer != nil {
+		keys, _ := h.repo.GetAPIKeysByUserID(ctx, userID)
+		for _, k := range keys {
+			_ = h.syncer.ToggleKey(k.ID, newStatus)
+		}
+	}
+
 	msg := "User suspended"
 	if newStatus {
 		msg = "User reactivated"
@@ -162,9 +173,19 @@ func (h *Handler) ToggleUserStatus(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
 	ctx := r.Context()
+
+	// Get keys before deleting to remove from 9router
+	keys, _ := h.repo.GetAPIKeysByUserID(ctx, userID)
+
 	if err := h.repo.DeleteUser(ctx, userID); err != nil {
 		http.Redirect(w, r, "/users?error="+err.Error(), http.StatusSeeOther)
 		return
+	}
+
+	if h.syncer != nil {
+		for _, k := range keys {
+			_ = h.syncer.DeleteKey(k.ID)
+		}
 	}
 
 	http.Redirect(w, r, "/users?msg=User+and+keys+deleted+successfully", http.StatusSeeOther)

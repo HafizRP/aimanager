@@ -91,7 +91,11 @@ func (p *GatewayProxy) handleGetModels(w http.ResponseWriter, r *http.Request, u
 		return
 	}
 
-	upstreamReq.Header.Set("Authorization", "Bearer "+p.cfg.UpstreamAPIKey)
+	authKey := key.Key
+	if authKey == "" {
+		authKey = p.cfg.UpstreamAPIKey
+	}
+	upstreamReq.Header.Set("Authorization", "Bearer "+authKey)
 	resp, err := p.httpClient.Do(upstreamReq)
 	if err != nil {
 		p.writeJSONError(w, http.StatusBadGateway, "Failed to contact 9router upstream: "+err.Error(), "upstream_error")
@@ -213,7 +217,11 @@ func (p *GatewayProxy) handleForwardRequest(w http.ResponseWriter, r *http.Reque
 		}
 	}
 	// Inject Upstream Key
-	upstreamReq.Header.Set("Authorization", "Bearer "+p.cfg.UpstreamAPIKey)
+	authKey := key.Key
+	if authKey == "" {
+		authKey = p.cfg.UpstreamAPIKey
+	}
+	upstreamReq.Header.Set("Authorization", "Bearer "+authKey)
 	upstreamReq.Header.Set("X-Forwarded-For", clientIP)
 
 	resp, err := p.httpClient.Do(upstreamReq)

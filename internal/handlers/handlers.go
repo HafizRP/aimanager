@@ -20,6 +20,7 @@ import (
 	"9router-gateway/internal/config"
 	"9router-gateway/internal/models"
 	"9router-gateway/internal/repository"
+	"9router-gateway/internal/syncer"
 )
 
 type UpstreamModelItem struct {
@@ -30,13 +31,15 @@ type UpstreamModelItem struct {
 type Handler struct {
 	cfg       *config.Config
 	repo      repository.Repository
+	syncer    *syncer.Syncer
 	templates map[string]*template.Template
 }
 
-func NewHandler(cfg *config.Config, repo repository.Repository) (*Handler, error) {
+func NewHandler(cfg *config.Config, repo repository.Repository, sync *syncer.Syncer) (*Handler, error) {
 	h := &Handler{
 		cfg:       cfg,
 		repo:      repo,
+		syncer:    sync,
 		templates: make(map[string]*template.Template),
 	}
 
