@@ -1,9 +1,11 @@
-document.addEventListener("DOMContentLoaded", function () {
+function initApp() {
   // Initialize Bootstrap Tooltips
-  const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-  tooltipTriggerList.map(function (tooltipTriggerEl) {
-    return new bootstrap.Tooltip(tooltipTriggerEl);
-  });
+  if (typeof bootstrap !== 'undefined') {
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+      return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+  }
 
   // Bulletproof Copy Function (Tested for Chrome & Safari on macOS/iOS over plain HTTP/Tailscale)
   function copyTextToClipboard(text) {
@@ -22,7 +24,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
   function execCommandFallback(text) {
     return new Promise((resolve, reject) => {
-      // Must be inside viewport and not hidden for Safari/WebKit security rules
       const el = document.createElement("textarea");
       el.value = text;
       el.setAttribute("readonly", "");
@@ -40,8 +41,6 @@ document.addEventListener("DOMContentLoaded", function () {
       el.style.zIndex = "-1";
 
       document.body.appendChild(el);
-      
-      // Selection handling across mobile & desktop
       el.focus();
       el.select();
       el.setSelectionRange(0, el.value.length);
@@ -72,7 +71,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     const toast = document.createElement("div");
-    toast.style.cssText = "background: #161b2a; border: 1px solid rgba(16, 185, 129, 0.4); color: #f8fafc; padding: 10px 16px; border-radius: 8px; font-size: 0.82rem; font-family: Inter, sans-serif; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 8px;";
+    toast.style.cssText = "background: #161b2a; border: 1px solid rgba(16, 185, 129, 0.4); color: #f8fafc; padding: 10px 16px; border-radius: 8px; font-size: 0.82rem; font-family: Inter, sans-serif; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 8px; animation: fadeIn 0.2s ease;";
     toast.innerHTML = `<i class="bi bi-check-circle-fill text-success"></i> <span>${msg || "Copied to clipboard!"}</span>`;
     
     container.appendChild(toast);
@@ -91,7 +90,6 @@ document.addEventListener("DOMContentLoaded", function () {
     e.preventDefault();
     let text = btn.getAttribute("data-copy");
 
-    // If data-target is specified (e.g. data-target="#codeBlock")
     const targetSelector = btn.getAttribute("data-target");
     if (!text && targetSelector) {
       const targetEl = document.querySelector(targetSelector);
@@ -189,4 +187,10 @@ document.addEventListener("DOMContentLoaded", function () {
       alert.querySelector("div")?.appendChild(copyBtn);
     }
   });
-});
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initApp);
+} else {
+  initApp();
+}

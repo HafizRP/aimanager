@@ -95,8 +95,12 @@ func NewHandler(cfg *config.Config, repo repository.Repository, sync *syncer.Syn
 				return template.HTML("-")
 			}
 			utcStr := t.UTC().Format(time.RFC3339)
-			fallbackStr := t.Format("2006-01-02 15:04:05")
-			return template.HTML(fmt.Sprintf(`<span class="local-time" data-utc="%s">%s</span>`, utcStr, fallbackStr))
+			loc, err := time.LoadLocation("Asia/Jakarta")
+			if err != nil {
+				loc = time.FixedZone("WIB", 7*3600)
+			}
+			displayStr := t.In(loc).Format("2006-01-02 15:04:05")
+			return template.HTML(fmt.Sprintf(`<span class="local-time font-monospace" data-utc="%s">%s</span>`, utcStr, displayStr))
 		},
 		"maskKey": func(k string) string {
 			if len(k) <= 12 {
