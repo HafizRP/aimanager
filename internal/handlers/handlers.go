@@ -3,21 +3,17 @@ package handlers
 import (
 	"bytes"
 	"context"
-	"crypto/hmac"
-	"crypto/rand"
-	"crypto/sha256"
 	"crypto/subtle"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
-	"golang.org/x/crypto/bcrypt"
 
 	"9router-gateway/internal/config"
 	"9router-gateway/internal/models"
@@ -25,6 +21,7 @@ import (
 	"9router-gateway/internal/repository"
 	"9router-gateway/internal/syncer"
 	"9router-gateway/internal/upstream"
+	"9router-gateway/internal/usecase"
 	"9router-gateway/web"
 )
 
@@ -32,6 +29,7 @@ type contextKey string
 
 const userContextKey = contextKey("current_user")
 
+// GetUserFromContext returns the authenticated user stored in the request context.
 func GetUserFromContext(ctx context.Context) *models.User {
 	if u, ok := ctx.Value(userContextKey).(*models.User); ok {
 		return u
@@ -39,11 +37,13 @@ func GetUserFromContext(ctx context.Context) *models.User {
 	return nil
 }
 
+// UpstreamModelItem is a lightweight model descriptor from the upstream catalog.
 type UpstreamModelItem struct {
 	ID      string `json:"id"`
 	OwnedBy string `json:"owned_by"`
 }
 
+// Handler is the thin HTTP layer. Domain logic lives in usecase.* services.
 type Handler struct {
 	cfg          *config.Config
 	repo         repository.Repository
@@ -53,8 +53,18 @@ type Handler struct {
 	cache        *proxy.ResponseCache
 	templates    map[string]*template.Template
 	httpClient   *http.Client
+
+	// Use case services
+	auth     *usecase.AuthService
+	users    *usecase.UserService
+	keys     *usecase.KeyService
+	dash     *usecase.DashboardService
+	billing  *usecase.BillingService
+	logs     *usecase.LogService
+	settings *usecase.SettingsService
 }
 
+// NewHandler wires the HTTP layer to use case services and pre-parses templates.
 func NewHandler(cfg *config.Config, repo repository.Repository, sync *syncer.Syncer, quotaMgr *upstream.QuotaManager) (*Handler, error) {
 	h := &Handler{
 		cfg:          cfg,
@@ -68,6 +78,15 @@ func NewHandler(cfg *config.Config, repo repository.Repository, sync *syncer.Syn
 			Timeout: 10 * time.Second,
 		},
 	}
+
+	// Wire use case services (domain layer)
+	h.auth = usecase.NewAuthService(repo, cfg.SessionSecret, cfg.AdminUsername, cfg.AdminPassword)
+	h.users = usecase.NewUserService(repo, sync)
+	h.keys = usecase.NewKeyService(repo, sync)
+	h.dash = usecase.NewDashboardService(repo)
+	h.billing = usecase.NewBillingService(repo)
+	h.logs = usecase.NewLogService(repo)
+	h.settings = usecase.NewSettingsService(repo, &configAdapter{cfg: cfg}, sync)
 
 	funcMap := template.FuncMap{
 		"formatNumber": func(v interface{}) string {
@@ -259,16 +278,8 @@ func (h *Handler) render(w http.ResponseWriter, r *http.Request, tmplName, layou
 const sessionCookieName = "gw_session"
 
 func (h *Handler) setSessionCookie(w http.ResponseWriter, r *http.Request, user *models.User) {
-	tokenBytes := make([]byte, 32)
-	if _, err := rand.Read(tokenBytes); err != nil {
-		log.Error().Err(err).Msg("Failed to generate session token")
-		return
-	}
-	token := hex.EncodeToString(tokenBytes)
-
-	expiresAt := time.Now().Add(7 * 24 * time.Hour)
-	ctx := r.Context()
-	if err := h.repo.CreateSession(ctx, token, user.ID, expiresAt); err != nil {
+	token, _, err := h.auth.StartSession(r.Context(), user.ID)
+	if err != nil {
 		log.Error().Err(err).Msg("Failed to store session in database")
 		return
 	}
@@ -287,7 +298,7 @@ func (h *Handler) setSessionCookie(w http.ResponseWriter, r *http.Request, user 
 
 func (h *Handler) clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 	if cookie, err := r.Cookie(sessionCookieName); err == nil && cookie.Value != "" {
-		_ = h.repo.DeleteSession(r.Context(), cookie.Value)
+		_ = h.auth.DeleteSession(r.Context(), cookie.Value)
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
@@ -304,19 +315,11 @@ func (h *Handler) getSessionUser(r *http.Request) *models.User {
 	if err != nil || cookie.Value == "" {
 		return nil
 	}
-
-	user, err := h.repo.GetSessionUser(r.Context(), cookie.Value)
-	if err != nil || user == nil || !user.IsActive {
+	user, err := h.auth.GetSessionUser(r.Context(), cookie.Value)
+	if err != nil {
 		return nil
 	}
-
 	return user
-}
-
-func (h *Handler) signSession(data string) string {
-	mac := hmac.New(sha256.New, []byte(h.cfg.SessionSecret))
-	mac.Write([]byte(data))
-	return hex.EncodeToString(mac.Sum(nil))
 }
 
 func (h *Handler) getCSRFToken(r *http.Request) string {
@@ -324,7 +327,11 @@ func (h *Handler) getCSRFToken(r *http.Request) string {
 	if err != nil || cookie.Value == "" {
 		return ""
 	}
-	return h.signSession("csrf:" + cookie.Value)
+	if h.auth != nil {
+		return h.auth.SignSession("csrf:" + cookie.Value)
+	}
+	// Fallback for tests / uninitialized auth service
+	return usecase.SignSession(h.cfg.SessionSecret, "csrf:"+cookie.Value)
 }
 
 // ValidateCSRF Middleware enforces CSRF validation on mutating HTTP methods for authenticated sessions
@@ -401,43 +408,15 @@ func (h *Handler) LoginPost(w http.ResponseWriter, r *http.Request) {
 
 	clientIP := proxy.GetClientIP(r)
 
-	ctx := r.Context()
-
-	// Rate limiting: max 5 failed attempts in 15 minutes
-	recentFails, _ := h.repo.GetRecentLoginAttempts(ctx, clientIP, 15)
-	if recentFails >= 5 {
-		http.Redirect(w, r, "/login?error=Too+many+failed+login+attempts.+Please+wait+15+minutes.", http.StatusSeeOther)
+	user, err := h.auth.Authenticate(r.Context(), usecase.AuthInput{
+		Username: username,
+		Password: password,
+	}, clientIP)
+	if err != nil {
+		http.Redirect(w, r, "/login?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
 
-	if username == "" || password == "" {
-		http.Redirect(w, r, "/login?error=Username+and+password+are+required", http.StatusSeeOther)
-		return
-	}
-
-	// 1. Authenticate strictly via database user and bcrypt hash
-	user, err := h.repo.GetUserByUsername(ctx, username)
-	if err != nil || user == nil {
-		_ = h.repo.RecordLoginAttempt(ctx, clientIP)
-		http.Redirect(w, r, "/login?error=Invalid+username+or+password", http.StatusSeeOther)
-		return
-	}
-
-	if !user.IsActive {
-		http.Redirect(w, r, "/login?error=Account+is+suspended.+Please+contact+administrator.", http.StatusSeeOther)
-		return
-	}
-
-	valid := CheckPasswordHash(password, user.PasswordHash)
-	if !valid {
-		_ = h.repo.RecordLoginAttempt(ctx, clientIP)
-		http.Redirect(w, r, "/login?error=Invalid+username+or+password", http.StatusSeeOther)
-		return
-	}
-
-	// Clear failed login attempts and create session
-	_ = h.repo.ClearLoginAttempts(ctx, clientIP)
-	_ = h.repo.UpdateUserLastLogin(ctx, user.ID)
 	h.setSessionCookie(w, r, user)
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
@@ -459,26 +438,24 @@ func (h *Handler) FetchUpstreamModels(ctx context.Context) []string {
 	return modelIDs
 }
 
+// GenerateSecureAPIKey delegates to the use case package.
 func GenerateSecureAPIKey(prefix string) string {
-	b := make([]byte, 16)
-	_, _ = rand.Read(b)
-	if prefix == "" {
-		prefix = "sk-gw-"
-	}
-	return prefix + hex.EncodeToString(b)
+	return usecase.GenerateSecureAPIKey(prefix)
 }
 
+// GenerateRandomPassword delegates to the use case package.
+func GenerateRandomPassword(length int) string {
+	return usecase.GenerateRandomPassword(length)
+}
+
+// HashPassword hashes a plaintext password with bcrypt.
 func HashPassword(password string) (string, error) {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 12)
-	return string(bytes), err
+	return usecase.HashPassword(password)
 }
 
+// CheckPasswordHash compares a plaintext password against a bcrypt hash.
 func CheckPasswordHash(password, hash string) bool {
-	if hash == "" {
-		return false
-	}
-	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
-	return err == nil
+	return usecase.CheckPasswordHash(password, hash)
 }
 
 func (h *Handler) deriveCurrentBaseURL(r *http.Request) string {

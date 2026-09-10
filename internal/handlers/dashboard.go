@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strings"
 
-	"9router-gateway/internal/models"
 	"9router-gateway/internal/upstream"
 )
 
@@ -18,15 +17,7 @@ func (h *Handler) DashboardPage(w http.ResponseWriter, r *http.Request) {
 		timeframe = "1d"
 	}
 
-	var stats *models.DashboardStats
-	var err error
-
-	if user != nil && user.IsAdmin() {
-		stats, err = h.repo.GetDashboardStats(ctx, timeframe)
-	} else if user != nil {
-		stats, err = h.repo.GetUserDashboardStats(ctx, user.ID, timeframe)
-	}
-
+	stats, err := h.dash.GetStats(ctx, user, timeframe)
 	if err != nil {
 		stats = nil
 	}
@@ -58,15 +49,7 @@ func (h *Handler) APIStats(w http.ResponseWriter, r *http.Request) {
 		timeframe = "1d"
 	}
 
-	var stats *models.DashboardStats
-	var err error
-
-	if user != nil && user.IsAdmin() {
-		stats, err = h.repo.GetDashboardStats(ctx, timeframe)
-	} else if user != nil {
-		stats, err = h.repo.GetUserDashboardStats(ctx, user.ID, timeframe)
-	}
-
+	stats, err := h.dash.GetStats(ctx, user, timeframe)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

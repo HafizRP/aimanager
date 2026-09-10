@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -10,9 +9,9 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 
 	"9router-gateway/internal/models"
+	"9router-gateway/internal/usecase"
 )
 
 // parseExpiryInput parses a datetime-local / RFC3339 value into a time.Time.
@@ -111,11 +110,6 @@ func (h *Handler) CreateKey(w http.ResponseWriter, r *http.Request) {
 		userID = currentUser.ID
 	}
 
-	name := strings.TrimSpace(r.FormValue("name"))
-	customKey := strings.TrimSpace(r.FormValue("custom_key"))
-	allowedModelsRaw := strings.TrimSpace(r.FormValue("allowed_models"))
-	rateLimitRPM, _ := strconv.Atoi(r.FormValue("rate_limit_rpm"))
-
 	redirectURL := safeRedirectURL(r.FormValue("redirect"), "/keys")
 
 	// Optional expiry datetime (RFC3339 or "YYYY-MM-DDTHH:MM")
@@ -133,75 +127,23 @@ func (h *Handler) CreateKey(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape("User must be selected"), http.StatusSeeOther)
 		return
 	}
-	if name == "" {
-		name = "API Key"
-	}
-	if len(name) > 64 {
-		name = name[:64]
-	}
-	if rateLimitRPM < 0 {
-		rateLimitRPM = 0
-	}
 
-	finalKey := customKey
-	if finalKey == "" {
-		finalKey = GenerateSecureAPIKey("sk-gw-")
-	} else {
-		if len(finalKey) < 8 || len(finalKey) > 128 {
-			http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape("Custom key must be between 8 and 128 characters"), http.StatusSeeOther)
-			return
-		}
-		if existing, _ := h.repo.GetAPIKeyByKey(ctx, finalKey); existing != nil {
-			http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape("API key already exists"), http.StatusSeeOther)
-			return
-		}
-	}
+	rateLimitRPM, _ := strconv.Atoi(r.FormValue("rate_limit_rpm"))
 
-	allowedModels := ""
-	if allowedModelsRaw != "" && allowedModelsRaw != "*" {
-		if strings.HasPrefix(allowedModelsRaw, "[") {
-			allowedModels = allowedModelsRaw
-		} else {
-			parts := strings.Split(allowedModelsRaw, ",")
-			var clean []string
-			for _, p := range parts {
-				p = strings.TrimSpace(p)
-				if p != "" {
-					clean = append(clean, p)
-				}
-			}
-			b, _ := json.Marshal(clean)
-			allowedModels = string(b)
-		}
-	}
-
-	apiKey := &models.APIKey{
-		ID:            uuid.New().String(),
+	key, err := h.keys.CreateKey(ctx, usecase.CreateKeyInput{
 		UserID:        userID,
-		Key:           finalKey,
-		Name:          name,
-		AllowedModels: allowedModels,
+		Name:          strings.TrimSpace(r.FormValue("name")),
+		CustomKey:     strings.TrimSpace(r.FormValue("custom_key")),
+		AllowedModels: strings.TrimSpace(r.FormValue("allowed_models")),
 		RateLimitRPM:  rateLimitRPM,
-		IsActive:      true,
 		ExpiresAt:     expiresAt,
-	}
-
-	if err := h.repo.CreateAPIKey(ctx, apiKey); err != nil {
+	})
+	if err != nil {
 		http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
 
-	// Sync to 9router Core
-	if h.syncer != nil {
-		u, _ := h.repo.GetUserByID(ctx, userID)
-		uName := ""
-		if u != nil {
-			uName = u.Name
-		}
-		_ = h.syncer.SyncKey(apiKey, uName)
-	}
-
-	http.Redirect(w, r, redirectURL+"?msg="+url.QueryEscape("Key created successfully! Token: "+finalKey), http.StatusSeeOther)
+	http.Redirect(w, r, redirectURL+"?msg="+url.QueryEscape("Key created successfully! Token: "+key.Key), http.StatusSeeOther)
 }
 
 func (h *Handler) ToggleKeyStatus(w http.ResponseWriter, r *http.Request) {
@@ -214,41 +156,26 @@ func (h *Handler) ToggleKeyStatus(w http.ResponseWriter, r *http.Request) {
 		redirectURL = safeRedirectURL(r.FormValue("redirect"), "/keys")
 	}
 
-	// Find key to toggle
-	keys, err := h.repo.GetAllAPIKeys(ctx)
-	if err != nil {
-		http.Redirect(w, r, redirectURL+"?error=Key+not+found", http.StatusSeeOther)
-		return
-	}
-
-	var targetKey *models.APIKey
-	for _, k := range keys {
-		if k.ID == keyID {
-			targetKey = &k
-			break
+	// Ownership enforcement (admin can toggle any key)
+	if currentUser != nil && !currentUser.IsAdmin() {
+		keys, _ := h.repo.GetAllAPIKeys(ctx)
+		owned := false
+		for _, k := range keys {
+			if k.ID == keyID && k.UserID == currentUser.ID {
+				owned = true
+				break
+			}
+		}
+		if !owned {
+			http.Redirect(w, r, redirectURL+"?error=Permission+denied", http.StatusSeeOther)
+			return
 		}
 	}
 
-	if targetKey == nil {
-		http.Redirect(w, r, redirectURL+"?error=Key+not+found", http.StatusSeeOther)
-		return
-	}
-
-	// Non-admin can only toggle their own keys
-	if currentUser != nil && !currentUser.IsAdmin() && targetKey.UserID != currentUser.ID {
-		http.Redirect(w, r, redirectURL+"?error=Permission+denied", http.StatusSeeOther)
-		return
-	}
-
-	newStatus := !targetKey.IsActive
-	if err := h.repo.ToggleAPIKeyStatus(ctx, keyID, newStatus); err != nil {
+	newStatus, err := h.keys.ToggleKeyStatus(ctx, keyID)
+	if err != nil {
 		http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
-	}
-
-	// Sync toggle to 9router Core
-	if h.syncer != nil {
-		_ = h.syncer.ToggleKey(keyID, newStatus)
 	}
 
 	msg := "API key suspended"
@@ -268,40 +195,25 @@ func (h *Handler) DeleteKey(w http.ResponseWriter, r *http.Request) {
 		redirectURL = safeRedirectURL(r.FormValue("redirect"), "/keys")
 	}
 
-	keys, err := h.repo.GetAllAPIKeys(ctx)
-	if err != nil {
-		http.Redirect(w, r, redirectURL+"?error=Key+not+found", http.StatusSeeOther)
-		return
-	}
-
-	var targetKey *models.APIKey
-	for _, k := range keys {
-		if k.ID == keyID {
-			targetKey = &k
-			break
+	// Ownership enforcement (admin can delete any key)
+	if currentUser != nil && !currentUser.IsAdmin() {
+		keys, _ := h.repo.GetAllAPIKeys(ctx)
+		owned := false
+		for _, k := range keys {
+			if k.ID == keyID && k.UserID == currentUser.ID {
+				owned = true
+				break
+			}
+		}
+		if !owned {
+			http.Redirect(w, r, redirectURL+"?error=Permission+denied", http.StatusSeeOther)
+			return
 		}
 	}
 
-	if targetKey == nil {
-		http.Redirect(w, r, redirectURL+"?error=Key+not+found", http.StatusSeeOther)
-		return
-	}
-
-	// Non-admin can only delete their own keys
-	if currentUser != nil && !currentUser.IsAdmin() && targetKey.UserID != currentUser.ID {
-		http.Redirect(w, r, redirectURL+"?error=Permission+denied", http.StatusSeeOther)
-		return
-	}
-
-	if err := h.repo.DeleteAPIKey(ctx, keyID); err != nil {
+	if err := h.keys.DeleteKey(ctx, keyID); err != nil {
 		http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
-
-	// Sync delete to 9router Core
-	if h.syncer != nil {
-		_ = h.syncer.DeleteKey(keyID)
-	}
-
 	http.Redirect(w, r, redirectURL+"?msg=API+key+revoked+and+deleted", http.StatusSeeOther)
 }

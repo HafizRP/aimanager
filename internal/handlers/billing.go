@@ -8,41 +8,25 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
 	"9router-gateway/internal/billing"
-	"9router-gateway/internal/models"
+	"9router-gateway/internal/usecase"
 )
 
 func (h *Handler) BillingPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	currentUser := GetUserFromContext(ctx)
 
-	packages, err := h.repo.GetActivePackages(ctx)
-	if err != nil {
-		packages = []models.TokenPackage{}
-	}
+	packages := h.billing.GetPackages(ctx)
 
-	var txs []models.Transaction
-	var totalTxCount int
-
-	if currentUser != nil && currentUser.IsAdmin() {
-		txs, totalTxCount, _ = h.repo.GetAllTransactions(ctx, 50, 0)
-	} else if currentUser != nil {
-		txs, totalTxCount, _ = h.repo.GetTransactionsByUserID(ctx, currentUser.ID, 30, 0)
-	}
+	txs, totalTxCount := h.billing.GetTransactions(ctx, currentUser)
 
 	// Calculate total revenue for admin
 	var totalRevenue int64
 	if currentUser != nil && currentUser.IsAdmin() {
-		for _, t := range txs {
-			if t.Status == "settlement" || t.Status == "paid" || t.Status == "capture" {
-				totalRevenue += t.AmountIDR
-			}
-		}
+		totalRevenue = h.billing.TotalRevenue(txs)
 	}
 
 	allUsers, _ := h.repo.GetAllUsers(ctx)
@@ -79,40 +63,38 @@ func (h *Handler) CheckoutSnap(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pkg, err := h.repo.GetPackageByID(ctx, packageID)
-	if err != nil || pkg == nil {
+	pkg, err := h.billing.GetPackage(ctx, packageID)
+	if err != nil {
 		http.Error(w, `{"error":"Package not found"}`, http.StatusNotFound)
 		return
 	}
 
-	orderID := fmt.Sprintf("AIM-%s-%s", time.Now().Format("20060102-150405"), uuid.New().String()[:5])
-
+	orderID := usecase.NewOrderID("AIM")
 	midtransClient := billing.NewMidtransClient(h.cfg)
-	snapResp, err := midtransClient.CreateSnapTransaction(orderID, pkg.PriceIDR, pkg.Name, pkg.ID, currentUser.Name)
+	snapResp, err := midtransClient.CreateSnapTransaction(
+		orderID,
+		pkg.PriceIDR, pkg.Name, pkg.ID, currentUser.Name,
+	)
 	if err != nil {
 		log.Error().Err(err).Msg("Midtrans Snap transaction failed")
 		http.Error(w, fmt.Sprintf(`{"error":"Midtrans error: %s"}`, err.Error()), http.StatusInternalServerError)
 		return
 	}
 
-	// Create Pending Transaction in Database
-	tx := &models.Transaction{
-		ID:        orderID,
-		UserID:    currentUser.ID,
-		PackageID: pkg.ID,
-		Tokens:    pkg.Tokens,
-		AmountIDR: pkg.PriceIDR,
-		Status:    "pending",
-		SnapToken: snapResp.Token,
-		SnapURL:   snapResp.RedirectURL,
+	// Create Pending Transaction in Database via use case
+	tx, err := h.billing.CreateOrder(ctx, currentUser, pkg, orderID, snapResp.Token, snapResp.RedirectURL)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create pending transaction")
+		http.Error(w, `{"error":"Failed to create transaction"}`, http.StatusInternalServerError)
+		return
 	}
-	_ = h.repo.CreateTransaction(ctx, tx)
+	// The order ID placeholder above isn't used; CreateOrder generates the real one.
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"snap_token":   snapResp.Token,
 		"redirect_url": snapResp.RedirectURL,
-		"order_id":     orderID,
+		"order_id":     tx.ID,
 	})
 }
 
@@ -144,11 +126,11 @@ func (h *Handler) MidtransWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx := r.Context()
-	tx, err := h.repo.GetTransactionByID(ctx, payload.OrderID)
+	tx, err := h.billing.GetTransaction(ctx, payload.OrderID)
 	if err != nil || tx == nil {
 		log.Warn().Str("order_id", payload.OrderID).Msg("Midtrans webhook: transaction not found")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ignored_unknown_order"}`))
+		_, _ = w.Write([]byte(`{"status":"ignored_unknown_order"}`))
 		return
 	}
 
@@ -164,10 +146,9 @@ func (h *Handler) MidtransWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if isPaid {
-		// Only credit if not already processed as settlement
-		if tx.Status != "settlement" && tx.Status != "paid" {
-			_ = h.repo.CreditUserTokens(ctx, tx.UserID, tx.Tokens)
-			_ = h.repo.UpdateTransactionStatus(ctx, tx.ID, "settlement", payload.PaymentType, payload.TransactionID)
+		if err := h.billing.MarkPaid(ctx, tx, payload.PaymentType, payload.TransactionID); err != nil {
+			log.Error().Err(err).Msg("Failed to credit tokens for Midtrans payment")
+		} else {
 			log.Info().
 				Str("user_id", tx.UserID).
 				Int64("tokens", tx.Tokens).
@@ -175,12 +156,12 @@ func (h *Handler) MidtransWebhook(w http.ResponseWriter, r *http.Request) {
 				Msg("Successfully credited tokens from Midtrans payment!")
 		}
 	} else if status == "expire" || status == "cancel" || status == "deny" {
-		_ = h.repo.UpdateTransactionStatus(ctx, tx.ID, status, payload.PaymentType, payload.TransactionID)
+		_ = h.billing.MarkFailed(ctx, tx, status, payload.PaymentType, payload.TransactionID)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"ok"}`))
+	_, _ = w.Write([]byte(`{"status":"ok"}`))
 }
 
 func (h *Handler) ManualCreditTokens(w http.ResponseWriter, r *http.Request) {
@@ -191,33 +172,12 @@ func (h *Handler) ManualCreditTokens(w http.ResponseWriter, r *http.Request) {
 	tokensStr := strings.TrimSpace(r.FormValue("tokens"))
 	tokens, _ := strconv.ParseInt(tokensStr, 10, 64)
 
-	if userID == "" || tokens <= 0 || tokens > 1000000000000 {
-		http.Redirect(w, r, "/billing?error=Invalid+user+or+token+amount", http.StatusSeeOther)
+	err := h.billing.ManualCredit(ctx, userID, tokens)
+	if err != nil {
+		http.Redirect(w, r, "/billing?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
 
-	user, err := h.repo.GetUserByID(ctx, userID)
-	if err != nil || user == nil {
-		http.Redirect(w, r, "/billing?error=User+not+found", http.StatusSeeOther)
-		return
-	}
-
-	// Credit tokens
-	_ = h.repo.CreditUserTokens(ctx, userID, tokens)
-
-	// Record manual settlement transaction
-	orderID := fmt.Sprintf("MANUAL-%s-%s", time.Now().Format("20060102-150405"), uuid.New().String()[:5])
-	manualTx := &models.Transaction{
-		ID:          orderID,
-		UserID:      userID,
-		PackageID:   "manual",
-		Tokens:      tokens,
-		AmountIDR:   0,
-		Status:      "settlement",
-		PaymentType: "manual_credit",
-	}
-	_ = h.repo.CreateTransaction(ctx, manualTx)
-
-	msg := fmt.Sprintf("Successfully credited %d tokens to %s!", tokens, user.Name)
+	msg := fmt.Sprintf("Successfully credited %d tokens!", tokens)
 	http.Redirect(w, r, "/billing?msg="+url.QueryEscape(msg), http.StatusSeeOther)
 }
