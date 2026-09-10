@@ -39,8 +39,8 @@ type Repository interface {
 	GetRequestLogsCursor(ctx context.Context, limit int, cursor, direction, userID, modelFilter string, statusFilter int) ([]models.RequestLog, *models.CursorPageInfo, error)
 
 	// Stats
-	GetDashboardStats(ctx context.Context, days int) (*models.DashboardStats, error)
-	GetUserDashboardStats(ctx context.Context, userID string, days int) (*models.DashboardStats, error)
+	GetDashboardStats(ctx context.Context, timeframe string) (*models.DashboardStats, error)
+	GetUserDashboardStats(ctx context.Context, userID string, timeframe string) (*models.DashboardStats, error)
 
 	// Billing & Midtrans Transactions
 	GetActivePackages(ctx context.Context) ([]models.TokenPackage, error)
@@ -573,14 +573,43 @@ func (r *SQLiteRepo) GetRequestLogsCursor(ctx context.Context, limit int, cursor
 	return logs, pageInfo, nil
 }
 
+func getTimeframeConfig(tf string) (bucketExpr, whereClause, candleSize, normTf string) {
+	normTf = strings.ToLower(strings.TrimSpace(tf))
+	switch normTf {
+	case "1h":
+		// Last 1 hour, 5-minute candles in WIB (+7h)
+		bucket := "strftime('%H:', datetime(created_at, '+7 hours')) || printf('%02d', (CAST(strftime('%M', datetime(created_at, '+7 hours')) AS INTEGER) / 5) * 5)"
+		return bucket, "created_at >= datetime('now', '-1 hour')", "5m", "1H"
+	case "4h":
+		// Last 4 hours, 15-minute candles in WIB (+7h)
+		bucket := "strftime('%H:', datetime(created_at, '+7 hours')) || printf('%02d', (CAST(strftime('%M', datetime(created_at, '+7 hours')) AS INTEGER) / 15) * 15)"
+		return bucket, "created_at >= datetime('now', '-4 hours')", "15m", "4H"
+	case "1d", "24h":
+		// Last 24 hours, 1-hour candles in WIB (+7h)
+		bucket := "strftime('%H:00', datetime(created_at, '+7 hours'))"
+		return bucket, "created_at >= datetime('now', '-24 hours')", "1h", "1D"
+	case "1w", "7d":
+		// Last 7 days, daily candles in WIB (+7h)
+		bucket := "strftime('%Y-%m-%d', datetime(created_at, '+7 hours'))"
+		return bucket, "created_at >= datetime('now', '-7 days')", "1d", "1W"
+	case "1m", "30d":
+		// Last 30 days, daily candles in WIB (+7h)
+		bucket := "strftime('%Y-%m-%d', datetime(created_at, '+7 hours'))"
+		return bucket, "created_at >= datetime('now', '-30 days')", "1d", "1M"
+	case "all":
+		// All time, daily candles
+		bucket := "strftime('%Y-%m-%d', datetime(created_at, '+7 hours'))"
+		return bucket, "1=1", "1d", "ALL"
+	default:
+		// Default to 1D (24h) for trading feel
+		bucket := "strftime('%H:00', datetime(created_at, '+7 hours'))"
+		return bucket, "created_at >= datetime('now', '-24 hours')", "1h", "1D"
+	}
+}
+
 // Dashboard statistics
 
-func (r *SQLiteRepo) GetDashboardStats(ctx context.Context, days int) (*models.DashboardStats, error) {
-	if days <= 0 {
-		days = 14
-	}
-	daysModifier := fmt.Sprintf("-%d days", days)
-
+func (r *SQLiteRepo) GetDashboardStats(ctx context.Context, timeframe string) (*models.DashboardStats, error) {
 	stats := &models.DashboardStats{}
 
 	// Totals
@@ -589,22 +618,31 @@ func (r *SQLiteRepo) GetDashboardStats(ctx context.Context, days int) (*models.D
 	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM users WHERE is_active = 1").Scan(&stats.ActiveUsers)
 	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM api_keys WHERE is_active = 1").Scan(&stats.ActiveKeys)
 
-	// Daily Usage (configurable days)
-	dailyQuery := `
-		SELECT strftime('%Y-%m-%d', created_at) as log_date, 
+	// Trading Timeframe Granular Aggregation
+	bucketExpr, whereClause, candleSize, normTf := getTimeframeConfig(timeframe)
+	stats.Timeframe = normTf
+	stats.CandleSize = candleSize
+
+	dailyQuery := fmt.Sprintf(`
+		SELECT %s as log_date, 
 		       COALESCE(SUM(total_tokens), 0) as tokens, 
 		       COUNT(*) as reqs
 		FROM request_logs
-		WHERE created_at >= datetime('now', ?)
+		WHERE %s
 		GROUP BY log_date
-		ORDER BY log_date ASC`
-	dailyRows, err := r.db.QueryContext(ctx, dailyQuery, daysModifier)
+		ORDER BY log_date ASC`, bucketExpr, whereClause)
+	dailyRows, err := r.db.QueryContext(ctx, dailyQuery)
 	if err == nil {
 		defer dailyRows.Close()
 		for dailyRows.Next() {
 			var du models.DailyUsage
 			if err := dailyRows.Scan(&du.Date, &du.TotalTokens, &du.Requests); err == nil {
 				stats.DailyUsage = append(stats.DailyUsage, du)
+				stats.TimeframeVol += du.TotalTokens
+				stats.TimeframeReqs += du.Requests
+				if du.TotalTokens > stats.PeakTokens {
+					stats.PeakTokens = du.TotalTokens
+				}
 			}
 		}
 	}
@@ -654,34 +692,43 @@ func (r *SQLiteRepo) GetDashboardStats(ctx context.Context, days int) (*models.D
 	return stats, nil
 }
 
-func (r *SQLiteRepo) GetUserDashboardStats(ctx context.Context, userID string, days int) (*models.DashboardStats, error) {
-	if days <= 0 {
-		days = 14
-	}
-	daysModifier := fmt.Sprintf("-%d days", days)
-
+func (r *SQLiteRepo) GetUserDashboardStats(ctx context.Context, userID string, timeframe string) (*models.DashboardStats, error) {
 	stats := &models.DashboardStats{}
 
 	// User-specific Totals
 	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*), COALESCE(SUM(total_tokens), 0) FROM request_logs WHERE user_id = ?", userID).Scan(&stats.TotalRequests, &stats.TotalTokens)
 	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM api_keys WHERE user_id = ? AND is_active = 1", userID).Scan(&stats.ActiveKeys)
 
-	// User Daily Usage (configurable days)
-	dailyQuery := `
-		SELECT strftime('%Y-%m-%d', created_at) as log_date, 
+	// Trading Timeframe Granular Aggregation
+	bucketExpr, whereClause, candleSize, normTf := getTimeframeConfig(timeframe)
+	stats.Timeframe = normTf
+	stats.CandleSize = candleSize
+
+	userWhere := whereClause + " AND user_id = ?"
+	if whereClause == "1=1" {
+		userWhere = "user_id = ?"
+	}
+
+	dailyQuery := fmt.Sprintf(`
+		SELECT %s as log_date, 
 		       COALESCE(SUM(total_tokens), 0) as tokens, 
 		       COUNT(*) as reqs
 		FROM request_logs
-		WHERE user_id = ? AND created_at >= datetime('now', ?)
+		WHERE %s
 		GROUP BY log_date
-		ORDER BY log_date ASC`
-	dailyRows, err := r.db.QueryContext(ctx, dailyQuery, userID, daysModifier)
+		ORDER BY log_date ASC`, bucketExpr, userWhere)
+	dailyRows, err := r.db.QueryContext(ctx, dailyQuery, userID)
 	if err == nil {
 		defer dailyRows.Close()
 		for dailyRows.Next() {
 			var du models.DailyUsage
 			if err := dailyRows.Scan(&du.Date, &du.TotalTokens, &du.Requests); err == nil {
 				stats.DailyUsage = append(stats.DailyUsage, du)
+				stats.TimeframeVol += du.TotalTokens
+				stats.TimeframeReqs += du.Requests
+				if du.TotalTokens > stats.PeakTokens {
+					stats.PeakTokens = du.TotalTokens
+				}
 			}
 		}
 	}

@@ -97,6 +97,11 @@ type DashboardStats struct {
 	ActiveUsers   int64          `json:"active_users"`
 	TotalUsers    int64          `json:"total_users"`
 	ActiveKeys    int64          `json:"active_keys"`
+	Timeframe     string         `json:"timeframe"`
+	TimeframeVol  int64          `json:"timeframe_vol"`
+	TimeframeReqs int64          `json:"timeframe_reqs"`
+	PeakTokens    int64          `json:"peak_tokens"`
+	CandleSize    string         `json:"candle_size"`
 	DailyUsage    []DailyUsage   `json:"daily_usage"`
 	TopUsers      []TopUserStat  `json:"top_users"`
 	TopModels     []TopModelStat `json:"top_models"`

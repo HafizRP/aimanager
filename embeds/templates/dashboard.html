@@ -129,23 +129,32 @@
   <!-- Chart: Daily Token Usage -->
   <div class="col-lg-8">
     <div class="card-modern p-4 h-100">
-      <div class="d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-2 mb-3">
+      <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3 mb-3">
         <div>
-          <h6 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
-            <i class="bi bi-graph-up text-primary"></i> Token Usage Trends
-          </h6>
-          <p class="text-dim small mb-0">Daily aggregated token consumption (<span id="timeframeDisplayLabel">last {{ if .Timeframe }}{{ .Timeframe }}{{ else }}14{{ end }} days</span>)</p>
-        </div>
-        <div class="d-flex align-items-center gap-2">
-          <div class="btn-group btn-group-sm" role="group" id="timeframeButtonGroup">
-            <button type="button" class="btn btn-modern-ghost py-1 px-2 tf-btn {{ if eq .Timeframe 7 }}active border-primary{{ end }}" data-days="7">7D</button>
-            <button type="button" class="btn btn-modern-ghost py-1 px-2 tf-btn {{ if or (eq .Timeframe 14) (not .Timeframe) }}active border-primary{{ end }}" data-days="14">14D</button>
-            <button type="button" class="btn btn-modern-ghost py-1 px-2 tf-btn {{ if eq .Timeframe 30 }}active border-primary{{ end }}" data-days="30">30D</button>
-            <button type="button" class="btn btn-modern-ghost py-1 px-2 tf-btn {{ if eq .Timeframe 90 }}active border-primary{{ end }}" data-days="90">90D</button>
+          <div class="d-flex align-items-center gap-2">
+            <h6 class="fw-bold mb-0 text-light d-flex align-items-center gap-2">
+              <i class="bi bi-graph-up-arrow text-emerald"></i> Token Usage Trends
+            </h6>
+            <span class="badge-modern badge-emerald" style="font-size: 0.65rem; padding: 0.15rem 0.45rem;">
+              <span class="pulse-dot"></span> LIVE VOL
+            </span>
           </div>
-          <span class="badge-modern badge-gray d-none d-md-inline-flex">
-            <span class="pulse-dot"></span> Live
-          </span>
+          <p class="text-dim small mb-0 mt-1" style="font-size: 0.78rem;">
+            TF: <span id="timeframeDisplayLabel" class="text-light fw-bold font-monospace">{{ if .Stats.Timeframe }}{{ .Stats.Timeframe }}{{ else }}1D{{ end }}</span>
+            <span class="opacity-40 mx-1">•</span> Candle: <span id="candleSizeLabel" class="text-info font-monospace">{{ if .Stats.CandleSize }}{{ .Stats.CandleSize }}{{ else }}1h{{ end }}</span>
+            <span class="opacity-40 mx-1">•</span> Vol: <span id="volMetricLabel" class="text-emerald font-monospace fw-bold">{{ formatNumber .Stats.TimeframeVol }} tok</span>
+            <span class="opacity-40 mx-1">•</span> Peak: <span id="peakMetricLabel" class="text-warning font-monospace">{{ formatNumber .Stats.PeakTokens }}</span>
+          </p>
+        </div>
+
+        <!-- Forex / TradingView Style Timeframe Bar -->
+        <div class="d-flex align-items-center gap-1 p-1 rounded-3" style="background: rgba(16, 19, 29, 0.9); border: 1px solid var(--border-subtle);" id="tradingTimeframeBar">
+          <button type="button" class="btn-trading-tf {{ if eq .Timeframe "1h" }}active{{ end }}" data-tf="1h">1H</button>
+          <button type="button" class="btn-trading-tf {{ if eq .Timeframe "4h" }}active{{ end }}" data-tf="4h">4H</button>
+          <button type="button" class="btn-trading-tf {{ if or (eq .Timeframe "1d") (not .Timeframe) }}active{{ end }}" data-tf="1d">1D</button>
+          <button type="button" class="btn-trading-tf {{ if eq .Timeframe "1w" }}active{{ end }}" data-tf="1w">1W</button>
+          <button type="button" class="btn-trading-tf {{ if eq .Timeframe "1m" }}active{{ end }}" data-tf="1m">1M</button>
+          <button type="button" class="btn-trading-tf {{ if eq .Timeframe "all" }}active{{ end }}" data-tf="all">ALL</button>
         </div>
       </div>
       <div style="height: 270px; position: relative;">
@@ -421,28 +430,43 @@
       }
     });
 
-    // Timeframe Switcher
-    const tfButtons = document.querySelectorAll('#timeframeButtonGroup .tf-btn');
-    const tfLabel = document.getElementById('timeframeDisplayLabel');
+    // Helper to format numbers like 1.2M, 50k
+    function formatNumShort(n) {
+      if (!n) return '0';
+      if (n >= 1000000) return (n / 1000000).toFixed(2) + 'M';
+      if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+      return n.toString();
+    }
+
+    // Forex / TradingView Timeframe Switcher
+    const tfButtons = document.querySelectorAll('#tradingTimeframeBar .btn-trading-tf');
+    const tfDisplayLabel = document.getElementById('timeframeDisplayLabel');
+    const candleLabel = document.getElementById('candleSizeLabel');
+    const volLabel = document.getElementById('volMetricLabel');
+    const peakLabel = document.getElementById('peakMetricLabel');
 
     tfButtons.forEach(btn => {
       btn.addEventListener('click', function() {
-        const days = this.getAttribute('data-days');
-        tfButtons.forEach(b => b.classList.remove('active', 'border-primary'));
-        this.classList.add('active', 'border-primary');
-        if (tfLabel) {
-          tfLabel.textContent = `last ${days} days`;
-        }
+        const tf = this.getAttribute('data-tf');
+        tfButtons.forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
 
-        fetch(`/api/stats?timeframe=${days}d`)
+        fetch(`/api/stats?timeframe=${tf}`)
           .then(res => res.json())
           .then(data => {
-            if (data && data.daily_usage) {
-              const newLabels = data.daily_usage.map(d => d.date);
-              const newData = data.daily_usage.map(d => d.total_tokens);
-              chartInstance.data.labels = newLabels.length ? newLabels : ['Today'];
-              chartInstance.data.datasets[0].data = newData.length ? newData : [0];
-              chartInstance.update();
+            if (data) {
+              if (tfDisplayLabel) tfDisplayLabel.textContent = data.timeframe || tf.toUpperCase();
+              if (candleLabel) candleLabel.textContent = data.candle_size || '1h';
+              if (volLabel) volLabel.textContent = formatNumShort(data.timeframe_vol) + ' tok';
+              if (peakLabel) peakLabel.textContent = formatNumShort(data.peak_tokens);
+
+              if (data.daily_usage) {
+                const newLabels = data.daily_usage.map(d => d.date);
+                const newData = data.daily_usage.map(d => d.total_tokens);
+                chartInstance.data.labels = newLabels.length ? newLabels : ['No Data'];
+                chartInstance.data.datasets[0].data = newData.length ? newData : [0];
+                chartInstance.update();
+              }
             }
           })
           .catch(err => console.error("Error fetching stats:", err));

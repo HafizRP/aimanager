@@ -241,6 +241,33 @@ body {
   }
 }
 
+/* Forex / TradingView Style Buttons */
+.btn-trading-tf {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.btn-trading-tf:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.btn-trading-tf.active {
+  background: rgba(99, 102, 241, 0.2) !important;
+  border-color: rgba(99, 102, 241, 0.4) !important;
+  color: #a5b4fc !important;
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.2);
+}
+
 /* Glassmorphism Navbar */
 .navbar-glass {
   background: rgba(9, 10, 16, 0.75) !important;
