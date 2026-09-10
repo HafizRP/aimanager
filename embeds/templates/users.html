@@ -3,25 +3,27 @@
 {{ define "content" }}
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
   <div>
-    <h4 class="fw-bold mb-1"><i class="bi bi-people me-2 text-primary"></i>Users & Quota Management</h4>
-    <p class="text-muted small mb-0">Configure users, assign token limits, and define model access whitelists.</p>
+    <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
+      <i class="bi bi-people text-primary"></i> Users & Quotas
+    </h4>
+    <p class="text-dim small mb-0">Manage client accounts, token budgets, and per-user model access permissions.</p>
   </div>
   <div>
-    <button class="btn btn-primary d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#createUserModal">
-      <i class="bi bi-person-plus-fill"></i> Add New User
+    <button class="btn-modern-primary d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#createUserModal">
+      <i class="bi bi-person-plus-fill"></i> Add User
     </button>
   </div>
 </div>
 
-<div class="card p-3 mb-4">
+<div class="card-modern mb-4">
   <div class="table-responsive">
-    <table class="table table-dark table-hover mb-0">
+    <table class="table table-modern mb-0">
       <thead>
         <tr>
           <th>User</th>
-          <th>Token Quota & Usage</th>
+          <th>Token Usage & Quota</th>
           <th>Allowed Models</th>
-          <th>Keys</th>
+          <th>API Keys</th>
           <th>Status</th>
           <th>Created</th>
           <th class="text-end">Actions</th>
@@ -33,69 +35,70 @@
             <tr>
               <td>
                 <div class="d-flex align-items-center gap-2">
-                  <div class="stat-icon-wrapper bg-primary bg-opacity-20 text-primary" style="width: 32px; height: 32px; font-size: 1rem;">
-                    <i class="bi bi-person"></i>
+                  <div class="kpi-icon kpi-icon-indigo" style="width: 34px; height: 34px; font-size: 0.95rem;">
+                    <i class="bi bi-person-fill"></i>
                   </div>
                   <div>
                     <div class="fw-bold text-light">{{ .Name }}</div>
-                    <span class="badge bg-secondary-subtle text-secondary small">{{ .Role }}</span>
+                    <span class="badge-modern badge-gray" style="font-size: 0.68rem; padding: 0.1rem 0.4rem;">{{ .Role }}</span>
                   </div>
                 </div>
               </td>
-              <td style="min-width: 220px;">
+              <td style="min-width: 240px;">
                 <div class="d-flex justify-content-between align-items-center small mb-1">
-                  <span class="text-light fw-medium">{{ formatNumber .TokensUsed }} tokens</span>
+                  <span class="text-light fw-medium font-monospace">{{ formatNumber .TokensUsed }} tok</span>
                   {{ if eq .TokenQuota 0 }}
-                    <span class="badge bg-info-subtle text-info">Unlimited</span>
+                    <span class="badge-modern badge-indigo" style="font-size: 0.68rem;">Unlimited</span>
                   {{ else }}
-                    <span class="text-muted small">/ {{ formatNumber .TokenQuota }}</span>
+                    {{ $p := .QuotaPercent }}
+                    <span class="text-dim small font-monospace">/ {{ formatNumber .TokenQuota }} ({{ printf "%.1f" $p }}%)</span>
                   {{ end }}
                 </div>
                 {{ if gt .TokenQuota 0 }}
                   {{ $p := .QuotaPercent }}
-                  <div class="progress" style="height: 6px;">
-                    <div class="progress-bar {{ if gt $p 90.0 }}bg-danger{{ else if gt $p 70.0 }}bg-warning{{ else }}bg-success{{ end }}" 
+                  <div class="progress-modern">
+                    <div class="progress-bar {{ if gt $p 90.0 }}progress-bar-danger{{ else if gt $p 75.0 }}progress-bar-warning{{ end }}" 
                          role="progressbar" style="width: {{ $p }}%;"></div>
                   </div>
                 {{ else }}
-                  <div class="progress" style="height: 6px;">
-                    <div class="progress-bar bg-info" role="progressbar" style="width: 100%;"></div>
+                  <div class="progress-modern">
+                    <div class="progress-bar" role="progressbar" style="width: 100%;"></div>
                   </div>
                 {{ end }}
               </td>
               <td style="max-width: 260px;">
                 {{ if containsWildcard .AllowedModels }}
-                  <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-asterisk"></i> All Models Allowed</span>
+                  <span class="badge-modern badge-emerald"><i class="bi bi-asterisk"></i> All Models Allowed</span>
                 {{ else }}
-                  <span class="badge bg-primary-subtle text-primary border border-primary-subtle">{{ countAllowed .AllowedModels }} Models Allowed</span>
+                  <span class="badge-modern badge-indigo">{{ countAllowed .AllowedModels }} Models Whitelisted</span>
                   <button type="button" class="btn btn-link p-0 text-muted small ms-1" data-bs-toggle="tooltip" title="{{ .AllowedModels }}">
                     <i class="bi bi-info-circle"></i>
                   </button>
                 {{ end }}
               </td>
               <td>
-                <a href="/keys?user_id={{ .ID }}" class="badge bg-dark border border-secondary text-decoration-none">
-                  <i class="bi bi-key me-1"></i> {{ .KeyCount }} Keys
+                <a href="/keys?user_id={{ .ID }}" class="badge-modern badge-gray text-decoration-none">
+                  <i class="bi bi-key me-1 text-amber"></i> {{ .KeyCount }} Keys
                 </a>
               </td>
               <td>
                 {{ if .IsActive }}
-                  <span class="badge bg-success-subtle text-success border border-success-subtle"><i class="bi bi-check-circle"></i> Active</span>
+                  <span class="badge-modern badge-emerald"><i class="bi bi-check-circle"></i> Active</span>
                 {{ else }}
-                  <span class="badge bg-danger-subtle text-danger border border-danger-subtle"><i class="bi bi-slash-circle"></i> Suspended</span>
+                  <span class="badge-modern badge-rose"><i class="bi bi-slash-circle"></i> Suspended</span>
                 {{ end }}
               </td>
-              <td class="text-muted small font-monospace">{{ formatDate .CreatedAt }}</td>
+              <td class="text-dim small font-monospace">{{ formatDate .CreatedAt }}</td>
               <td class="text-end">
                 <div class="d-flex justify-content-end gap-1">
                   <!-- Add Key Button -->
-                  <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#createKeyModal" 
+                  <button class="btn-modern-ghost py-1 px-2 text-primary" data-bs-toggle="modal" data-bs-target="#createKeyModal" 
                           data-userid="{{ .ID }}" data-username="{{ .Name }}" title="Add API Key">
                     <i class="bi bi-plus-circle"></i> Key
                   </button>
 
                   <!-- Edit Button -->
-                  <button class="btn btn-sm btn-outline-secondary btn-edit-user" 
+                  <button class="btn-modern-ghost py-1 px-2 btn-edit-user" 
                           data-id="{{ .ID }}" data-name="{{ .Name }}" data-quota="{{ .TokenQuota }}" 
                           data-models="{{ .AllowedModels }}" data-active="{{ .IsActive }}" title="Edit User">
                     <i class="bi bi-pencil"></i>
@@ -103,7 +106,7 @@
 
                   <!-- Toggle Status Form -->
                   <form action="/users/{{ .ID }}/toggle" method="POST" class="d-inline m-0">
-                    <button type="submit" class="btn btn-sm {{ if .IsActive }}btn-outline-warning{{ else }}btn-outline-success{{ end }}" 
+                    <button type="submit" class="btn-modern-ghost py-1 px-2 {{ if .IsActive }}text-warning{{ else }}text-success{{ end }}" 
                             title="{{ if .IsActive }}Suspend User{{ else }}Reactivate User{{ end }}">
                       <i class="bi {{ if .IsActive }}bi-pause-fill{{ else }}bi-play-fill{{ end }}"></i>
                     </button>
@@ -111,7 +114,7 @@
 
                   <!-- Delete Form -->
                   <form action="/users/{{ .ID }}/delete" method="POST" class="d-inline m-0" onsubmit="return confirm('Are you sure you want to delete this user and all associated API keys?');">
-                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete User">
+                    <button type="submit" class="btn-modern-ghost py-1 px-2 text-danger" title="Delete User">
                       <i class="bi bi-trash"></i>
                     </button>
                   </form>
@@ -121,9 +124,9 @@
           {{ end }}
         {{ else }}
           <tr>
-            <td colspan="7" class="text-center text-muted py-4">
-              <i class="bi bi-people fs-2 d-block mb-2"></i>
-              No users yet. Click <strong>Add New User</strong> to create your first client.
+            <td colspan="7" class="text-center text-dim py-5">
+              <i class="bi bi-people fs-2 d-block mb-2 opacity-50"></i>
+              No users found. Click <strong>Add User</strong> to create your first client.
             </td>
           </tr>
         {{ end }}
@@ -135,24 +138,26 @@
 <!-- Modal: Create User -->
 <div class="modal fade" id="createUserModal" tabindex="-1">
   <div class="modal-dialog modal-lg">
-    <div class="modal-content">
+    <div class="modal-content modal-content-modern">
       <form action="/users" method="POST">
-        <div class="modal-header">
-          <h5 class="modal-title fw-bold"><i class="bi bi-person-plus text-primary me-2"></i>Create New User</h5>
+        <div class="modal-header modal-header-modern">
+          <h5 class="modal-title fw-bold text-light d-flex align-items-center gap-2">
+            <i class="bi bi-person-plus text-primary"></i> Create User & Assign Quota
+          </h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
-        <div class="modal-body">
-          <div class="row g-3 mb-3">
+        <div class="modal-body p-4">
+          <div class="row g-3 mb-4">
             <div class="col-md-6">
-              <label class="form-label small text-muted">User / Client Name</label>
-              <input type="text" name="name" class="form-control" placeholder="e.g. Cursor Pro, Client A, John" required>
+              <label class="form-label small text-muted">User / Client Label</label>
+              <input type="text" name="name" class="form-control form-control-modern" placeholder="e.g. Cursor Pro, Client A, John" required>
             </div>
             <div class="col-md-6">
               <label class="form-label small text-muted">Token Quota (0 for Unlimited)</label>
               <div class="input-group">
-                <input type="number" name="token_quota" id="createQuotaInput" class="form-control" value="1000000" min="0" step="10000">
-                <button type="button" class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown">Presets</button>
-                <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end">
+                <input type="number" name="token_quota" id="createQuotaInput" class="form-control form-control-modern" value="1000000" min="0" step="10000">
+                <button type="button" class="btn btn-modern-ghost dropdown-toggle" data-bs-toggle="dropdown">Presets</button>
+                <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end shadow">
                   <li><a class="dropdown-item preset-quota" data-target="createQuotaInput" data-val="100000">100,000 (100k)</a></li>
                   <li><a class="dropdown-item preset-quota" data-target="createQuotaInput" data-val="500000">500,000 (500k)</a></li>
                   <li><a class="dropdown-item preset-quota" data-target="createQuotaInput" data-val="1000000">1,000,000 (1M)</a></li>
@@ -164,33 +169,33 @@
             </div>
           </div>
 
-          <div class="mb-3">
+          <div class="mb-4">
             <div class="d-flex justify-content-between align-items-center mb-2">
-              <label class="form-label small text-muted mb-0">Model Access Whitelist</label>
-              <div class="d-flex gap-2">
-                <button type="button" class="btn btn-xs btn-outline-primary btn-sm py-0" id="btnSelectAllModels">Select All</button>
-                <button type="button" class="btn btn-xs btn-outline-secondary btn-sm py-0" id="btnSelectGeminiOnly">Gemini Only</button>
-                <button type="button" class="btn btn-xs btn-outline-secondary btn-sm py-0" id="btnSelectClaudeOnly">Claude Only</button>
-                <button type="button" class="btn btn-xs btn-outline-danger btn-sm py-0" id="btnDeselectAll">Clear</button>
+              <label class="form-label small text-muted mb-0">Model Whitelist Permissions</label>
+              <div class="d-flex gap-1">
+                <button type="button" class="btn btn-xs btn-modern-ghost py-0 px-2" style="font-size:0.75rem;" id="btnSelectAllModels">All</button>
+                <button type="button" class="btn btn-xs btn-modern-ghost py-0 px-2" style="font-size:0.75rem;" id="btnSelectGeminiOnly">Gemini Only</button>
+                <button type="button" class="btn btn-xs btn-modern-ghost py-0 px-2" style="font-size:0.75rem;" id="btnSelectClaudeOnly">Claude Only</button>
+                <button type="button" class="btn btn-xs btn-modern-ghost py-0 px-2 text-danger" style="font-size:0.75rem;" id="btnDeselectAll">Clear</button>
               </div>
             </div>
 
-            <div class="form-check mb-2 p-2 rounded bg-dark border border-secondary border-opacity-50">
+            <div class="form-check mb-2 p-3 rounded-3" style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-subtle);">
               <input class="form-check-input ms-0 me-2" type="checkbox" name="allow_all" id="createAllowAllCheck" value="true" checked>
-              <label class="form-check-label fw-bold text-success" for="createAllowAllCheck">
-                <i class="bi bi-asterisk"></i> Allow All Models (*)
+              <label class="form-check-label fw-bold text-emerald" for="createAllowAllCheck">
+                <i class="bi bi-asterisk"></i> Allow All Upstream Models (*)
               </label>
-              <div class="text-muted small ps-4">User can access any model available on upstream 9router.</div>
+              <div class="text-dim small ps-4">User can invoke any model registered in 9router Core.</div>
             </div>
 
-            <div id="createModelsChecklistContainer" class="p-2 rounded bg-dark border border-secondary border-opacity-25" style="max-height: 200px; overflow-y: auto; display: none;">
-              <input type="text" class="form-control form-control-sm mb-2" id="createModelSearchInput" placeholder="Filter models...">
-              <div id="createModelsChecklist" class="row g-1">
+            <div id="createModelsChecklistContainer" class="p-3 rounded-3" style="background: #0b0d14; border: 1px solid var(--border-subtle); max-height: 240px; overflow-y: auto; display: none;">
+              <input type="text" class="form-control form-control-modern form-control-sm mb-2" id="createModelSearchInput" placeholder="Filter models...">
+              <div id="createModelsChecklist" class="row g-2">
                 {{ range .AvailableModels }}
                   <div class="col-md-6 model-check-item">
                     <div class="form-check">
                       <input class="form-check-input create-model-checkbox" type="checkbox" name="models" value="{{ . }}" id="m_{{ . }}">
-                      <label class="form-check-label font-monospace small text-truncate d-block" for="m_{{ . }}" title="{{ . }}">{{ . }}</label>
+                      <label class="form-check-label font-monospace small text-truncate d-block text-light" for="m_{{ . }}" title="{{ . }}">{{ . }}</label>
                     </div>
                   </div>
                 {{ end }}
@@ -198,16 +203,16 @@
             </div>
           </div>
 
-          <div class="form-check p-2 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-25">
+          <div class="form-check p-3 rounded-3" style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-subtle);">
             <input class="form-check-input ms-0 me-2" type="checkbox" name="create_key" id="createKeyCheck" value="true" checked>
             <label class="form-check-label text-light fw-medium" for="createKeyCheck">
-              <i class="bi bi-key text-warning"></i> Generate an initial API Key automatically
+              <i class="bi bi-key text-warning"></i> Generate an initial API Key automatically (synced with 9router Core)
             </label>
           </div>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-primary"><i class="bi bi-check2"></i> Create User</button>
+        <div class="modal-footer modal-footer-modern">
+          <button type="button" class="btn-modern-ghost" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn-modern-primary"><i class="bi bi-check2"></i> Create User</button>
         </div>
       </form>
     </div>
@@ -217,41 +222,43 @@
 <!-- Modal: Edit User -->
 <div class="modal fade" id="editUserModal" tabindex="-1">
   <div class="modal-dialog modal-lg">
-    <div class="modal-content">
+    <div class="modal-content modal-content-modern">
       <form id="editUserForm" action="/users/edit" method="POST">
         <input type="hidden" name="id" id="editUserId">
-        <div class="modal-header">
-          <h5 class="modal-title fw-bold"><i class="bi bi-pencil-square text-primary me-2"></i>Edit User & Quota</h5>
+        <div class="modal-header modal-header-modern">
+          <h5 class="modal-title fw-bold text-light d-flex align-items-center gap-2">
+            <i class="bi bi-pencil-square text-primary"></i> Edit User & Whitelist
+          </h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
-        <div class="modal-body">
-          <div class="row g-3 mb-3">
+        <div class="modal-body p-4">
+          <div class="row g-3 mb-4">
             <div class="col-md-6">
               <label class="form-label small text-muted">User Name</label>
-              <input type="text" name="name" id="editUserName" class="form-control" required>
+              <input type="text" name="name" id="editUserName" class="form-control form-control-modern" required>
             </div>
             <div class="col-md-6">
               <label class="form-label small text-muted">Token Quota (0 for Unlimited)</label>
-              <input type="number" name="token_quota" id="editUserQuota" class="form-control" min="0" step="10000">
+              <input type="number" name="token_quota" id="editUserQuota" class="form-control form-control-modern" min="0" step="10000">
             </div>
           </div>
 
-          <div class="mb-3">
-            <div class="form-check mb-2 p-2 rounded bg-dark border border-secondary border-opacity-50">
+          <div class="mb-4">
+            <div class="form-check mb-2 p-3 rounded-3" style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-subtle);">
               <input class="form-check-input ms-0 me-2" type="checkbox" name="allow_all" id="editAllowAllCheck" value="true">
-              <label class="form-check-label fw-bold text-success" for="editAllowAllCheck">
-                <i class="bi bi-asterisk"></i> Allow All Models (*)
+              <label class="form-check-label fw-bold text-emerald" for="editAllowAllCheck">
+                <i class="bi bi-asterisk"></i> Allow All Upstream Models (*)
               </label>
             </div>
 
-            <div id="editModelsChecklistContainer" class="p-2 rounded bg-dark border border-secondary border-opacity-25" style="max-height: 200px; overflow-y: auto;">
-              <input type="text" class="form-control form-control-sm mb-2" id="editModelSearchInput" placeholder="Filter models...">
-              <div id="editModelsChecklist" class="row g-1">
+            <div id="editModelsChecklistContainer" class="p-3 rounded-3" style="background: #0b0d14; border: 1px solid var(--border-subtle); max-height: 240px; overflow-y: auto;">
+              <input type="text" class="form-control form-control-modern form-control-sm mb-2" id="editModelSearchInput" placeholder="Filter models...">
+              <div id="editModelsChecklist" class="row g-2">
                 {{ range .AvailableModels }}
                   <div class="col-md-6 model-check-item">
                     <div class="form-check">
                       <input class="form-check-input edit-model-checkbox" type="checkbox" name="models" value="{{ . }}" id="em_{{ . }}">
-                      <label class="form-check-label font-monospace small text-truncate d-block" for="em_{{ . }}" title="{{ . }}">{{ . }}</label>
+                      <label class="form-check-label font-monospace small text-truncate d-block text-light" for="em_{{ . }}" title="{{ . }}">{{ . }}</label>
                     </div>
                   </div>
                 {{ end }}
@@ -259,14 +266,14 @@
             </div>
           </div>
 
-          <div class="form-check form-switch p-2 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-25">
+          <div class="form-check form-switch p-3 rounded-3" style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-subtle);">
             <input class="form-check-input ms-0 me-2" type="checkbox" name="is_active" id="editUserActive" value="true">
             <label class="form-check-label text-light fw-medium" for="editUserActive">User Account Active</label>
           </div>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-primary"><i class="bi bi-check2"></i> Save Changes</button>
+        <div class="modal-footer modal-footer-modern">
+          <button type="button" class="btn-modern-ghost" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn-modern-primary"><i class="bi bi-check2"></i> Save Changes</button>
         </div>
       </form>
     </div>
@@ -276,31 +283,33 @@
 <!-- Modal: Quick Create API Key -->
 <div class="modal fade" id="createKeyModal" tabindex="-1">
   <div class="modal-dialog">
-    <div class="modal-content">
+    <div class="modal-content modal-content-modern">
       <form action="/keys" method="POST">
         <input type="hidden" name="user_id" id="keyModalUserId">
-        <div class="modal-header">
-          <h5 class="modal-title fw-bold"><i class="bi bi-key text-warning me-2"></i>Generate API Key</h5>
+        <div class="modal-header modal-header-modern">
+          <h5 class="modal-title fw-bold text-light d-flex align-items-center gap-2">
+            <i class="bi bi-key text-warning"></i> Generate API Key
+          </h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
-        <div class="modal-body">
+        <div class="modal-body p-4">
           <div class="mb-3">
-            <label class="form-label small text-muted">User</label>
-            <input type="text" id="keyModalUserName" class="form-control" readonly>
+            <label class="form-label small text-muted">User Account</label>
+            <input type="text" id="keyModalUserName" class="form-control form-control-modern text-muted" readonly>
           </div>
           <div class="mb-3">
-            <label class="form-label small text-muted">Key Name / Label</label>
-            <input type="text" name="name" class="form-control" placeholder="e.g. Cursor Pro, Hermes Dev, Cline" required value="Default Key">
+            <label class="form-label small text-muted">Key Identifier / Label</label>
+            <input type="text" name="name" class="form-control form-control-modern" placeholder="e.g. Cursor Pro, Hermes Dev, Cline" required value="Default Key">
           </div>
           <div class="mb-3">
             <label class="form-label small text-muted">Custom Key (Optional)</label>
-            <input type="text" name="custom_key" class="form-control font-monospace" placeholder="Leave empty to auto-generate sk-gw-...">
-            <div class="form-text text-muted small">If empty, a secure random key prefixed with <code>sk-gw-</code> will be generated.</div>
+            <input type="text" name="custom_key" class="form-control form-control-modern font-monospace" placeholder="Leave empty for auto sk-gw-...">
+            <div class="text-dim small mt-1">If blank, a secure <code>sk-gw-...</code> key will be generated and synced to 9router Core.</div>
           </div>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-warning text-dark fw-medium"><i class="bi bi-check2"></i> Generate Key</button>
+        <div class="modal-footer modal-footer-modern">
+          <button type="button" class="btn-modern-ghost" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn-modern-primary"><i class="bi bi-check2"></i> Generate & Sync</button>
         </div>
       </form>
     </div>
@@ -323,7 +332,7 @@
   // Create Modal Allow All Toggle
   const createAllowAll = document.getElementById("createAllowAllCheck");
   const createContainer = document.getElementById("createModelsChecklistContainer");
-  createAllowAll.addEventListener("change", function() {
+  createAllowAll?.addEventListener("change", function() {
     createContainer.style.display = this.checked ? "none" : "block";
   });
 
@@ -393,13 +402,13 @@
     });
   });
 
-  document.getElementById("editAllowAllCheck").addEventListener("change", function() {
+  document.getElementById("editAllowAllCheck")?.addEventListener("change", function() {
     document.getElementById("editModelsChecklistContainer").style.display = this.checked ? "none" : "block";
   });
 
   // Quick Key Modal User assignment
   const keyModal = document.getElementById('createKeyModal');
-  keyModal.addEventListener('show.bs.modal', function (event) {
+  keyModal?.addEventListener('show.bs.modal', function (event) {
     const button = event.relatedTarget;
     if (button) {
       const userId = button.getAttribute('data-userid');

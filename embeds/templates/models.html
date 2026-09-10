@@ -3,33 +3,38 @@
 {{ define "content" }}
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
   <div>
-    <h4 class="fw-bold mb-1"><i class="bi bi-cpu me-2 text-primary"></i>Upstream Model Catalog</h4>
-    <p class="text-muted small mb-0">Live models synchronized from upstream 9router (<code>127.0.0.1:20128</code>).</p>
+    <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
+      <i class="bi bi-cpu text-primary"></i> Upstream Model Catalog
+    </h4>
+    <p class="text-dim small mb-0">Live models synchronized from upstream 9router (<code>127.0.0.1:20128</code>).</p>
   </div>
   <div class="d-flex align-items-center gap-2">
-    <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2">
-      <i class="bi bi-check-circle-fill me-1"></i> {{ len .Models }} Models Online
-    </span>
-    <a href="/models" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-clockwise"></i> Refresh</a>
+    <div class="status-pill-live">
+      <span class="pulse-dot"></span>
+      <span>{{ len .Models }} Models Online</span>
+    </div>
+    <a href="/models" class="btn-modern-ghost text-decoration-none d-inline-flex align-items-center gap-2">
+      <i class="bi bi-arrow-clockwise"></i> Refresh
+    </a>
   </div>
 </div>
 
-<div class="card p-3 mb-4">
-  <div class="mb-3">
+<div class="card-modern mb-4">
+  <div class="p-3 border-bottom border-secondary border-opacity-10">
     <div class="input-group">
-      <span class="input-group-text bg-dark border-secondary"><i class="bi bi-search text-muted"></i></span>
-      <input type="text" id="modelFilterInput" class="form-control" placeholder="Search models by name or provider (e.g. gemini, claude, deepseek, minimax)...">
+      <span class="input-group-text bg-transparent border-0 text-muted"><i class="bi bi-search"></i></span>
+      <input type="text" id="modelFilterInput" class="form-control form-control-modern border-0" placeholder="Search models by name or provider (e.g. gemini, claude, deepseek, minimax)...">
     </div>
   </div>
 
   <div class="table-responsive">
-    <table class="table table-dark table-hover mb-0" id="modelsTable">
+    <table class="table table-modern mb-0" id="modelsTable">
       <thead>
         <tr>
           <th>Model Identifier</th>
           <th>Provider / Group</th>
           <th>Status</th>
-          <th>Whitelisted By</th>
+          <th>Whitelisted Access</th>
           <th class="text-end">Quick Action</th>
         </tr>
       </thead>
@@ -38,28 +43,28 @@
           {{ range .Models }}
             <tr class="model-row">
               <td>
-                <span class="font-monospace text-primary fw-medium model-id">{{ .ID }}</span>
+                <span class="font-monospace text-light fw-medium model-id">{{ .ID }}</span>
               </td>
               <td>
-                <span class="badge bg-dark border border-secondary text-secondary font-monospace">{{ .OwnedBy }}</span>
+                <span class="badge-modern badge-gray font-monospace">{{ .OwnedBy }}</span>
               </td>
               <td>
-                <span class="badge bg-success-subtle text-success border border-success-subtle">
-                  <i class="bi bi-dot"></i> Ready
+                <span class="badge-modern badge-emerald">
+                  <span class="pulse-dot" style="width: 5px; height: 5px;"></span> Ready
                 </span>
               </td>
               <td>
                 {{ $allowedCount := countUsersAllowed $.Users .ID }}
                 {{ if eq $allowedCount (len $.Users) }}
-                  <span class="badge bg-info-subtle text-info">All Users ({{ $allowedCount }})</span>
+                  <span class="badge-modern badge-indigo">All Users ({{ $allowedCount }})</span>
                 {{ else if gt $allowedCount 0 }}
-                  <span class="badge bg-primary-subtle text-primary">{{ $allowedCount }} Users</span>
+                  <span class="badge-modern badge-indigo">{{ $allowedCount }} Users Whitelisted</span>
                 {{ else }}
-                  <span class="badge bg-secondary-subtle text-secondary">0 Users (Restricted)</span>
+                  <span class="badge-modern badge-gray opacity-60">Restricted (0 Users)</span>
                 {{ end }}
               </td>
               <td class="text-end">
-                <button type="button" class="btn btn-xs btn-outline-primary copy-btn" data-copy="{{ .ID }}" title="Copy model ID">
+                <button type="button" class="btn-modern-ghost btn-sm py-1 px-2 copy-btn" data-copy="{{ .ID }}" title="Copy model ID">
                   <i class="bi bi-clipboard"></i> Copy ID
                 </button>
               </td>
@@ -67,9 +72,9 @@
           {{ end }}
         {{ else }}
           <tr>
-            <td colspan="5" class="text-center text-muted py-4">
-              <i class="bi bi-cpu fs-2 d-block mb-2"></i>
-              No models returned from 9router. Check upstream connection in Settings.
+            <td colspan="5" class="text-center text-dim py-5">
+              <i class="bi bi-cpu fs-2 d-block mb-2 opacity-50"></i>
+              No models returned from 9router. Check upstream connection.
             </td>
           </tr>
         {{ end }}
@@ -81,7 +86,7 @@
 
 {{ define "scripts" }}
 <script>
-  document.getElementById("modelFilterInput").addEventListener("input", function() {
+  document.getElementById("modelFilterInput")?.addEventListener("input", function() {
     const q = this.value.toLowerCase();
     document.querySelectorAll(".model-row").forEach(row => {
       const id = row.querySelector(".model-id").textContent.toLowerCase();

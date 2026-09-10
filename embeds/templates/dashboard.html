@@ -1,117 +1,145 @@
 {{ define "title" }}Dashboard - 9router Gateway{{ end }}
 
 {{ define "content" }}
+<!-- Top KPI Metric Cards -->
 <div class="row g-3 mb-4">
   <!-- KPI 1: Total Requests -->
   <div class="col-sm-6 col-xl-3">
-    <div class="card p-3 h-100">
+    <div class="card-modern card-interactive p-3 h-100">
       <div class="d-flex align-items-center justify-content-between">
         <div>
-          <span class="text-muted small fw-medium">Total Requests</span>
-          <h3 class="fw-bold mt-1 mb-0">{{ formatNumber .Stats.TotalRequests }}</h3>
+          <span class="kpi-title">Total Requests</span>
+          <div class="kpi-value mt-1">{{ formatNumber .Stats.TotalRequests }}</div>
         </div>
-        <div class="stat-icon-wrapper bg-primary bg-opacity-10 text-primary">
+        <div class="kpi-icon kpi-icon-indigo">
           <i class="bi bi-arrow-left-right"></i>
         </div>
       </div>
-      <div class="mt-3 small text-muted">
-        <i class="bi bi-shield-check text-success me-1"></i> Proxied & logged
+      <div class="mt-3 pt-2 border-top border-secondary border-opacity-10 d-flex align-items-center justify-content-between text-dim small">
+        <span class="d-flex align-items-center gap-1 text-muted">
+          <i class="bi bi-shield-check text-emerald"></i> Upstream proxy
+        </span>
+        <span class="badge-modern badge-indigo" style="font-size: 0.68rem;">Live</span>
       </div>
     </div>
   </div>
 
   <!-- KPI 2: Total Tokens -->
   <div class="col-sm-6 col-xl-3">
-    <div class="card p-3 h-100">
+    <div class="card-modern card-interactive p-3 h-100">
       <div class="d-flex align-items-center justify-content-between">
         <div>
-          <span class="text-muted small fw-medium">Total Tokens Used</span>
-          <h3 class="fw-bold mt-1 mb-0">{{ formatNumber .Stats.TotalTokens }}</h3>
+          <span class="kpi-title">Total Tokens Used</span>
+          <div class="kpi-value mt-1 text-light">{{ formatNumber .Stats.TotalTokens }}</div>
         </div>
-        <div class="stat-icon-wrapper bg-info bg-opacity-10 text-info">
+        <div class="kpi-icon kpi-icon-cyan">
           <i class="bi bi-database-check"></i>
         </div>
       </div>
-      <div class="mt-3 small text-muted">
-        <i class="bi bi-lightning-charge text-warning me-1"></i> Real-time streamed & cached
+      <div class="mt-3 pt-2 border-top border-secondary border-opacity-10 d-flex align-items-center justify-content-between text-dim small">
+        <span class="d-flex align-items-center gap-1 text-muted">
+          <i class="bi bi-lightning-charge-fill text-amber"></i> Streaming & JSON
+        </span>
+        <span class="badge-modern badge-emerald" style="font-size: 0.68rem;">Real-time</span>
       </div>
     </div>
   </div>
 
   <!-- KPI 3: Users -->
   <div class="col-sm-6 col-xl-3">
-    <div class="card p-3 h-100">
+    <div class="card-modern card-interactive p-3 h-100">
       <div class="d-flex align-items-center justify-content-between">
         <div>
-          <span class="text-muted small fw-medium">Active Users</span>
-          <h3 class="fw-bold mt-1 mb-0">{{ .Stats.ActiveUsers }} <span class="fs-6 fw-normal text-muted">/ {{ .Stats.TotalUsers }}</span></h3>
+          <span class="kpi-title">Active Users</span>
+          <div class="kpi-value mt-1">
+            {{ .Stats.ActiveUsers }} <span class="fs-6 fw-normal text-dim">/ {{ .Stats.TotalUsers }}</span>
+          </div>
         </div>
-        <div class="stat-icon-wrapper bg-success bg-opacity-10 text-success">
+        <div class="kpi-icon kpi-icon-emerald">
           <i class="bi bi-people-fill"></i>
         </div>
       </div>
-      <div class="mt-3 small text-muted">
-        <a href="/users" class="text-decoration-none text-success">Manage users & quotas &rarr;</a>
+      <div class="mt-3 pt-2 border-top border-secondary border-opacity-10 d-flex align-items-center justify-content-between text-dim small">
+        <a href="/users" class="text-decoration-none text-emerald d-flex align-items-center gap-1 fw-medium">
+          Manage quotas <i class="bi bi-arrow-right"></i>
+        </a>
+        <span class="text-dim small">Quotas Active</span>
       </div>
     </div>
   </div>
 
   <!-- KPI 4: API Keys -->
   <div class="col-sm-6 col-xl-3">
-    <div class="card p-3 h-100">
+    <div class="card-modern card-interactive p-3 h-100">
       <div class="d-flex align-items-center justify-content-between">
         <div>
-          <span class="text-muted small fw-medium">Active API Keys</span>
-          <h3 class="fw-bold mt-1 mb-0">{{ .Stats.ActiveKeys }}</h3>
+          <span class="kpi-title">Active API Keys</span>
+          <div class="kpi-value mt-1">{{ .Stats.ActiveKeys }}</div>
         </div>
-        <div class="stat-icon-wrapper bg-warning bg-opacity-10 text-warning">
+        <div class="kpi-icon kpi-icon-amber">
           <i class="bi bi-key-fill"></i>
         </div>
       </div>
-      <div class="mt-3 small text-muted">
-        <a href="/keys" class="text-decoration-none text-warning">Manage keys &rarr;</a>
+      <div class="mt-3 pt-2 border-top border-secondary border-opacity-10 d-flex align-items-center justify-content-between text-dim small">
+        <a href="/keys" class="text-decoration-none text-amber d-flex align-items-center gap-1 fw-medium">
+          Manage keys <i class="bi bi-arrow-right"></i>
+        </a>
+        <span class="badge-modern badge-amber" style="font-size: 0.68rem;">Synced</span>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Middle Section: Chart & Top Usage -->
+<!-- Middle Section: Chart & Top Models -->
 <div class="row g-3 mb-4">
   <!-- Chart: Daily Token Usage -->
   <div class="col-lg-8">
-    <div class="card p-3 h-100">
+    <div class="card-modern p-4 h-100">
       <div class="d-flex align-items-center justify-content-between mb-3">
-        <h6 class="fw-bold mb-0 text-light"><i class="bi bi-graph-up me-2 text-primary"></i>Daily Token Consumption (14 Days)</h6>
-        <span class="badge bg-dark border border-secondary text-muted small">Updated Live</span>
+        <div>
+          <h6 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
+            <i class="bi bi-graph-up text-primary"></i> Token Usage Trends
+          </h6>
+          <p class="text-dim small mb-0">Daily aggregated token consumption over the last 14 days</p>
+        </div>
+        <span class="badge-modern badge-gray">
+          <span class="pulse-dot"></span> Live Sync
+        </span>
       </div>
-      <div style="height: 280px; position: relative;">
+      <div style="height: 270px; position: relative;">
         <canvas id="usageChart"></canvas>
       </div>
     </div>
   </div>
 
-  <!-- Top Models & Quick Connect -->
+  <!-- Top Models -->
   <div class="col-lg-4">
-    <div class="card p-3 h-100">
-      <h6 class="fw-bold mb-3 text-light"><i class="bi bi-cpu me-2 text-info"></i>Top Models</h6>
+    <div class="card-modern p-4 h-100">
+      <div class="d-flex align-items-center justify-content-between mb-3">
+        <h6 class="fw-bold mb-0 text-light d-flex align-items-center gap-2">
+          <i class="bi bi-cpu text-info"></i> Top Models
+        </h6>
+        <a href="/models" class="text-dim small text-decoration-none">Catalog &rarr;</a>
+      </div>
+      
       {{ if .Stats.TopModels }}
         <div class="d-flex flex-column gap-2">
-          {{ range .Stats.TopModels }}
-            <div class="p-2 rounded bg-dark bg-opacity-50 border border-secondary border-opacity-25">
+          {{ range $i, $m := .Stats.TopModels }}
+            <div class="p-2 px-3 rounded-3" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.04);">
               <div class="d-flex align-items-center justify-content-between mb-1">
-                <span class="font-monospace small text-primary fw-medium text-truncate" style="max-width: 180px;">{{ .Model }}</span>
-                <span class="badge bg-secondary-subtle text-secondary small">{{ .Requests }} reqs</span>
+                <span class="font-monospace small fw-medium text-truncate" style="max-width: 170px; color: #a5b4fc;">{{ $m.Model }}</span>
+                <span class="badge-modern badge-gray" style="font-size: 0.7rem;">{{ $m.Requests }} reqs</span>
               </div>
-              <div class="small text-muted d-flex justify-content-between">
+              <div class="d-flex justify-content-between align-items-center small text-dim">
                 <span>Tokens:</span>
-                <span class="fw-medium text-light">{{ formatNumber .TotalTokens }}</span>
+                <span class="fw-semibold text-light font-monospace">{{ formatNumber $m.TotalTokens }}</span>
               </div>
             </div>
           {{ end }}
         </div>
       {{ else }}
-        <div class="text-center text-muted py-4 small">
-          <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+        <div class="text-center text-dim py-5 small">
+          <i class="bi bi-cpu fs-3 d-block mb-2 opacity-50"></i>
           No model usage recorded yet
         </div>
       {{ end }}
@@ -119,33 +147,39 @@
   </div>
 </div>
 
-<!-- Bottom Section: Top Users & Recent Request Logs -->
+<!-- Bottom Section: Top Users & Recent Requests -->
 <div class="row g-3">
   <!-- Top Users -->
   <div class="col-lg-4">
-    <div class="card p-3 h-100">
+    <div class="card-modern p-4 h-100">
       <div class="d-flex align-items-center justify-content-between mb-3">
-        <h6 class="fw-bold mb-0 text-light"><i class="bi bi-trophy me-2 text-warning"></i>Top Users by Token</h6>
-        <a href="/users" class="small text-decoration-none">All users</a>
+        <h6 class="fw-bold mb-0 text-light d-flex align-items-center gap-2">
+          <i class="bi bi-trophy text-warning"></i> Top Users
+        </h6>
+        <a href="/users" class="text-dim small text-decoration-none">All users &rarr;</a>
       </div>
+
       {{ if .Stats.TopUsers }}
         <div class="d-flex flex-column gap-3">
           {{ range .Stats.TopUsers }}
             <div>
               <div class="d-flex justify-content-between align-items-center small mb-1">
                 <span class="fw-medium text-light">{{ .UserName }}</span>
-                <span class="text-muted">{{ formatNumber .TokensUsed }} tok ({{ .Requests }} reqs)</span>
+                <span class="text-dim font-monospace">{{ formatNumber .TokensUsed }} tok</span>
               </div>
-              <div class="progress">
-                <div class="progress-bar bg-primary" role="progressbar" style="width: 100%;"></div>
+              <div class="progress-modern">
+                <div class="progress-bar" role="progressbar" style="width: 100%;"></div>
+              </div>
+              <div class="text-dim small mt-1 text-end" style="font-size: 0.72rem;">
+                {{ .Requests }} requests logged
               </div>
             </div>
           {{ end }}
         </div>
       {{ else }}
-        <div class="text-center text-muted py-4 small">
-          <i class="bi bi-people fs-3 d-block mb-2"></i>
-          No users data available
+        <div class="text-center text-dim py-5 small">
+          <i class="bi bi-people fs-3 d-block mb-2 opacity-50"></i>
+          No users data recorded
         </div>
       {{ end }}
     </div>
@@ -153,13 +187,16 @@
 
   <!-- Recent Logs -->
   <div class="col-lg-8">
-    <div class="card p-3 h-100">
+    <div class="card-modern p-4 h-100">
       <div class="d-flex align-items-center justify-content-between mb-3">
-        <h6 class="fw-bold mb-0 text-light"><i class="bi bi-clock-history me-2 text-success"></i>Recent Requests</h6>
-        <a href="/logs" class="small text-decoration-none">View full logs &rarr;</a>
+        <h6 class="fw-bold mb-0 text-light d-flex align-items-center gap-2">
+          <i class="bi bi-clock-history text-success"></i> Recent Activity
+        </h6>
+        <a href="/logs" class="text-dim small text-decoration-none">Full Audit Logs &rarr;</a>
       </div>
+
       <div class="table-responsive">
-        <table class="table table-dark table-hover mb-0">
+        <table class="table table-modern mb-0">
           <thead>
             <tr>
               <th>Time</th>
@@ -175,35 +212,35 @@
             {{ if .Stats.RecentLogs }}
               {{ range .Stats.RecentLogs }}
                 <tr>
-                  <td class="text-muted font-monospace small">{{ formatDate .CreatedAt }}</td>
+                  <td class="text-dim font-monospace small" style="font-size: 0.78rem;">{{ formatDate .CreatedAt }}</td>
                   <td class="fw-medium text-light">{{ .UserName }}</td>
                   <td><span class="model-pill">{{ .Model }}</span></td>
                   <td>
                     {{ if .IsStream }}
-                      <span class="badge bg-info-subtle text-info"><i class="bi bi-lightning-charge"></i> SSE</span>
+                      <span class="badge-modern badge-indigo" style="font-size: 0.68rem;"><i class="bi bi-lightning-charge-fill"></i> SSE</span>
                     {{ else }}
-                      <span class="badge bg-secondary-subtle text-secondary">JSON</span>
+                      <span class="badge-modern badge-gray" style="font-size: 0.68rem;">JSON</span>
                     {{ end }}
                   </td>
-                  <td class="font-monospace small">{{ formatNumber (toInt64 .TotalTokens) }}</td>
+                  <td class="font-monospace small text-light">{{ formatNumber (toInt64 .TotalTokens) }}</td>
                   <td>
                     {{ if eq .StatusCode 200 }}
-                      <span class="badge bg-success-subtle text-success">200 OK</span>
+                      <span class="badge-modern badge-emerald">200 OK</span>
                     {{ else if eq .StatusCode 403 }}
-                      <span class="badge bg-warning-subtle text-warning">403 Blocked</span>
+                      <span class="badge-modern badge-amber">403 Blocked</span>
                     {{ else if eq .StatusCode 429 }}
-                      <span class="badge bg-danger-subtle text-danger">429 Quota</span>
+                      <span class="badge-modern badge-rose">429 Quota</span>
                     {{ else }}
-                      <span class="badge bg-danger-subtle text-danger">{{ .StatusCode }}</span>
+                      <span class="badge-modern badge-rose">{{ .StatusCode }}</span>
                     {{ end }}
                   </td>
-                  <td class="text-muted small">{{ .DurationMs }}ms</td>
+                  <td class="text-dim small font-monospace">{{ .DurationMs }}ms</td>
                 </tr>
               {{ end }}
             {{ else }}
               <tr>
-                <td colspan="7" class="text-center text-muted py-4 small">
-                  No requests proxied yet. Connect your client to <code>http://127.0.0.1:20129/v1</code>
+                <td colspan="7" class="text-center text-dim py-4 small">
+                  No requests proxied yet. Connect your client to <code>http://100.108.204.127:20129/v1</code>
                 </td>
               </tr>
             {{ end }}
@@ -217,7 +254,7 @@
 
 {{ define "scripts" }}
 <script>
-  // Render Chart.js
+  // Render Chart.js with modern dark styling
   const dailyLabels = [
     {{ range .Stats.DailyUsage }}
       "{{ .Date }}",
@@ -229,41 +266,74 @@
     {{ end }}
   ];
 
-  const ctx = document.getElementById('usageChart').getContext('2d');
-  new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: dailyLabels.length ? dailyLabels : ['Today'],
-      datasets: [{
-        label: 'Tokens Used',
-        data: dailyData.length ? dailyData : [0],
-        borderColor: '#3b82f6',
-        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-        borderWidth: 2,
-        fill: true,
-        tension: 0.3,
-        pointBackgroundColor: '#3b82f6',
-        pointRadius: 4,
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      scales: {
-        x: {
-          grid: { color: 'rgba(255, 255, 255, 0.05)' },
-          ticks: { color: '#94a3b8', font: { size: 11 } }
-        },
-        y: {
-          grid: { color: 'rgba(255, 255, 255, 0.05)' },
-          ticks: { color: '#94a3b8', font: { size: 11 } },
-          beginAtZero: true
-        }
+  const canvas = document.getElementById('usageChart');
+  if (canvas) {
+    const ctx = canvas.getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 0, 260);
+    gradient.addColorStop(0, 'rgba(99, 102, 241, 0.35)');
+    gradient.addColorStop(1, 'rgba(99, 102, 241, 0.00)');
+
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: dailyLabels.length ? dailyLabels : ['Today'],
+        datasets: [{
+          label: 'Tokens Used',
+          data: dailyData.length ? dailyData : [0],
+          borderColor: '#6366f1',
+          borderWidth: 2.5,
+          backgroundColor: gradient,
+          fill: true,
+          tension: 0.35,
+          pointBackgroundColor: '#6366f1',
+          pointBorderColor: '#090a10',
+          pointBorderWidth: 2,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+        }]
       },
-      plugins: {
-        legend: { display: false }
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+          mode: 'index',
+          intersect: false,
+        },
+        scales: {
+          x: {
+            grid: { color: 'rgba(255, 255, 255, 0.04)' },
+            ticks: { color: '#64748b', font: { family: 'Inter', size: 11 } }
+          },
+          y: {
+            grid: { color: 'rgba(255, 255, 255, 0.04)' },
+            ticks: { 
+              color: '#64748b', 
+              font: { family: 'Inter', size: 11 },
+              callback: function(value) {
+                if (value >= 1000000) return (value / 1000000) + 'M';
+                if (value >= 1000) return (value / 1000) + 'k';
+                return value;
+              }
+            },
+            beginAtZero: true
+          }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#111420',
+            titleColor: '#f8fafc',
+            bodyColor: '#a5b4fc',
+            borderColor: 'rgba(255, 255, 255, 0.1)',
+            borderWidth: 1,
+            padding: 10,
+            displayColors: false,
+            titleFont: { family: 'Inter', weight: '600' },
+            bodyFont: { family: 'JetBrains Mono', weight: '500' }
+          }
+        }
       }
-    }
-  });
+    });
+  }
 </script>
 {{ end }}

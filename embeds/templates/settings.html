@@ -3,50 +3,58 @@
 {{ define "content" }}
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
   <div>
-    <h4 class="fw-bold mb-1"><i class="bi bi-sliders me-2 text-warning"></i>Gateway Setup & Settings</h4>
-    <p class="text-muted small mb-0">Upstream connection status, client connection guides, and administrative security.</p>
+    <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
+      <i class="bi bi-sliders text-warning"></i> Gateway Setup & Integration
+    </h4>
+    <p class="text-dim small mb-0">Upstream status, connection guides for AI IDEs, and administrator security.</p>
   </div>
 </div>
 
 <div class="row g-4">
   <!-- Left Column: Upstream & Server Status -->
   <div class="col-lg-5">
-    <div class="card p-3 mb-4">
-      <h6 class="fw-bold mb-3 text-light"><i class="bi bi-diagram-3 me-2 text-primary"></i>Upstream 9router Status</h6>
-      <div class="p-3 rounded bg-dark border border-secondary border-opacity-50 mb-3">
+    <div class="card-modern p-4 mb-4">
+      <h6 class="fw-bold mb-3 text-light d-flex align-items-center gap-2">
+        <i class="bi bi-diagram-3 text-primary"></i> Upstream 9router Core
+      </h6>
+      <div class="p-3 rounded-3 mb-3" style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-subtle);">
         <div class="d-flex justify-content-between align-items-center mb-2">
-          <span class="text-muted small">Target Upstream URL</span>
-          <code class="text-info">{{ .Config.UpstreamURL }}</code>
+          <span class="text-dim small">Upstream Address</span>
+          <code class="text-info font-monospace">{{ .Config.UpstreamURL }}</code>
         </div>
         <div class="d-flex justify-content-between align-items-center mb-2">
-          <span class="text-muted small">Upstream API Key</span>
-          <span class="badge bg-success-subtle text-success border border-success-subtle">Configured & Active</span>
+          <span class="text-dim small">Database Sync</span>
+          <span class="badge-modern badge-emerald"><i class="bi bi-check-circle-fill"></i> Auto-Synced</span>
         </div>
         <div class="d-flex justify-content-between align-items-center">
-          <span class="text-muted small">Connection Health</span>
-          <span class="badge bg-success text-dark fw-medium"><i class="bi bi-check-circle-fill"></i> Operational</span>
+          <span class="text-dim small">Local Core Health</span>
+          <span class="status-pill-live">
+            <span class="pulse-dot"></span> Operational
+          </span>
         </div>
       </div>
 
-      <div class="d-flex justify-content-between align-items-center small text-muted">
-        <span>Gateway Listening:</span>
-        <code class="text-warning">http://0.0.0.0:{{ .Config.Port }}</code>
+      <div class="d-flex justify-content-between align-items-center small text-dim pt-2 border-top border-secondary border-opacity-10">
+        <span>Gateway Listener:</span>
+        <code class="text-warning font-monospace">http://0.0.0.0:{{ .Config.Port }}</code>
       </div>
     </div>
 
     <!-- Admin Password -->
-    <div class="card p-3">
-      <h6 class="fw-bold mb-3 text-light"><i class="bi bi-shield-lock me-2 text-warning"></i>Change Admin Password</h6>
+    <div class="card-modern p-4">
+      <h6 class="fw-bold mb-3 text-light d-flex align-items-center gap-2">
+        <i class="bi bi-shield-lock text-warning"></i> Admin Security
+      </h6>
       <form action="/settings/password" method="POST">
         <div class="mb-3">
           <label class="form-label small text-muted">Current Password</label>
-          <input type="password" name="current_password" class="form-control form-control-sm" required>
+          <input type="password" name="current_password" class="form-control form-control-modern form-control-sm" required>
         </div>
         <div class="mb-3">
           <label class="form-label small text-muted">New Password</label>
-          <input type="password" name="new_password" class="form-control form-control-sm" required minlength="6">
+          <input type="password" name="new_password" class="form-control form-control-modern form-control-sm" required minlength="6">
         </div>
-        <button type="submit" class="btn btn-warning btn-sm text-dark fw-medium w-100">
+        <button type="submit" class="btn-modern-primary btn-sm w-100 py-2">
           <i class="bi bi-check2"></i> Update Password
         </button>
       </form>
@@ -55,12 +63,14 @@
 
   <!-- Right Column: Quick Connect Instructions -->
   <div class="col-lg-7">
-    <div class="card p-4">
-      <h5 class="fw-bold mb-3 text-light"><i class="bi bi-plug-fill me-2 text-success"></i>Client Integration Guide</h5>
-      <p class="text-muted small">Connect your AI coding assistants to this Gateway wrapper on port <code>20129</code>:</p>
+    <div class="card-modern p-4">
+      <h5 class="fw-bold mb-2 text-light d-flex align-items-center gap-2">
+        <i class="bi bi-plug-fill text-success"></i> Client Integration Guide
+      </h5>
+      <p class="text-dim small mb-4">Connect your AI coding assistants through this Gateway on port <code>20129</code>:</p>
 
       <!-- Tabs for Clients -->
-      <ul class="nav nav-tabs nav-tabs-bordered border-secondary mb-3" id="clientTabs" role="tablist">
+      <ul class="nav nav-tabs nav-tabs-modern mb-3" id="clientTabs" role="tablist">
         <li class="nav-item">
           <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-cursor">Cursor</button>
         </li>
@@ -78,38 +88,44 @@
       <div class="tab-content">
         <!-- Cursor Tab -->
         <div class="tab-pane fade show active" id="tab-cursor">
-          <ol class="small text-light ps-3 mb-3">
-            <li class="mb-1">Open <strong>Cursor Settings &gt; Models &gt; OpenAI API Key</strong>.</li>
-            <li class="mb-1">Enable <strong>Override OpenAI Base URL</strong> and enter:
-              <div class="mt-1 mb-2 d-flex align-items-center gap-2">
-                <code class="p-2 rounded bg-dark border border-secondary text-info flex-grow-1">http://127.0.0.1:20129/v1</code>
-                <button class="btn btn-sm btn-outline-secondary copy-btn" data-copy="http://127.0.0.1:20129/v1">Copy</button>
+          <ol class="small text-light ps-3 mb-3 d-flex flex-column gap-2">
+            <li>Open <strong>Cursor Settings &gt; Models &gt; OpenAI API Key</strong>.</li>
+            <li>Enable <strong>Override OpenAI Base URL</strong> and enter:
+              <div class="mt-2 mb-2 d-flex align-items-center gap-2">
+                <code class="p-2 rounded-2 flex-grow-1 font-monospace" style="background: #0b0d14; border: 1px solid var(--border-subtle); color: #38bdf8;">http://100.108.204.127:20129/v1</code>
+                <button class="btn-modern-ghost btn-sm copy-btn" data-copy="http://100.108.204.127:20129/v1">Copy</button>
               </div>
             </li>
-            <li class="mb-1">Or for remote devices via Tailscale:
-              <div class="mt-1 mb-2 d-flex align-items-center gap-2">
-                <code class="p-2 rounded bg-dark border border-secondary text-info flex-grow-1">http://100.108.204.127:20129/v1</code>
-                <button class="btn btn-sm btn-outline-secondary copy-btn" data-copy="http://100.108.204.127:20129/v1">Copy</button>
-              </div>
-            </li>
-            <li>Paste your user <strong>API Key</strong> (e.g. <code>sk-gw-...</code>) and add desired model (e.g. <code>ag/gemini-3.8-flash-high</code>).</li>
+            <li>Paste your user <strong>API Key</strong> (<code>sk-gw-...</code>) created from the Users/Keys menu.</li>
+            <li>Add your whitelisted model ID (e.g. <code>ag/gemini-3.8-flash-high</code>).</li>
           </ol>
         </div>
 
         <!-- Cline Tab -->
         <div class="tab-pane fade" id="tab-cline">
-          <div class="p-3 rounded bg-dark border border-secondary border-opacity-50 small mb-3">
-            <div class="mb-2"><strong>API Provider:</strong> <code>OpenAI Compatible</code></div>
-            <div class="mb-2"><strong>Base URL:</strong> <code>http://127.0.0.1:20129/v1</code></div>
-            <div class="mb-2"><strong>API Key:</strong> <code>sk-gw-your-api-key</code></div>
-            <div><strong>Model ID:</strong> <code>ag/gemini-3.8-flash-low</code> or any whitelisted model</div>
+          <div class="p-3 rounded-3 small mb-3" style="background: #0b0d14; border: 1px solid var(--border-subtle);">
+            <div class="mb-2 text-dim">API Provider: <strong class="text-light font-monospace">OpenAI Compatible</strong></div>
+            <div class="mb-2 text-dim d-flex align-items-center justify-content-between">
+              <div>Base URL: <strong class="text-info font-monospace">http://100.108.204.127:20129/v1</strong></div>
+              <button class="btn-modern-ghost btn-sm py-0 px-2 copy-btn" data-copy="http://100.108.204.127:20129/v1">Copy</button>
+            </div>
+            <div class="mb-2 text-dim">API Key: <strong class="text-warning font-monospace">sk-gw-your-api-key</strong></div>
+            <div class="text-dim">Model ID: <strong class="text-light font-monospace">ag/gemini-3.8-flash-high</strong></div>
           </div>
         </div>
 
         <!-- Hermes Tab -->
         <div class="tab-pane fade" id="tab-hermes">
-          <p class="small text-muted mb-2">In <code>~/.hermes/config.yaml</code> under <code>custom_providers</code>:</p>
-          <pre class="p-3 rounded bg-dark border border-secondary text-info font-monospace small mb-2"><code>custom_providers:
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="small text-dim">In <code>~/.hermes/config.yaml</code> under <code>custom_providers</code>:</span>
+            <button class="btn-modern-ghost btn-sm py-0 px-2 copy-btn" data-copy="custom_providers:
+  - name: 9router Gateway
+    base_url: http://localhost:20129/v1
+    key_env: GATEWAY_API_KEY
+    model: ag/gemini-3.8-flash-high
+    api_mode: chat_completions">Copy YAML</button>
+          </div>
+          <pre class="code-box-modern mb-2"><code>custom_providers:
   - name: 9router Gateway
     base_url: http://localhost:20129/v1
     key_env: GATEWAY_API_KEY
@@ -120,18 +136,19 @@
         <!-- Curl / Python Tab -->
         <div class="tab-pane fade" id="tab-curl">
           <div class="d-flex justify-content-between align-items-center mb-1">
-            <span class="small text-muted">Test Curl Command:</span>
-            <button class="btn btn-xs btn-outline-primary copy-btn" data-copy='curl -X POST http://127.0.0.1:20129/v1/chat/completions \
-  -H "Authorization: Bearer YOUR_KEY" \
+            <span class="small text-dim">Test Curl Command:</span>
+            <button class="btn-modern-ghost btn-sm py-1 px-2 copy-btn" data-copy='curl -X POST http://100.108.204.127:20129/v1/chat/completions \
+  -H "Authorization: Bearer sk-gw-..." \
   -H "Content-Type: application/json" \
-  -d "{\"model\": \"ag/gemini-3.8-flash-low\", \"messages\": [{\"role\": \"user\", \"content\": \"Hello!\"}]}"'>Copy</button>
+  -d "{\"model\": \"ag/gemini-3.8-flash-high\", \"messages\": [{\"role\": \"user\", \"content\": \"Hello!\"}], \"stream\": true}"'>Copy</button>
           </div>
-          <pre class="p-3 rounded bg-dark border border-secondary text-light font-monospace small"><code>curl -X POST http://127.0.0.1:20129/v1/chat/completions \
+          <pre class="code-box-modern"><code>curl -X POST http://100.108.204.127:20129/v1/chat/completions \
   -H "Authorization: Bearer sk-gw-..." \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "ag/gemini-3.8-flash-low",
-    "messages": [{"role": "user", "content": "Hello!"}]
+    "model": "ag/gemini-3.8-flash-high",
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "stream": true
   }'</code></pre>
         </div>
       </div>
