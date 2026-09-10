@@ -1,4 +1,4 @@
-package handlers
+package v1
 
 import (
 	"encoding/json"
@@ -11,7 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"9router-gateway/internal/models"
+	"9router-gateway/internal/entity"
 	"9router-gateway/internal/usecase"
 )
 
@@ -24,7 +24,7 @@ func (h *Handler) UsersPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	users, err := h.repo.GetAllUsers(ctx)
 	if err != nil {
-		users = []models.User{}
+		users = []entity.User{}
 	}
 
 	availableModels := h.FetchUpstreamModels(ctx)
@@ -53,7 +53,7 @@ func (h *Handler) UserDetailPage(w http.ResponseWriter, r *http.Request) {
 
 	keys, err := h.repo.GetAPIKeysByUserID(ctx, userID)
 	if err != nil {
-		keys = []models.APIKey{}
+		keys = []entity.APIKey{}
 	}
 	for i := range keys {
 		keys[i].UserName = user.Name
@@ -61,13 +61,13 @@ func (h *Handler) UserDetailPage(w http.ResponseWriter, r *http.Request) {
 
 	logs, totalLogs, err := h.repo.GetRequestLogs(ctx, 15, 0, userID, "", 0)
 	if err != nil {
-		logs = []models.RequestLog{}
+		logs = []entity.RequestLog{}
 		totalLogs = 0
 	}
 
 	stats, err := h.dash.GetStats(ctx, user, "30d")
 	if err != nil {
-		stats = &models.DashboardStats{}
+		stats = &entity.DashboardStats{}
 	}
 
 	availableModels := h.FetchUpstreamModels(ctx)

@@ -1,4 +1,4 @@
-package models
+package entity
 
 import (
 	"encoding/json"
@@ -186,7 +186,7 @@ type Transaction struct {
 	UserName string `json:"user_name,omitempty"`
 }
 
-// ParseAllowedModels parses a JSON array or comma-separated string of allowed models.
+// ParseAllowedModels parses a JSON array or comma-separated string of allowed entity.
 func ParseAllowedModels(raw string) []string {
 	var list []string
 	if strings.TrimSpace(raw) == "" {

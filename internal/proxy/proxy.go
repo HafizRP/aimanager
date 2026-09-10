@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"9router-gateway/internal/config"
-	"9router-gateway/internal/models"
+	"9router-gateway/internal/entity"
 	"9router-gateway/internal/repository"
 )
 
@@ -113,7 +113,7 @@ func (p *GatewayProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	p.handleForwardRequest(w, r, user, key, startTime, clientIP)
 }
 
-func (p *GatewayProxy) handleGetModels(w http.ResponseWriter, r *http.Request, user *models.User, key *models.APIKey) {
+func (p *GatewayProxy) handleGetModels(w http.ResponseWriter, r *http.Request, user *entity.User, key *entity.APIKey) {
 	upstreamReq, err := http.NewRequestWithContext(r.Context(), http.MethodGet, p.cfg.GetUpstreamURL()+"/v1/models", nil)
 	if err != nil {
 		p.writeJSONError(w, http.StatusBadGateway, "Failed to create upstream request", "gateway_error")
@@ -157,8 +157,8 @@ func (p *GatewayProxy) handleGetModels(w http.ResponseWriter, r *http.Request, u
 	}
 
 	// Parse user allowed models
-	allowedList := models.ParseAllowedModels(user.AllowedModels)
-	if models.HasWildcard(allowedList) {
+	allowedList := entity.ParseAllowedModels(user.AllowedModels)
+	if entity.HasWildcard(allowedList) {
 		// Return full catalog
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(bodyBytes)
@@ -183,7 +183,7 @@ func (p *GatewayProxy) handleGetModels(w http.ResponseWriter, r *http.Request, u
 	_ = json.NewEncoder(w).Encode(modelsResp)
 }
 
-func (p *GatewayProxy) handleForwardRequest(w http.ResponseWriter, r *http.Request, user *models.User, key *models.APIKey, startTime time.Time, clientIP string) {
+func (p *GatewayProxy) handleForwardRequest(w http.ResponseWriter, r *http.Request, user *entity.User, key *entity.APIKey, startTime time.Time, clientIP string) {
 	// Read body for inspection
 	bodyBytes, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -215,7 +215,7 @@ func (p *GatewayProxy) handleForwardRequest(w http.ResponseWriter, r *http.Reque
 			p.writeJSONError(w, http.StatusForbidden, errMsg, "permission_denied")
 
 			// Log unauthorized attempt
-			_ = p.repo.CreateRequestLog(r.Context(), &models.RequestLog{
+			_ = p.repo.CreateRequestLog(r.Context(), &entity.RequestLog{
 				UserID:       user.ID,
 				APIKeyID:     key.ID,
 				Path:         r.URL.Path,
@@ -238,7 +238,7 @@ func (p *GatewayProxy) handleForwardRequest(w http.ResponseWriter, r *http.Reque
 				errMsg := fmt.Sprintf("Model '%s' is not allowed for this specific API key. Allowed key models: %v", requestedModel, keyAllowed)
 				p.writeJSONError(w, http.StatusForbidden, errMsg, "permission_denied")
 
-				_ = p.repo.CreateRequestLog(r.Context(), &models.RequestLog{
+				_ = p.repo.CreateRequestLog(r.Context(), &entity.RequestLog{
 					UserID:       user.ID,
 					APIKeyID:     key.ID,
 					Path:         r.URL.Path,
@@ -271,7 +271,7 @@ func (p *GatewayProxy) handleForwardRequest(w http.ResponseWriter, r *http.Reque
 			_, _ = w.Write(cached.Body)
 
 			_ = p.repo.UpdateKeyLastUsed(r.Context(), key.ID)
-			_ = p.repo.CreateRequestLog(r.Context(), &models.RequestLog{
+			_ = p.repo.CreateRequestLog(r.Context(), &entity.RequestLog{
 				UserID:     user.ID,
 				APIKeyID:   key.ID,
 				Path:       r.URL.Path,
@@ -318,7 +318,7 @@ func (p *GatewayProxy) handleForwardRequest(w http.ResponseWriter, r *http.Reque
 		errMsg := "Upstream 9router connection error: " + err.Error()
 		p.writeJSONError(w, http.StatusBadGateway, errMsg, "upstream_error")
 
-		_ = p.repo.CreateRequestLog(r.Context(), &models.RequestLog{
+		_ = p.repo.CreateRequestLog(r.Context(), &entity.RequestLog{
 			UserID:       user.ID,
 			APIKeyID:     key.ID,
 			Path:         r.URL.Path,
@@ -351,7 +351,7 @@ func (p *GatewayProxy) handleForwardRequest(w http.ResponseWriter, r *http.Reque
 	p.handleNonStreamingResponse(w, r, resp, user, key, requestedModel, startTime, clientIP, len(bodyBytes), cacheKey)
 }
 
-func (p *GatewayProxy) handleStreamingResponse(w http.ResponseWriter, r *http.Request, resp *http.Response, user *models.User, key *models.APIKey, model string, startTime time.Time, clientIP string) {
+func (p *GatewayProxy) handleStreamingResponse(w http.ResponseWriter, r *http.Request, resp *http.Response, user *entity.User, key *entity.APIKey, model string, startTime time.Time, clientIP string) {
 	flusher, isFlusher := w.(http.Flusher)
 	if !isFlusher {
 		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
@@ -431,7 +431,7 @@ func (p *GatewayProxy) handleStreamingResponse(w http.ResponseWriter, r *http.Re
 	// Deduct tokens and log
 	_ = p.repo.DeductTokens(context.Background(), user.ID, totalTokens)
 	_ = p.repo.UpdateKeyLastUsed(context.Background(), key.ID)
-	_ = p.repo.CreateRequestLog(context.Background(), &models.RequestLog{
+	_ = p.repo.CreateRequestLog(context.Background(), &entity.RequestLog{
 		UserID:           user.ID,
 		APIKeyID:         key.ID,
 		Path:             r.URL.Path,
@@ -447,7 +447,7 @@ func (p *GatewayProxy) handleStreamingResponse(w http.ResponseWriter, r *http.Re
 	})
 }
 
-func (p *GatewayProxy) handleNonStreamingResponse(w http.ResponseWriter, r *http.Request, resp *http.Response, user *models.User, key *models.APIKey, model string, startTime time.Time, clientIP string, reqBodyLen int, cacheKey string) {
+func (p *GatewayProxy) handleNonStreamingResponse(w http.ResponseWriter, r *http.Request, resp *http.Response, user *entity.User, key *entity.APIKey, model string, startTime time.Time, clientIP string, reqBodyLen int, cacheKey string) {
 	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		p.writeJSONError(w, http.StatusInternalServerError, "Failed to read upstream response", "gateway_error")
@@ -509,7 +509,7 @@ func (p *GatewayProxy) handleNonStreamingResponse(w http.ResponseWriter, r *http
 	if resp.StatusCode >= 400 {
 		errMsg = fmt.Sprintf("Upstream returned HTTP %d", resp.StatusCode)
 	}
-	_ = p.repo.CreateRequestLog(context.Background(), &models.RequestLog{
+	_ = p.repo.CreateRequestLog(context.Background(), &entity.RequestLog{
 		UserID:           user.ID,
 		APIKeyID:         key.ID,
 		Path:             r.URL.Path,

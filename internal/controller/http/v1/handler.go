@@ -1,4 +1,4 @@
-package handlers
+package v1
 
 import (
 	"bytes"
@@ -16,7 +16,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"9router-gateway/internal/config"
-	"9router-gateway/internal/models"
+	"9router-gateway/internal/entity"
 	"9router-gateway/internal/proxy"
 	"9router-gateway/internal/repository"
 	"9router-gateway/internal/syncer"
@@ -30,8 +30,8 @@ type contextKey string
 const userContextKey = contextKey("current_user")
 
 // GetUserFromContext returns the authenticated user stored in the request context.
-func GetUserFromContext(ctx context.Context) *models.User {
-	if u, ok := ctx.Value(userContextKey).(*models.User); ok {
+func GetUserFromContext(ctx context.Context) *entity.User {
+	if u, ok := ctx.Value(userContextKey).(*entity.User); ok {
 		return u
 	}
 	return nil
@@ -166,7 +166,7 @@ func NewHandler(cfg *config.Config, repo repository.Repository, sync *syncer.Syn
 			parts := strings.Split(raw, ",")
 			return len(parts)
 		},
-		"countUsersAllowed": func(users []models.User, modelID string) int {
+		"countUsersAllowed": func(users []entity.User, modelID string) int {
 			c := 0
 			for _, u := range users {
 				if strings.Contains(u.AllowedModels, "*") || strings.Contains(u.AllowedModels, modelID) {
@@ -214,7 +214,7 @@ func NewHandler(cfg *config.Config, repo repository.Repository, sync *syncer.Syn
 	}
 
 	pages := []string{
-		"dashboard.html", "users.html", "user_detail.html", "keys.html", "logs.html", "models.html",
+		"dashboard.html", "users.html", "user_detail.html", "keys.html", "logs.html",
 		"settings.html", "billing.html", "providers.html", "combos.html", "token_saver.html",
 		"chat.html", "cli_tools.html", "proxy_pools.html", "benchmark.html", "cache_analytics.html",
 	}
@@ -277,7 +277,7 @@ func (h *Handler) render(w http.ResponseWriter, r *http.Request, tmplName, layou
 
 const sessionCookieName = "gw_session"
 
-func (h *Handler) setSessionCookie(w http.ResponseWriter, r *http.Request, user *models.User) {
+func (h *Handler) setSessionCookie(w http.ResponseWriter, r *http.Request, user *entity.User) {
 	token, _, err := h.auth.StartSession(r.Context(), user.ID)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to store session in database")
@@ -310,7 +310,7 @@ func (h *Handler) clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handler) getSessionUser(r *http.Request) *models.User {
+func (h *Handler) getSessionUser(r *http.Request) *entity.User {
 	cookie, err := r.Cookie(sessionCookieName)
 	if err != nil || cookie.Value == "" {
 		return nil

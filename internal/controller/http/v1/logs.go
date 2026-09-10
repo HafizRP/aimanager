@@ -1,4 +1,4 @@
-package handlers
+package v1
 
 import (
 	"encoding/csv"
@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"9router-gateway/internal/models"
+	"9router-gateway/internal/entity"
 	"9router-gateway/internal/usecase"
 )
 
@@ -36,10 +36,10 @@ func (h *Handler) LogsPage(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		logs = nil
-		pageInfo = &models.CursorPageInfo{Limit: 25}
+		pageInfo = &entity.CursorPageInfo{Limit: 25}
 	}
 
-	var users []models.User
+	var users []entity.User
 	if currentUser != nil && currentUser.IsAdmin() {
 		users, _ = h.repo.GetAllUsers(ctx)
 	}
@@ -79,7 +79,7 @@ func (h *Handler) APILogs(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		logs = nil
-		pageInfo = &models.CursorPageInfo{Limit: 25}
+		pageInfo = &entity.CursorPageInfo{Limit: 25}
 	}
 
 	type logRow struct {

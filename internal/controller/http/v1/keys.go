@@ -1,4 +1,4 @@
-package handlers
+package v1
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"9router-gateway/internal/models"
+	"9router-gateway/internal/entity"
 	"9router-gateway/internal/usecase"
 )
 
@@ -51,14 +51,14 @@ func (h *Handler) KeysPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	currentUser := GetUserFromContext(ctx)
 
-	var keys []models.APIKey
+	var keys []entity.APIKey
 	var err error
 
 	if currentUser != nil && currentUser.IsAdmin() {
 		keys, err = h.repo.GetAllAPIKeys(ctx)
 		filterUserID := r.URL.Query().Get("user_id")
 		if filterUserID != "" {
-			filtered := []models.APIKey{}
+			filtered := []entity.APIKey{}
 			for _, k := range keys {
 				if k.UserID == filterUserID {
 					filtered = append(filtered, k)
@@ -74,14 +74,14 @@ func (h *Handler) KeysPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		keys = []models.APIKey{}
+		keys = []entity.APIKey{}
 	}
 
-	var users []models.User
+	var users []entity.User
 	if currentUser != nil && currentUser.IsAdmin() {
 		users, _ = h.repo.GetAllUsers(ctx)
 	} else if currentUser != nil {
-		users = []models.User{*currentUser}
+		users = []entity.User{*currentUser}
 	}
 
 	allModels, _ := h.fetchUpstreamModels(ctx)

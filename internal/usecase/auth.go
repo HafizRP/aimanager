@@ -16,7 +16,7 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
-	"9router-gateway/internal/models"
+	"9router-gateway/internal/entity"
 )
 
 var (
@@ -36,7 +36,7 @@ type AuthInput struct {
 
 // LoginResult describes a successful login.
 type LoginResult struct {
-	User  *models.User
+	User  *entity.User
 	Token string
 	// ExpiresAt is the session cookie expiry.
 	ExpiresAt time.Time
@@ -63,7 +63,7 @@ func NewAuthService(store Store, sessionSecret, adminUsername, adminPassword str
 
 // Authenticate validates username/password, records failed attempts, clears them
 // on success, and returns the user (session token is created by the caller).
-func (s *AuthService) Authenticate(ctx context.Context, in AuthInput, clientIP string) (*models.User, error) {
+func (s *AuthService) Authenticate(ctx context.Context, in AuthInput, clientIP string) (*entity.User, error) {
 	recentFails, _ := s.store.GetRecentLoginAttempts(ctx, clientIP, 15)
 	if recentFails >= 5 {
 		return nil, fmt.Errorf("too many failed login attempts. Please wait 15 minutes")
@@ -107,7 +107,7 @@ func (s *AuthService) StartSession(ctx context.Context, userID string) (string, 
 
 // GetSessionUser resolves a session token to a user.
 // Remove the unused variable warning on GetSessionUser (user is used below).
-func (s *AuthService) GetSessionUser(ctx context.Context, token string) (*models.User, error) {
+func (s *AuthService) GetSessionUser(ctx context.Context, token string) (*entity.User, error) {
 	user, err := s.store.GetSessionUser(ctx, token)
 	if err != nil {
 		return nil, err
@@ -136,7 +136,7 @@ func SignSession(secret, data string) string {
 }
 
 // VerifySessionPassword allows the legacy admin password to act as the current password.
-func (s *AuthService) VerifySessionPassword(user *models.User, candidate string) bool {
+func (s *AuthService) VerifySessionPassword(user *entity.User, candidate string) bool {
 	if CheckPasswordHash(candidate, user.PasswordHash) {
 		return true
 	}
@@ -192,10 +192,10 @@ type UserService struct {
 
 // KeySyncer pushes key state changes to 9router Core.
 type KeySyncer interface {
-	SyncKey(key *models.APIKey, userName string) error
+	SyncKey(key *entity.APIKey, userName string) error
 	ToggleKey(keyID string, isActive bool) error
 	DeleteKey(keyID string) error
-	BackfillAll(keys []models.APIKey) error
+	BackfillAll(keys []entity.APIKey) error
 	UpdateDBPath(path string)
 }
 
@@ -217,7 +217,7 @@ type CreateUserInput struct {
 
 // CreateUser creates the user, optionally generating an initial key synced to 9router.
 // It returns the user and (if generated) the plaintext password/key for display.
-func (s *UserService) CreateUser(ctx context.Context, in CreateUserInput) (*models.User, string, string, error) {
+func (s *UserService) CreateUser(ctx context.Context, in CreateUserInput) (*entity.User, string, string, error) {
 	name := strings.TrimSpace(in.Name)
 	if name == "" {
 		return nil, "", "", fmt.Errorf("user name cannot be empty")
@@ -268,7 +268,7 @@ func (s *UserService) CreateUser(ctx context.Context, in CreateUserInput) (*mode
 		allowedModelsJSON = `["*"]`
 	}
 
-	user := &models.User{
+	user := &entity.User{
 		ID:            uuid.New().String(),
 		Username:      username,
 		Name:          name,
@@ -287,7 +287,7 @@ func (s *UserService) CreateUser(ctx context.Context, in CreateUserInput) (*mode
 	var generatedKey string
 	if in.CreateKey {
 		generatedKey = GenerateSecureAPIKey("sk-gw-")
-		apiKey := &models.APIKey{
+		apiKey := &entity.APIKey{
 			ID:       uuid.New().String(),
 			UserID:   user.ID,
 			Key:      generatedKey,
@@ -317,7 +317,7 @@ type UpdateUserInput struct {
 }
 
 // UpdateUser applies allowed profile updates.
-func (s *UserService) UpdateUser(ctx context.Context, in UpdateUserInput) (*models.User, error) {
+func (s *UserService) UpdateUser(ctx context.Context, in UpdateUserInput) (*entity.User, error) {
 	user, err := s.store.GetUserByID(ctx, in.ID)
 	if err != nil {
 		return nil, ErrNotFound
@@ -446,7 +446,7 @@ type CreateKeyInput struct {
 }
 
 // CreateKey creates an API key and syncs it to 9router Core.
-func (s *KeyService) CreateKey(ctx context.Context, in CreateKeyInput) (*models.APIKey, error) {
+func (s *KeyService) CreateKey(ctx context.Context, in CreateKeyInput) (*entity.APIKey, error) {
 	finalKey := strings.TrimSpace(in.CustomKey)
 	if finalKey == "" {
 		finalKey = GenerateSecureAPIKey("sk-gw-")
@@ -474,7 +474,7 @@ func (s *KeyService) CreateKey(ctx context.Context, in CreateKeyInput) (*models.
 
 	allowedModels := normalizeAllowedModels(in.AllowedModels)
 
-	key := &models.APIKey{
+	key := &entity.APIKey{
 		ID:            uuid.New().String(),
 		UserID:        in.UserID,
 		Key:           finalKey,
@@ -506,7 +506,7 @@ func (s *KeyService) ToggleKeyStatus(ctx context.Context, keyID string) (bool, e
 	if err != nil {
 		return false, ErrNotFound
 	}
-	var target *models.APIKey
+	var target *entity.APIKey
 	for i := range keys {
 		if keys[i].ID == keyID {
 			target = &keys[i]
@@ -541,7 +541,7 @@ func (s *KeyService) DeleteKey(ctx context.Context, keyID string) error {
 	return nil
 }
 
-func (s *KeyService) getKeyByID(ctx context.Context, keyID string) (*models.APIKey, error) {
+func (s *KeyService) getKeyByID(ctx context.Context, keyID string) (*entity.APIKey, error) {
 	keys, err := s.store.GetAllAPIKeys(ctx)
 	if err != nil {
 		return nil, err

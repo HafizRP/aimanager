@@ -7,16 +7,16 @@ import (
 	"strings"
 	"time"
 
-	"9router-gateway/internal/models"
+	"9router-gateway/internal/entity"
 )
 
 type Repository interface {
 	// Users
-	GetUserByID(ctx context.Context, id string) (*models.User, error)
-	GetUserByUsername(ctx context.Context, username string) (*models.User, error)
-	GetAllUsers(ctx context.Context) ([]models.User, error)
-	CreateUser(ctx context.Context, u *models.User) error
-	UpdateUser(ctx context.Context, u *models.User) error
+	GetUserByID(ctx context.Context, id string) (*entity.User, error)
+	GetUserByUsername(ctx context.Context, username string) (*entity.User, error)
+	GetAllUsers(ctx context.Context) ([]entity.User, error)
+	CreateUser(ctx context.Context, u *entity.User) error
+	UpdateUser(ctx context.Context, u *entity.User) error
 	UpdateUserPassword(ctx context.Context, id, passwordHash string) error
 	ResetUserUsage(ctx context.Context, id string) error
 	UpdateUserLastLogin(ctx context.Context, id string) error
@@ -25,31 +25,31 @@ type Repository interface {
 	DeductTokens(ctx context.Context, userID string, tokens int) error
 
 	// API Keys
-	GetAPIKeyByKey(ctx context.Context, key string) (*models.APIKey, error)
-	GetAPIKeysByUserID(ctx context.Context, userID string) ([]models.APIKey, error)
-	GetAllAPIKeys(ctx context.Context) ([]models.APIKey, error)
-	CreateAPIKey(ctx context.Context, k *models.APIKey) error
+	GetAPIKeyByKey(ctx context.Context, key string) (*entity.APIKey, error)
+	GetAPIKeysByUserID(ctx context.Context, userID string) ([]entity.APIKey, error)
+	GetAllAPIKeys(ctx context.Context) ([]entity.APIKey, error)
+	CreateAPIKey(ctx context.Context, k *entity.APIKey) error
 	ToggleAPIKeyStatus(ctx context.Context, id string, isActive bool) error
 	DeleteAPIKey(ctx context.Context, id string) error
 	UpdateKeyLastUsed(ctx context.Context, id string) error
 
 	// Logs
-	CreateRequestLog(ctx context.Context, log *models.RequestLog) error
-	GetRequestLogs(ctx context.Context, limit, offset int, userID, modelFilter string, statusFilter int) ([]models.RequestLog, int, error)
-	GetRequestLogsCursor(ctx context.Context, limit int, cursor, direction, userID, modelFilter string, statusFilter int) ([]models.RequestLog, *models.CursorPageInfo, error)
+	CreateRequestLog(ctx context.Context, log *entity.RequestLog) error
+	GetRequestLogs(ctx context.Context, limit, offset int, userID, modelFilter string, statusFilter int) ([]entity.RequestLog, int, error)
+	GetRequestLogsCursor(ctx context.Context, limit int, cursor, direction, userID, modelFilter string, statusFilter int) ([]entity.RequestLog, *entity.CursorPageInfo, error)
 
 	// Stats
-	GetDashboardStats(ctx context.Context, timeframe string) (*models.DashboardStats, error)
-	GetUserDashboardStats(ctx context.Context, userID string, timeframe string) (*models.DashboardStats, error)
+	GetDashboardStats(ctx context.Context, timeframe string) (*entity.DashboardStats, error)
+	GetUserDashboardStats(ctx context.Context, userID string, timeframe string) (*entity.DashboardStats, error)
 
 	// Billing & Midtrans Transactions
-	GetActivePackages(ctx context.Context) ([]models.TokenPackage, error)
-	GetPackageByID(ctx context.Context, id string) (*models.TokenPackage, error)
-	CreateTransaction(ctx context.Context, tx *models.Transaction) error
-	GetTransactionByID(ctx context.Context, id string) (*models.Transaction, error)
+	GetActivePackages(ctx context.Context) ([]entity.TokenPackage, error)
+	GetPackageByID(ctx context.Context, id string) (*entity.TokenPackage, error)
+	CreateTransaction(ctx context.Context, tx *entity.Transaction) error
+	GetTransactionByID(ctx context.Context, id string) (*entity.Transaction, error)
 	UpdateTransactionStatus(ctx context.Context, id, status, paymentType, midtransTxID string) error
-	GetTransactionsByUserID(ctx context.Context, userID string, limit, offset int) ([]models.Transaction, int, error)
-	GetAllTransactions(ctx context.Context, limit, offset int) ([]models.Transaction, int, error)
+	GetTransactionsByUserID(ctx context.Context, userID string, limit, offset int) ([]entity.Transaction, int, error)
+	GetAllTransactions(ctx context.Context, limit, offset int) ([]entity.Transaction, int, error)
 	CreditUserTokens(ctx context.Context, userID string, tokens int64) error
 
 	// Settings
@@ -58,7 +58,7 @@ type Repository interface {
 
 	// Server-Side Sessions
 	CreateSession(ctx context.Context, token, userID string, expiresAt time.Time) error
-	GetSessionUser(ctx context.Context, token string) (*models.User, error)
+	GetSessionUser(ctx context.Context, token string) (*entity.User, error)
 	DeleteSession(ctx context.Context, token string) error
 	CleanExpiredSessions(ctx context.Context) error
 
@@ -100,11 +100,11 @@ func parseTimeFlexible(s string) time.Time {
 
 // User methods
 
-func (r *SQLiteRepo) GetUserByID(ctx context.Context, id string) (*models.User, error) {
+func (r *SQLiteRepo) GetUserByID(ctx context.Context, id string) (*entity.User, error) {
 	query := `SELECT id, COALESCE(username, ''), name, COALESCE(password_hash, ''), role, token_quota, tokens_used, allowed_models, 
 	                 COALESCE(rate_limit_rpm, 0), COALESCE(rate_limit_tpm, 0), is_active, created_at, updated_at, last_login_at 
 	          FROM users WHERE id = ?`
-	var u models.User
+	var u entity.User
 	var createdAt, updatedAt string
 	var lastLogin sql.NullString
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
@@ -125,11 +125,11 @@ func (r *SQLiteRepo) GetUserByID(ctx context.Context, id string) (*models.User, 
 	return &u, nil
 }
 
-func (r *SQLiteRepo) GetUserByUsername(ctx context.Context, username string) (*models.User, error) {
+func (r *SQLiteRepo) GetUserByUsername(ctx context.Context, username string) (*entity.User, error) {
 	query := `SELECT id, COALESCE(username, ''), name, COALESCE(password_hash, ''), role, token_quota, tokens_used, allowed_models, 
 	                 COALESCE(rate_limit_rpm, 0), COALESCE(rate_limit_tpm, 0), is_active, created_at, updated_at, last_login_at 
 	          FROM users WHERE LOWER(username) = LOWER(?) OR LOWER(name) = LOWER(?) LIMIT 1`
-	var u models.User
+	var u entity.User
 	var createdAt, updatedAt string
 	var lastLogin sql.NullString
 	err := r.db.QueryRowContext(ctx, query, username, username).Scan(
@@ -150,7 +150,7 @@ func (r *SQLiteRepo) GetUserByUsername(ctx context.Context, username string) (*m
 	return &u, nil
 }
 
-func (r *SQLiteRepo) GetAllUsers(ctx context.Context) ([]models.User, error) {
+func (r *SQLiteRepo) GetAllUsers(ctx context.Context) ([]entity.User, error) {
 	query := `
 		SELECT u.id, COALESCE(u.username, ''), u.name, COALESCE(u.password_hash, ''), u.role, u.token_quota, u.tokens_used, u.allowed_models,
 		       COALESCE(u.rate_limit_rpm, 0), COALESCE(u.rate_limit_tpm, 0), u.is_active, u.created_at, u.updated_at, u.last_login_at,
@@ -164,9 +164,9 @@ func (r *SQLiteRepo) GetAllUsers(ctx context.Context) ([]models.User, error) {
 	}
 	defer rows.Close()
 
-	var users []models.User
+	var users []entity.User
 	for rows.Next() {
-		var u models.User
+		var u entity.User
 		var createdAt, updatedAt string
 		var lastLogin sql.NullString
 		if err := rows.Scan(&u.ID, &u.Username, &u.Name, &u.PasswordHash, &u.Role, &u.TokenQuota, &u.TokensUsed, &u.AllowedModels,
@@ -186,14 +186,14 @@ func (r *SQLiteRepo) GetAllUsers(ctx context.Context) ([]models.User, error) {
 	return users, nil
 }
 
-func (r *SQLiteRepo) CreateUser(ctx context.Context, u *models.User) error {
+func (r *SQLiteRepo) CreateUser(ctx context.Context, u *entity.User) error {
 	query := `INSERT INTO users (id, username, name, password_hash, role, token_quota, tokens_used, allowed_models, is_active, created_at, updated_at) 
 	          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`
 	_, err := r.db.ExecContext(ctx, query, u.ID, u.Username, u.Name, u.PasswordHash, u.Role, u.TokenQuota, u.TokensUsed, u.AllowedModels, u.IsActive)
 	return err
 }
 
-func (r *SQLiteRepo) UpdateUser(ctx context.Context, u *models.User) error {
+func (r *SQLiteRepo) UpdateUser(ctx context.Context, u *entity.User) error {
 	query := `UPDATE users 
 	          SET username = ?, name = ?, role = ?, token_quota = ?, allowed_models = ?, is_active = ?, updated_at = datetime('now')
 	          WHERE id = ?`
@@ -257,12 +257,12 @@ func (r *SQLiteRepo) DeductTokens(ctx context.Context, userID string, tokens int
 
 // API Key methods
 
-func (r *SQLiteRepo) GetAPIKeyByKey(ctx context.Context, key string) (*models.APIKey, error) {
+func (r *SQLiteRepo) GetAPIKeyByKey(ctx context.Context, key string) (*entity.APIKey, error) {
 	query := `SELECT k.id, k.user_id, k.key, k.name, COALESCE(k.allowed_models, ''), COALESCE(k.rate_limit_rpm, 0), k.is_active, k.created_at, k.last_used_at, k.expires_at, u.name 
 	          FROM api_keys k 
 	          JOIN users u ON k.user_id = u.id 
 	          WHERE k.key = ?`
-	var k models.APIKey
+	var k entity.APIKey
 	var createdAt string
 	var lastUsed sql.NullString
 	var expiresAt sql.NullString
@@ -288,7 +288,7 @@ func (r *SQLiteRepo) GetAPIKeyByKey(ctx context.Context, key string) (*models.AP
 	return &k, nil
 }
 
-func (r *SQLiteRepo) GetAPIKeysByUserID(ctx context.Context, userID string) ([]models.APIKey, error) {
+func (r *SQLiteRepo) GetAPIKeysByUserID(ctx context.Context, userID string) ([]entity.APIKey, error) {
 	query := `SELECT id, user_id, key, name, COALESCE(allowed_models, ''), COALESCE(rate_limit_rpm, 0), is_active, created_at, last_used_at, expires_at 
 	          FROM api_keys WHERE user_id = ? ORDER BY created_at DESC`
 	rows, err := r.db.QueryContext(ctx, query, userID)
@@ -297,9 +297,9 @@ func (r *SQLiteRepo) GetAPIKeysByUserID(ctx context.Context, userID string) ([]m
 	}
 	defer rows.Close()
 
-	var keys []models.APIKey
+	var keys []entity.APIKey
 	for rows.Next() {
-		var k models.APIKey
+		var k entity.APIKey
 		var createdAt string
 		var lastUsed sql.NullString
 		var expiresAt sql.NullString
@@ -324,7 +324,7 @@ func (r *SQLiteRepo) GetAPIKeysByUserID(ctx context.Context, userID string) ([]m
 	return keys, nil
 }
 
-func (r *SQLiteRepo) GetAllAPIKeys(ctx context.Context) ([]models.APIKey, error) {
+func (r *SQLiteRepo) GetAllAPIKeys(ctx context.Context) ([]entity.APIKey, error) {
 	query := `SELECT k.id, k.user_id, k.key, k.name, COALESCE(k.allowed_models, ''), COALESCE(k.rate_limit_rpm, 0), k.is_active, k.created_at, k.last_used_at, k.expires_at, u.name 
 	          FROM api_keys k 
 	          JOIN users u ON k.user_id = u.id 
@@ -335,9 +335,9 @@ func (r *SQLiteRepo) GetAllAPIKeys(ctx context.Context) ([]models.APIKey, error)
 	}
 	defer rows.Close()
 
-	var keys []models.APIKey
+	var keys []entity.APIKey
 	for rows.Next() {
-		var k models.APIKey
+		var k entity.APIKey
 		var createdAt string
 		var lastUsed sql.NullString
 		var expiresAt sql.NullString
@@ -362,7 +362,7 @@ func (r *SQLiteRepo) GetAllAPIKeys(ctx context.Context) ([]models.APIKey, error)
 	return keys, nil
 }
 
-func (r *SQLiteRepo) CreateAPIKey(ctx context.Context, k *models.APIKey) error {
+func (r *SQLiteRepo) CreateAPIKey(ctx context.Context, k *entity.APIKey) error {
 	query := `INSERT INTO api_keys (id, user_id, key, name, allowed_models, rate_limit_rpm, is_active, expires_at, created_at) 
 	          VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
 	_, err := r.db.ExecContext(ctx, query, k.ID, k.UserID, k.Key, k.Name, k.AllowedModels, k.RateLimitRPM, k.IsActive, formatNullableTime(k.ExpiresAt))
@@ -400,7 +400,7 @@ func (r *SQLiteRepo) UpdateKeyLastUsed(ctx context.Context, id string) error {
 
 // Request logs
 
-func (r *SQLiteRepo) CreateRequestLog(ctx context.Context, log *models.RequestLog) error {
+func (r *SQLiteRepo) CreateRequestLog(ctx context.Context, log *entity.RequestLog) error {
 	query := `INSERT INTO request_logs 
 	          (user_id, api_key_id, path, method, model, is_stream, prompt_tokens, completion_tokens, total_tokens, status_code, duration_ms, client_ip, error_message, created_at) 
 	          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
@@ -416,7 +416,7 @@ func (r *SQLiteRepo) CreateRequestLog(ctx context.Context, log *models.RequestLo
 	return err
 }
 
-func (r *SQLiteRepo) GetRequestLogs(ctx context.Context, limit, offset int, userID, modelFilter string, statusFilter int) ([]models.RequestLog, int, error) {
+func (r *SQLiteRepo) GetRequestLogs(ctx context.Context, limit, offset int, userID, modelFilter string, statusFilter int) ([]entity.RequestLog, int, error) {
 	whereClauses := []string{"1=1"}
 	args := []interface{}{}
 
@@ -464,9 +464,9 @@ func (r *SQLiteRepo) GetRequestLogs(ctx context.Context, limit, offset int, user
 	}
 	defer rows.Close()
 
-	var logs []models.RequestLog
+	var logs []entity.RequestLog
 	for rows.Next() {
-		var l models.RequestLog
+		var l entity.RequestLog
 		var createdAt string
 		var isStream int
 		if err := rows.Scan(
@@ -484,7 +484,7 @@ func (r *SQLiteRepo) GetRequestLogs(ctx context.Context, limit, offset int, user
 	return logs, total, nil
 }
 
-func (r *SQLiteRepo) GetRequestLogsCursor(ctx context.Context, limit int, cursor, direction, userID, modelFilter string, statusFilter int) ([]models.RequestLog, *models.CursorPageInfo, error) {
+func (r *SQLiteRepo) GetRequestLogsCursor(ctx context.Context, limit int, cursor, direction, userID, modelFilter string, statusFilter int) ([]entity.RequestLog, *entity.CursorPageInfo, error) {
 	if limit <= 0 {
 		limit = 25
 	}
@@ -550,13 +550,13 @@ func (r *SQLiteRepo) GetRequestLogsCursor(ctx context.Context, limit int, cursor
 
 	rows, err := r.db.QueryContext(ctx, dataQuery, allArgs...)
 	if err != nil {
-		return nil, &models.CursorPageInfo{Limit: limit, TotalCount: total}, err
+		return nil, &entity.CursorPageInfo{Limit: limit, TotalCount: total}, err
 	}
 	defer rows.Close()
 
-	var logs []models.RequestLog
+	var logs []entity.RequestLog
 	for rows.Next() {
-		var l models.RequestLog
+		var l entity.RequestLog
 		var createdAt string
 		var isStream int
 		if err := rows.Scan(
@@ -565,14 +565,14 @@ func (r *SQLiteRepo) GetRequestLogsCursor(ctx context.Context, limit int, cursor
 			&l.DurationMs, &l.ClientIP, &l.ErrorMessage, &createdAt,
 			&l.UserName, &l.KeyName,
 		); err != nil {
-			return nil, &models.CursorPageInfo{Limit: limit, TotalCount: total}, err
+			return nil, &entity.CursorPageInfo{Limit: limit, TotalCount: total}, err
 		}
 		l.IsStream = (isStream == 1)
 		l.CreatedAt = parseTimeFlexible(createdAt)
 		logs = append(logs, l)
 	}
 
-	pageInfo := &models.CursorPageInfo{
+	pageInfo := &entity.CursorPageInfo{
 		Limit:      limit,
 		TotalCount: total,
 	}
@@ -644,8 +644,8 @@ func getTimeframeConfig(tf string) (bucketExpr, whereClause, candleSize, normTf 
 
 // Dashboard statistics
 
-func (r *SQLiteRepo) GetDashboardStats(ctx context.Context, timeframe string) (*models.DashboardStats, error) {
-	stats := &models.DashboardStats{}
+func (r *SQLiteRepo) GetDashboardStats(ctx context.Context, timeframe string) (*entity.DashboardStats, error) {
+	stats := &entity.DashboardStats{}
 
 	// Totals
 	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*), COALESCE(SUM(total_tokens), 0) FROM request_logs").Scan(&stats.TotalRequests, &stats.TotalTokens)
@@ -675,7 +675,7 @@ func (r *SQLiteRepo) GetDashboardStats(ctx context.Context, timeframe string) (*
 	if err == nil {
 		defer dailyRows.Close()
 		for dailyRows.Next() {
-			var du models.DailyUsage
+			var du entity.DailyUsage
 			if err := dailyRows.Scan(&du.Date, &du.TotalTokens, &du.Requests); err == nil {
 				stats.DailyUsage = append(stats.DailyUsage, du)
 				stats.TimeframeVol += du.TotalTokens
@@ -699,7 +699,7 @@ func (r *SQLiteRepo) GetDashboardStats(ctx context.Context, timeframe string) (*
 	if err == nil {
 		defer tuRows.Close()
 		for tuRows.Next() {
-			var tu models.TopUserStat
+			var tu entity.TopUserStat
 			if err := tuRows.Scan(&tu.UserID, &tu.UserName, &tu.TokensUsed, &tu.Requests); err == nil {
 				stats.TopUsers = append(stats.TopUsers, tu)
 			}
@@ -718,7 +718,7 @@ func (r *SQLiteRepo) GetDashboardStats(ctx context.Context, timeframe string) (*
 	if err == nil {
 		defer tmRows.Close()
 		for tmRows.Next() {
-			var tm models.TopModelStat
+			var tm entity.TopModelStat
 			if err := tmRows.Scan(&tm.Model, &tm.Requests, &tm.TotalTokens); err == nil {
 				stats.TopModels = append(stats.TopModels, tm)
 			}
@@ -732,8 +732,8 @@ func (r *SQLiteRepo) GetDashboardStats(ctx context.Context, timeframe string) (*
 	return stats, nil
 }
 
-func (r *SQLiteRepo) GetUserDashboardStats(ctx context.Context, userID string, timeframe string) (*models.DashboardStats, error) {
-	stats := &models.DashboardStats{}
+func (r *SQLiteRepo) GetUserDashboardStats(ctx context.Context, userID string, timeframe string) (*entity.DashboardStats, error) {
+	stats := &entity.DashboardStats{}
 
 	// User-specific Totals
 	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*), COALESCE(SUM(total_tokens), 0) FROM request_logs WHERE user_id = ?", userID).Scan(&stats.TotalRequests, &stats.TotalTokens)
@@ -766,7 +766,7 @@ func (r *SQLiteRepo) GetUserDashboardStats(ctx context.Context, userID string, t
 	if err == nil {
 		defer dailyRows.Close()
 		for dailyRows.Next() {
-			var du models.DailyUsage
+			var du entity.DailyUsage
 			if err := dailyRows.Scan(&du.Date, &du.TotalTokens, &du.Requests); err == nil {
 				stats.DailyUsage = append(stats.DailyUsage, du)
 				stats.TimeframeVol += du.TotalTokens
@@ -790,7 +790,7 @@ func (r *SQLiteRepo) GetUserDashboardStats(ctx context.Context, userID string, t
 	if err == nil {
 		defer tmRows.Close()
 		for tmRows.Next() {
-			var tm models.TopModelStat
+			var tm entity.TopModelStat
 			if err := tmRows.Scan(&tm.Model, &tm.Requests, &tm.TotalTokens); err == nil {
 				stats.TopModels = append(stats.TopModels, tm)
 			}
@@ -806,7 +806,7 @@ func (r *SQLiteRepo) GetUserDashboardStats(ctx context.Context, userID string, t
 
 // Billing & Midtrans Transactions
 
-func (r *SQLiteRepo) GetActivePackages(ctx context.Context) ([]models.TokenPackage, error) {
+func (r *SQLiteRepo) GetActivePackages(ctx context.Context) ([]entity.TokenPackage, error) {
 	query := `SELECT id, name, tokens, price_idr, description, is_popular, is_active, created_at 
 	          FROM token_packages WHERE is_active = 1 ORDER BY price_idr ASC`
 	rows, err := r.db.QueryContext(ctx, query)
@@ -815,9 +815,9 @@ func (r *SQLiteRepo) GetActivePackages(ctx context.Context) ([]models.TokenPacka
 	}
 	defer rows.Close()
 
-	var pkgs []models.TokenPackage
+	var pkgs []entity.TokenPackage
 	for rows.Next() {
-		var p models.TokenPackage
+		var p entity.TokenPackage
 		var isPop, isActive int
 		var createdAt string
 		if err := rows.Scan(&p.ID, &p.Name, &p.Tokens, &p.PriceIDR, &p.Description, &isPop, &isActive, &createdAt); err != nil {
@@ -831,10 +831,10 @@ func (r *SQLiteRepo) GetActivePackages(ctx context.Context) ([]models.TokenPacka
 	return pkgs, nil
 }
 
-func (r *SQLiteRepo) GetPackageByID(ctx context.Context, id string) (*models.TokenPackage, error) {
+func (r *SQLiteRepo) GetPackageByID(ctx context.Context, id string) (*entity.TokenPackage, error) {
 	query := `SELECT id, name, tokens, price_idr, description, is_popular, is_active, created_at 
 	          FROM token_packages WHERE id = ?`
-	var p models.TokenPackage
+	var p entity.TokenPackage
 	var isPop, isActive int
 	var createdAt string
 	err := r.db.QueryRowContext(ctx, query, id).Scan(&p.ID, &p.Name, &p.Tokens, &p.PriceIDR, &p.Description, &isPop, &isActive, &createdAt)
@@ -847,14 +847,14 @@ func (r *SQLiteRepo) GetPackageByID(ctx context.Context, id string) (*models.Tok
 	return &p, nil
 }
 
-func (r *SQLiteRepo) CreateTransaction(ctx context.Context, tx *models.Transaction) error {
+func (r *SQLiteRepo) CreateTransaction(ctx context.Context, tx *entity.Transaction) error {
 	query := `INSERT INTO transactions (id, user_id, package_id, tokens, amount_idr, status, payment_type, snap_token, snap_url, midtrans_tx_id, created_at)
 	          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
 	_, err := r.db.ExecContext(ctx, query, tx.ID, tx.UserID, tx.PackageID, tx.Tokens, tx.AmountIDR, tx.Status, tx.PaymentType, tx.SnapToken, tx.SnapURL, tx.MidtransTxID)
 	return err
 }
 
-func (r *SQLiteRepo) GetTransactionByID(ctx context.Context, id string) (*models.Transaction, error) {
+func (r *SQLiteRepo) GetTransactionByID(ctx context.Context, id string) (*entity.Transaction, error) {
 	query := `SELECT t.id, t.user_id, t.package_id, t.tokens, t.amount_idr, t.status, 
 	                 COALESCE(t.payment_type, ''), COALESCE(t.snap_token, ''), COALESCE(t.snap_url, ''), 
 	                 COALESCE(t.midtrans_tx_id, ''), t.created_at, t.paid_at,
@@ -862,7 +862,7 @@ func (r *SQLiteRepo) GetTransactionByID(ctx context.Context, id string) (*models
 	          FROM transactions t
 	          LEFT JOIN users u ON t.user_id = u.id
 	          WHERE t.id = ?`
-	var t models.Transaction
+	var t entity.Transaction
 	var createdAt string
 	var paidAt sql.NullString
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
@@ -898,7 +898,7 @@ func (r *SQLiteRepo) UpdateTransactionStatus(ctx context.Context, id, status, pa
 	return err
 }
 
-func (r *SQLiteRepo) GetTransactionsByUserID(ctx context.Context, userID string, limit, offset int) ([]models.Transaction, int, error) {
+func (r *SQLiteRepo) GetTransactionsByUserID(ctx context.Context, userID string, limit, offset int) ([]entity.Transaction, int, error) {
 	var total int
 	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM transactions WHERE user_id = ?", userID).Scan(&total)
 
@@ -917,9 +917,9 @@ func (r *SQLiteRepo) GetTransactionsByUserID(ctx context.Context, userID string,
 	}
 	defer rows.Close()
 
-	var txs []models.Transaction
+	var txs []entity.Transaction
 	for rows.Next() {
-		var t models.Transaction
+		var t entity.Transaction
 		var createdAt string
 		var paidAt sql.NullString
 		if err := rows.Scan(
@@ -941,7 +941,7 @@ func (r *SQLiteRepo) GetTransactionsByUserID(ctx context.Context, userID string,
 	return txs, total, nil
 }
 
-func (r *SQLiteRepo) GetAllTransactions(ctx context.Context, limit, offset int) ([]models.Transaction, int, error) {
+func (r *SQLiteRepo) GetAllTransactions(ctx context.Context, limit, offset int) ([]entity.Transaction, int, error) {
 	var total int
 	_ = r.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM transactions").Scan(&total)
 
@@ -959,9 +959,9 @@ func (r *SQLiteRepo) GetAllTransactions(ctx context.Context, limit, offset int) 
 	}
 	defer rows.Close()
 
-	var txs []models.Transaction
+	var txs []entity.Transaction
 	for rows.Next() {
-		var t models.Transaction
+		var t entity.Transaction
 		var createdAt string
 		var paidAt sql.NullString
 		if err := rows.Scan(
@@ -1014,7 +1014,7 @@ func (r *SQLiteRepo) CreateSession(ctx context.Context, token, userID string, ex
 	return err
 }
 
-func (r *SQLiteRepo) GetSessionUser(ctx context.Context, token string) (*models.User, error) {
+func (r *SQLiteRepo) GetSessionUser(ctx context.Context, token string) (*entity.User, error) {
 	query := `
 		SELECT u.id, u.name, COALESCE(u.username, ''), COALESCE(u.password_hash, ''), 
 		       u.role, u.token_quota, u.tokens_used, u.allowed_models, u.is_active, 
@@ -1023,7 +1023,7 @@ func (r *SQLiteRepo) GetSessionUser(ctx context.Context, token string) (*models.
 		JOIN users u ON s.user_id = u.id
 		WHERE s.token = ? AND s.expires_at > datetime('now') AND u.is_active = 1`
 
-	var u models.User
+	var u entity.User
 	var createdAt, updatedAt string
 	var isActive int
 	err := r.db.QueryRowContext(ctx, query, token).Scan(

@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"strings"
 
-	"9router-gateway/internal/models"
+	"9router-gateway/internal/entity"
 )
 
 // LogService provides scoped request log queries and pagination.
@@ -30,7 +30,7 @@ type LogQuery struct {
 }
 
 // List returns logs and paging info for the query.
-func (s *LogService) List(ctx context.Context, q LogQuery) ([]models.RequestLog, *models.CursorPageInfo, error) {
+func (s *LogService) List(ctx context.Context, q LogQuery) ([]entity.RequestLog, *entity.CursorPageInfo, error) {
 	if q.Limit <= 0 {
 		q.Limit = 25
 	}

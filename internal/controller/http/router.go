@@ -1,4 +1,4 @@
-package server
+package http
 
 import (
 	"database/sql"
@@ -14,14 +14,14 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"9router-gateway/internal/config"
-	"9router-gateway/internal/handlers"
+	"9router-gateway/internal/controller/http/v1"
 	"9router-gateway/internal/proxy"
 	"9router-gateway/internal/repository"
 	"9router-gateway/web"
 )
 
 // NewRouter assembles the HTTP router (composition root for handlers/proxy).
-func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *handlers.Handler, gwProxy *proxy.GatewayProxy) *chi.Mux {
+func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1.Handler, gwProxy *proxy.GatewayProxy) *chi.Mux {
 	r := chi.NewRouter()
 
 	// Middlewares

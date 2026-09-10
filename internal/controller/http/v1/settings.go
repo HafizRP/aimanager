@@ -1,4 +1,4 @@
-package handlers
+package v1
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
-	"9router-gateway/internal/models"
+	"9router-gateway/internal/entity"
 	"9router-gateway/internal/upstream"
 	"9router-gateway/internal/usecase"
 )
@@ -32,8 +32,8 @@ func (h *Handler) ModelsPage(w http.ResponseWriter, r *http.Request) {
 	// Filter for non-admin user
 	displayModels := allModels
 	if currentUser != nil && !currentUser.IsAdmin() {
-		allowedList := models.ParseAllowedModels(currentUser.AllowedModels)
-		if !models.HasWildcard(allowedList) {
+		allowedList := entity.ParseAllowedModels(currentUser.AllowedModels)
+		if !entity.HasWildcard(allowedList) {
 			allowedMap := make(map[string]bool)
 			for _, m := range allowedList {
 				allowedMap[strings.TrimSpace(m)] = true
@@ -64,14 +64,14 @@ func (h *Handler) ModelsPage(w http.ResponseWriter, r *http.Request) {
 		modelViews = append(modelViews, item)
 	}
 
-	var users []models.User
+	var users []entity.User
 	if currentUser != nil && currentUser.IsAdmin() {
 		users, _ = h.repo.GetAllUsers(ctx)
 	}
 
 	aliases, _ := h.coreClient.GetModelAliases(ctx)
 
-	h.render(w, r, "models.html", "base.html", map[string]interface{}{
+	h.render(w, r, "entity.html", "base.html", map[string]interface{}{
 		"ActivePage":  "models",
 		"Models":      modelViews,
 		"Users":       users,
@@ -119,7 +119,7 @@ func (h *Handler) SettingsPage(w http.ResponseWriter, r *http.Request) {
 				prefix = "sk-gw-admin-"
 			}
 			newKey := usecase.GenerateSecureAPIKey(prefix)
-			apiKey := &models.APIKey{
+			apiKey := &entity.APIKey{
 				ID:       uuid.New().String(),
 				UserID:   currentUser.ID,
 				Key:      newKey,
@@ -139,7 +139,7 @@ func (h *Handler) SettingsPage(w http.ResponseWriter, r *http.Request) {
 
 	userModel := "ag/gemini-3.8-flash-high"
 	if currentUser != nil {
-		allowed := models.ParseAllowedModels(currentUser.AllowedModels)
+		allowed := entity.ParseAllowedModels(currentUser.AllowedModels)
 		if len(allowed) > 0 && allowed[0] != "*" {
 			userModel = allowed[0]
 		}

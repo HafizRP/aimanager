@@ -7,16 +7,16 @@ import (
 	"testing"
 	"time"
 
-	"9router-gateway/internal/models"
+	"9router-gateway/internal/entity"
 )
 
 // ---- Fake store implementation ----
 
 type fakeStore struct {
-	users        map[string]*models.User
-	keys         map[string]*models.APIKey
-	packages     map[string]*models.TokenPackage
-	transactions map[string]*models.Transaction
+	users        map[string]*entity.User
+	keys         map[string]*entity.APIKey
+	packages     map[string]*entity.TokenPackage
+	transactions map[string]*entity.Transaction
 	settings     map[string]string
 	sessions     map[string]string // token -> userID
 	loginFails   map[string]int
@@ -24,10 +24,10 @@ type fakeStore struct {
 
 func newFakeStore() *fakeStore {
 	return &fakeStore{
-		users:        map[string]*models.User{},
-		keys:         map[string]*models.APIKey{},
-		packages:     map[string]*models.TokenPackage{},
-		transactions: map[string]*models.Transaction{},
+		users:        map[string]*entity.User{},
+		keys:         map[string]*entity.APIKey{},
+		packages:     map[string]*entity.TokenPackage{},
+		transactions: map[string]*entity.Transaction{},
 		settings:     map[string]string{},
 		sessions:     map[string]string{},
 		loginFails:   map[string]int{},
@@ -35,14 +35,14 @@ func newFakeStore() *fakeStore {
 }
 
 // UserStore
-func (f *fakeStore) GetUserByID(ctx context.Context, id string) (*models.User, error) {
+func (f *fakeStore) GetUserByID(ctx context.Context, id string) (*entity.User, error) {
 	u, ok := f.users[id]
 	if !ok {
 		return nil, errors.New("not found")
 	}
 	return u, nil
 }
-func (f *fakeStore) GetUserByUsername(ctx context.Context, username string) (*models.User, error) {
+func (f *fakeStore) GetUserByUsername(ctx context.Context, username string) (*entity.User, error) {
 	for _, u := range f.users {
 		if strings.EqualFold(u.Username, username) || strings.EqualFold(u.Name, username) {
 			return u, nil
@@ -50,18 +50,18 @@ func (f *fakeStore) GetUserByUsername(ctx context.Context, username string) (*mo
 	}
 	return nil, errors.New("not found")
 }
-func (f *fakeStore) GetAllUsers(ctx context.Context) ([]models.User, error) {
-	out := []models.User{}
+func (f *fakeStore) GetAllUsers(ctx context.Context) ([]entity.User, error) {
+	out := []entity.User{}
 	for _, u := range f.users {
 		out = append(out, *u)
 	}
 	return out, nil
 }
-func (f *fakeStore) CreateUser(ctx context.Context, u *models.User) error {
+func (f *fakeStore) CreateUser(ctx context.Context, u *entity.User) error {
 	f.users[u.ID] = u
 	return nil
 }
-func (f *fakeStore) UpdateUser(ctx context.Context, u *models.User) error {
+func (f *fakeStore) UpdateUser(ctx context.Context, u *entity.User) error {
 	f.users[u.ID] = u
 	return nil
 }
@@ -96,7 +96,7 @@ func (f *fakeStore) DeductTokens(ctx context.Context, id string, tokens int) err
 }
 
 // APIKeyStore
-func (f *fakeStore) GetAPIKeyByKey(ctx context.Context, key string) (*models.APIKey, error) {
+func (f *fakeStore) GetAPIKeyByKey(ctx context.Context, key string) (*entity.APIKey, error) {
 	for _, k := range f.keys {
 		if k.Key == key {
 			return k, nil
@@ -104,8 +104,8 @@ func (f *fakeStore) GetAPIKeyByKey(ctx context.Context, key string) (*models.API
 	}
 	return nil, errors.New("not found")
 }
-func (f *fakeStore) GetAPIKeysByUserID(ctx context.Context, userID string) ([]models.APIKey, error) {
-	out := []models.APIKey{}
+func (f *fakeStore) GetAPIKeysByUserID(ctx context.Context, userID string) ([]entity.APIKey, error) {
+	out := []entity.APIKey{}
 	for _, k := range f.keys {
 		if k.UserID == userID {
 			out = append(out, *k)
@@ -113,14 +113,14 @@ func (f *fakeStore) GetAPIKeysByUserID(ctx context.Context, userID string) ([]mo
 	}
 	return out, nil
 }
-func (f *fakeStore) GetAllAPIKeys(ctx context.Context) ([]models.APIKey, error) {
-	out := []models.APIKey{}
+func (f *fakeStore) GetAllAPIKeys(ctx context.Context) ([]entity.APIKey, error) {
+	out := []entity.APIKey{}
 	for _, k := range f.keys {
 		out = append(out, *k)
 	}
 	return out, nil
 }
-func (f *fakeStore) CreateAPIKey(ctx context.Context, k *models.APIKey) error {
+func (f *fakeStore) CreateAPIKey(ctx context.Context, k *entity.APIKey) error {
 	f.keys[k.ID] = k
 	return nil
 }
@@ -137,42 +137,42 @@ func (f *fakeStore) DeleteAPIKey(ctx context.Context, id string) error {
 func (f *fakeStore) UpdateKeyLastUsed(ctx context.Context, id string) error { return nil }
 
 // RequestLogStore
-func (f *fakeStore) CreateRequestLog(ctx context.Context, l *models.RequestLog) error { return nil }
-func (f *fakeStore) GetRequestLogs(ctx context.Context, limit, offset int, userID, model string, status int) ([]models.RequestLog, int, error) {
-	return []models.RequestLog{}, 0, nil
+func (f *fakeStore) CreateRequestLog(ctx context.Context, l *entity.RequestLog) error { return nil }
+func (f *fakeStore) GetRequestLogs(ctx context.Context, limit, offset int, userID, model string, status int) ([]entity.RequestLog, int, error) {
+	return []entity.RequestLog{}, 0, nil
 }
-func (f *fakeStore) GetRequestLogsCursor(ctx context.Context, limit int, cursor, dir, userID, model string, status int) ([]models.RequestLog, *models.CursorPageInfo, error) {
-	return []models.RequestLog{}, &models.CursorPageInfo{Limit: limit}, nil
+func (f *fakeStore) GetRequestLogsCursor(ctx context.Context, limit int, cursor, dir, userID, model string, status int) ([]entity.RequestLog, *entity.CursorPageInfo, error) {
+	return []entity.RequestLog{}, &entity.CursorPageInfo{Limit: limit}, nil
 }
 
 // StatsStore
-func (f *fakeStore) GetDashboardStats(ctx context.Context, tf string) (*models.DashboardStats, error) {
-	return &models.DashboardStats{TotalUsers: int64(len(f.users))}, nil
+func (f *fakeStore) GetDashboardStats(ctx context.Context, tf string) (*entity.DashboardStats, error) {
+	return &entity.DashboardStats{TotalUsers: int64(len(f.users))}, nil
 }
-func (f *fakeStore) GetUserDashboardStats(ctx context.Context, userID, tf string) (*models.DashboardStats, error) {
-	return &models.DashboardStats{}, nil
+func (f *fakeStore) GetUserDashboardStats(ctx context.Context, userID, tf string) (*entity.DashboardStats, error) {
+	return &entity.DashboardStats{}, nil
 }
 
 // TransactionStore
-func (f *fakeStore) GetActivePackages(ctx context.Context) ([]models.TokenPackage, error) {
-	out := []models.TokenPackage{}
+func (f *fakeStore) GetActivePackages(ctx context.Context) ([]entity.TokenPackage, error) {
+	out := []entity.TokenPackage{}
 	for _, p := range f.packages {
 		out = append(out, *p)
 	}
 	return out, nil
 }
-func (f *fakeStore) GetPackageByID(ctx context.Context, id string) (*models.TokenPackage, error) {
+func (f *fakeStore) GetPackageByID(ctx context.Context, id string) (*entity.TokenPackage, error) {
 	p, ok := f.packages[id]
 	if !ok {
 		return nil, errors.New("not found")
 	}
 	return p, nil
 }
-func (f *fakeStore) CreateTransaction(ctx context.Context, tx *models.Transaction) error {
+func (f *fakeStore) CreateTransaction(ctx context.Context, tx *entity.Transaction) error {
 	f.transactions[tx.ID] = tx
 	return nil
 }
-func (f *fakeStore) GetTransactionByID(ctx context.Context, id string) (*models.Transaction, error) {
+func (f *fakeStore) GetTransactionByID(ctx context.Context, id string) (*entity.Transaction, error) {
 	tx, ok := f.transactions[id]
 	if !ok {
 		return nil, errors.New("not found")
@@ -187,11 +187,11 @@ func (f *fakeStore) UpdateTransactionStatus(ctx context.Context, id, status, pay
 	}
 	return nil
 }
-func (f *fakeStore) GetTransactionsByUserID(ctx context.Context, userID string, limit, offset int) ([]models.Transaction, int, error) {
-	return []models.Transaction{}, 0, nil
+func (f *fakeStore) GetTransactionsByUserID(ctx context.Context, userID string, limit, offset int) ([]entity.Transaction, int, error) {
+	return []entity.Transaction{}, 0, nil
 }
-func (f *fakeStore) GetAllTransactions(ctx context.Context, limit, offset int) ([]models.Transaction, int, error) {
-	return []models.Transaction{}, 0, nil
+func (f *fakeStore) GetAllTransactions(ctx context.Context, limit, offset int) ([]entity.Transaction, int, error) {
+	return []entity.Transaction{}, 0, nil
 }
 func (f *fakeStore) CreditUserTokens(ctx context.Context, userID string, tokens int64) error {
 	if u, ok := f.users[userID]; ok {
@@ -218,7 +218,7 @@ func (f *fakeStore) CreateSession(ctx context.Context, token, userID string, exp
 	f.sessions[token] = userID
 	return nil
 }
-func (f *fakeStore) GetSessionUser(ctx context.Context, token string) (*models.User, error) {
+func (f *fakeStore) GetSessionUser(ctx context.Context, token string) (*entity.User, error) {
 	userID, ok := f.sessions[token]
 	if !ok {
 		return nil, errors.New("not found")
@@ -253,7 +253,7 @@ var _ Store = (*fakeStore)(nil)
 func TestAuthService_Authenticate(t *testing.T) {
 	store := newFakeStore()
 	hash, _ := HashPassword("secret123")
-	store.users["u1"] = &models.User{
+	store.users["u1"] = &entity.User{
 		ID: "u1", Username: "hafiz", Name: "Hafiz",
 		PasswordHash: hash, Role: "user", IsActive: true,
 	}
@@ -281,7 +281,7 @@ func TestAuthService_Authenticate(t *testing.T) {
 
 func TestAuthService_SessionLifecycle(t *testing.T) {
 	store := newFakeStore()
-	store.users["u1"] = &models.User{ID: "u1", Username: "hafiz", IsActive: true}
+	store.users["u1"] = &entity.User{ID: "u1", Username: "hafiz", IsActive: true}
 	svc := NewAuthService(store, "test-secret", "admin", "admin")
 	ctx := context.Background()
 
@@ -348,7 +348,7 @@ func TestUserService_CreateUser(t *testing.T) {
 
 func TestKeyService_CreateKey(t *testing.T) {
 	store := newFakeStore()
-	store.users["u1"] = &models.User{ID: "u1", Username: "hafiz", Name: "Hafiz"}
+	store.users["u1"] = &entity.User{ID: "u1", Username: "hafiz", Name: "Hafiz"}
 	svc := NewKeyService(store, nil)
 
 	exp := time.Now().Add(24 * time.Hour)
@@ -374,7 +374,7 @@ func TestKeyService_CreateKey(t *testing.T) {
 
 func TestBillingService_ManualCredit(t *testing.T) {
 	store := newFakeStore()
-	store.users["u1"] = &models.User{ID: "u1", Username: "hafiz", TokenQuota: 100}
+	store.users["u1"] = &entity.User{ID: "u1", Username: "hafiz", TokenQuota: 100}
 	svc := NewBillingService(store)
 
 	if err := svc.ManualCredit(context.Background(), "u1", 500); err != nil {
@@ -395,10 +395,10 @@ func TestBillingService_ManualCredit(t *testing.T) {
 
 func TestBillingService_MarkPaid_NoDoubleCredit(t *testing.T) {
 	store := newFakeStore()
-	store.users["u1"] = &models.User{ID: "u1", Username: "hafiz", TokenQuota: 100}
+	store.users["u1"] = &entity.User{ID: "u1", Username: "hafiz", TokenQuota: 100}
 	svc := NewBillingService(store)
 
-	tx := &models.Transaction{ID: "tx1", UserID: "u1", PackageID: "p1", Tokens: 1000, Status: "pending"}
+	tx := &entity.Transaction{ID: "tx1", UserID: "u1", PackageID: "p1", Tokens: 1000, Status: "pending"}
 	store.transactions["tx1"] = tx
 
 	if err := svc.MarkPaid(context.Background(), tx, "bank_transfer", "mt1"); err != nil {

@@ -1,10 +1,10 @@
-package handlers
+package v1
 
 import (
 	"strings"
 	"testing"
 
-	"9router-gateway/internal/models"
+	"9router-gateway/internal/entity"
 )
 
 func TestGenerateSecureAPIKey(t *testing.T) {
@@ -56,33 +56,33 @@ func TestPasswordHashing(t *testing.T) {
 }
 
 func TestUserVirtualMethods(t *testing.T) {
-	adminUser := &models.User{Role: "admin"}
+	adminUser := &entity.User{Role: "admin"}
 	if !adminUser.IsAdmin() {
 		t.Error("expected IsAdmin() true for role 'admin'")
 	}
 
-	superUser := &models.User{Role: "superadmin"}
+	superUser := &entity.User{Role: "superadmin"}
 	if !superUser.IsAdmin() {
 		t.Error("expected IsAdmin() true for role 'superadmin'")
 	}
 
-	regularUser := &models.User{Role: "user"}
+	regularUser := &entity.User{Role: "user"}
 	if regularUser.IsAdmin() {
 		t.Error("expected IsAdmin() false for role 'user'")
 	}
 
 	// Quota calculations
-	unlimitedUser := &models.User{TokenQuota: 0, TokensUsed: 500}
+	unlimitedUser := &entity.User{TokenQuota: 0, TokensUsed: 500}
 	if pct := unlimitedUser.QuotaPercent(); pct != 0 {
 		t.Errorf("expected 0 for unlimited user, got %f", pct)
 	}
 
-	quotaUser := &models.User{TokenQuota: 1000, TokensUsed: 250}
+	quotaUser := &entity.User{TokenQuota: 1000, TokensUsed: 250}
 	if pct := quotaUser.QuotaPercent(); pct != 25.0 {
 		t.Errorf("expected 25.0%%, got %f", pct)
 	}
 
-	overQuotaUser := &models.User{TokenQuota: 1000, TokensUsed: 1500}
+	overQuotaUser := &entity.User{TokenQuota: 1000, TokensUsed: 1500}
 	if pct := overQuotaUser.QuotaPercent(); pct != 100.0 {
 		t.Errorf("expected capped 100.0%%, got %f", pct)
 	}
