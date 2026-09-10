@@ -15,27 +15,46 @@
   <div class="col-lg-5">
     {{ if .IsAdmin }}
       <div class="card-modern p-4 mb-4">
-        <h6 class="fw-bold mb-3 text-light d-flex align-items-center gap-2">
-          <i class="bi bi-diagram-3 text-primary"></i> Upstream 9router Core
-        </h6>
-        <div class="p-3 rounded-3 mb-3" style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-subtle);">
-          <div class="d-flex justify-content-between align-items-center mb-2">
-            <span class="text-dim small">Upstream Address</span>
-            <code class="text-info font-monospace">{{ .Config.UpstreamURL }}</code>
-          </div>
-          <div class="d-flex justify-content-between align-items-center mb-2">
-            <span class="text-dim small">Database Sync</span>
-            <span class="badge-modern badge-emerald"><i class="bi bi-check-circle-fill"></i> Auto-Synced</span>
-          </div>
-          <div class="d-flex justify-content-between align-items-center">
-            <span class="text-dim small">Local Core Health</span>
-            <span class="status-pill-live">
-              <span class="pulse-dot"></span> Operational
-            </span>
-          </div>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h6 class="fw-bold mb-0 text-light d-flex align-items-center gap-2">
+            <i class="bi bi-diagram-3 text-primary"></i> Upstream 9router Core
+          </h6>
+          <span id="upstreamLiveBadge" class="status-pill-live" style="font-size:0.68rem; padding: 0.2rem 0.5rem;">
+            <span class="pulse-dot"></span> <span id="upstreamLiveText">Checking...</span>
+          </span>
         </div>
 
-        <div class="d-flex justify-content-between align-items-center small text-dim pt-2 border-top border-secondary border-opacity-10">
+        <form action="/settings/upstream" method="POST">
+          <div class="mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <label class="form-label small text-muted mb-0">Upstream Base URL</label>
+              <button type="button" class="btn btn-link text-info text-decoration-none p-0 small" id="btnTestUpstream" style="font-size: 0.75rem;">
+                <i class="bi bi-broadcast"></i> Test Ping
+              </button>
+            </div>
+            <input type="text" name="upstream_url" id="inputUpstreamURL" class="form-control form-control-modern font-monospace" value="{{ .Config.UpstreamURL }}" placeholder="http://127.0.0.1:20128" required>
+            <div id="testPingResult" class="mt-2 small d-none"></div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small text-muted">9router SQLite Database Path</label>
+            <input type="text" name="ninerouter_db_path" class="form-control form-control-modern font-monospace" value="{{ .Config.NineRouterDBPath }}" placeholder="/home/b14/9router/data/db/data.sqlite" required>
+            <div class="text-dim small mt-1" style="font-size: 0.72rem;">
+              Used by Syncer to automatically replicate API keys to 9router Core.
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label small text-muted">Upstream Master Key (Optional)</label>
+            <input type="password" name="upstream_api_key" class="form-control form-control-modern font-monospace" value="{{ .Config.UpstreamAPIKey }}" placeholder="Leave empty for direct key passthrough">
+          </div>
+
+          <button type="submit" class="btn-modern-primary btn-sm w-100 py-2">
+            <i class="bi bi-check2"></i> Save Upstream Config
+          </button>
+        </form>
+
+        <div class="d-flex justify-content-between align-items-center small text-dim pt-3 mt-3 border-top border-secondary border-opacity-10">
           <span>Gateway Listener:</span>
           <code class="text-warning font-monospace">http://0.0.0.0:{{ .Config.Port }}</code>
         </div>
@@ -200,4 +219,62 @@
     </div>
   </div>
 </div>
+{{ end }}
+
+{{ define "scripts" }}
+<script>
+  // Upstream Live Checker & Test Ping
+  const upstreamLiveBadge = document.getElementById("upstreamLiveBadge");
+  const upstreamLiveText = document.getElementById("upstreamLiveText");
+  const btnTestUpstream = document.getElementById("btnTestUpstream");
+  const inputUpstreamURL = document.getElementById("inputUpstreamURL");
+  const testPingResult = document.getElementById("testPingResult");
+
+  function checkUpstreamHealth(url, isManual = false) {
+    if (!upstreamLiveBadge) return;
+
+    if (isManual && testPingResult) {
+      testPingResult.classList.remove("d-none");
+      testPingResult.innerHTML = '<span class="text-dim"><span class="spinner-border spinner-border-sm me-1"></span> Pinging upstream...</span>';
+    }
+
+    const testUrl = "/api/upstream/test?url=" + encodeURIComponent(url || "");
+    fetch(testUrl)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          upstreamLiveBadge.className = "status-pill-live";
+          upstreamLiveText.innerHTML = `Operational (${data.latency_ms}ms)`;
+          if (isManual && testPingResult) {
+            testPingResult.innerHTML = `<span class="badge-modern badge-emerald"><i class="bi bi-check-circle-fill"></i> Connected: HTTP ${data.status_code} (${data.latency_ms}ms)</span>`;
+          }
+        } else {
+          upstreamLiveBadge.className = "badge-modern badge-rose";
+          upstreamLiveText.innerHTML = "Offline";
+          if (isManual && testPingResult) {
+            testPingResult.innerHTML = `<span class="badge-modern badge-rose"><i class="bi bi-x-circle-fill"></i> Error: ${data.error || 'Connection Failed'}</span>`;
+          }
+        }
+      })
+      .catch(err => {
+        upstreamLiveBadge.className = "badge-modern badge-rose";
+        upstreamLiveText.innerHTML = "Unreachable";
+        if (isManual && testPingResult) {
+          testPingResult.innerHTML = `<span class="badge-modern badge-rose"><i class="bi bi-x-circle-fill"></i> Ping error: ${err.message}</span>`;
+        }
+      });
+  }
+
+  // Initial check on load
+  if (upstreamLiveBadge) {
+    checkUpstreamHealth(inputUpstreamURL ? inputUpstreamURL.value : "");
+  }
+
+  if (btnTestUpstream) {
+    btnTestUpstream.addEventListener("click", function() {
+      const url = inputUpstreamURL ? inputUpstreamURL.value.trim() : "";
+      checkUpstreamHealth(url, true);
+    });
+  }
+</script>
 {{ end }}

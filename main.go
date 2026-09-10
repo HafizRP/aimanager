@@ -54,6 +54,30 @@ func main() {
 	slog.Info("SQLite database initialized successfully")
 
 	repo := repository.NewSQLiteRepo(db)
+
+	// Load runtime settings from database if configured
+	if uURL, err := repo.GetSetting(context.Background(), "upstream_url"); err == nil && uURL != "" {
+		cfg.UpstreamURL = uURL
+	}
+	if uKey, err := repo.GetSetting(context.Background(), "upstream_api_key"); err == nil && uKey != "" {
+		cfg.UpstreamAPIKey = uKey
+	}
+	if nrDB, err := repo.GetSetting(context.Background(), "ninerouter_db_path"); err == nil && nrDB != "" {
+		cfg.NineRouterDBPath = nrDB
+	}
+	if mServer, err := repo.GetSetting(context.Background(), "midtrans_server_key"); err == nil && mServer != "" {
+		cfg.MidtransServerKey = mServer
+	}
+	if mClient, err := repo.GetSetting(context.Background(), "midtrans_client_key"); err == nil && mClient != "" {
+		cfg.MidtransClientKey = mClient
+	}
+	if mMerchant, err := repo.GetSetting(context.Background(), "midtrans_merchant_id"); err == nil && mMerchant != "" {
+		cfg.MidtransMerchantID = mMerchant
+	}
+	if mProd, err := repo.GetSetting(context.Background(), "midtrans_is_production"); err == nil && mProd != "" {
+		cfg.MidtransIsProduction = (mProd == "true")
+	}
+
 	keySyncer := syncer.NewSyncer(cfg.NineRouterDBPath)
 
 	// 4. Seed initial user and API key if table is empty
@@ -165,6 +189,10 @@ func main() {
 			// Admin Billing Actions
 			adminOnly.Post("/api/billing/manual-credit", h.ManualCreditTokens)
 			adminOnly.Post("/settings/midtrans", h.UpdateMidtransPost)
+
+			// Admin Upstream 9router Actions
+			adminOnly.Post("/settings/upstream", h.UpdateUpstreamPost)
+			adminOnly.Get("/api/upstream/test", h.TestUpstreamConnection)
 		})
 	})
 

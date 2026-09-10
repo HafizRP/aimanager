@@ -33,6 +33,10 @@ func NewSyncer(dbPath string) *Syncer {
 	}
 }
 
+func (s *Syncer) UpdateDBPath(newPath string) {
+	s.dbPath = newPath
+}
+
 func (s *Syncer) getDB() (*sql.DB, error) {
 	if _, err := os.Stat(s.dbPath); err != nil {
 		return nil, fmt.Errorf("9router db not found at %s: %w", s.dbPath, err)

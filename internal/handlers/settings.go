@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -212,6 +213,114 @@ func (h *Handler) UpdateMidtransPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, "/settings?msg=Midtrans+configuration+saved+successfully", http.StatusSeeOther)
+}
+
+func (h *Handler) UpdateUpstreamPost(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	ctx := r.Context()
+	currentUser := GetUserFromContext(ctx)
+	if currentUser == nil || !currentUser.IsAdmin() {
+		http.Redirect(w, r, "/?error=Unauthorized", http.StatusSeeOther)
+		return
+	}
+
+	upstreamURL := strings.TrimRight(strings.TrimSpace(r.FormValue("upstream_url")), "/")
+	dbPath := strings.TrimSpace(r.FormValue("ninerouter_db_path"))
+	apiKey := strings.TrimSpace(r.FormValue("upstream_api_key"))
+
+	if upstreamURL != "" {
+		h.cfg.UpstreamURL = upstreamURL
+		_ = h.repo.SaveSetting(ctx, "upstream_url", upstreamURL)
+	}
+	if dbPath != "" {
+		h.cfg.NineRouterDBPath = dbPath
+		_ = h.repo.SaveSetting(ctx, "ninerouter_db_path", dbPath)
+		if h.syncer != nil {
+			h.syncer.UpdateDBPath(dbPath)
+			// Trigger re-sync of all active keys
+			if allKeys, err := h.repo.GetAllAPIKeys(ctx); err == nil {
+				_ = h.syncer.BackfillAll(allKeys)
+			}
+		}
+	}
+	h.cfg.UpstreamAPIKey = apiKey
+	_ = h.repo.SaveSetting(ctx, "upstream_api_key", apiKey)
+
+	http.Redirect(w, r, "/settings?msg=Upstream+9router+Core+configuration+updated+successfully", http.StatusSeeOther)
+}
+
+func (h *Handler) TestUpstreamConnection(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	currentUser := GetUserFromContext(ctx)
+	if currentUser == nil || !currentUser.IsAdmin() {
+		http.Error(w, `{"error":"Unauthorized"}`, http.StatusUnauthorized)
+		return
+	}
+
+	targetURL := strings.TrimRight(strings.TrimSpace(r.URL.Query().Get("url")), "/")
+	if targetURL == "" {
+		targetURL = h.cfg.UpstreamURL
+	}
+
+	client := &http.Client{Timeout: 4 * time.Second}
+	start := time.Now()
+
+	// Test connection: Try root "/" (307/200 on 9router) or "/v1/models"
+	checkURL := targetURL + "/"
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, checkURL, nil)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+			"target":  targetURL,
+		})
+		return
+	}
+
+	resp, err := client.Do(req)
+	latency := time.Since(start).Milliseconds()
+
+	if err != nil {
+		// Fallback to /v1/models
+		checkURL = targetURL + "/v1/models"
+		req2, err2 := http.NewRequestWithContext(r.Context(), http.MethodGet, checkURL, nil)
+		if err2 == nil {
+			start = time.Now()
+			resp2, err3 := client.Do(req2)
+			if err3 == nil {
+				defer resp2.Body.Close()
+				latency = time.Since(start).Milliseconds()
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
+					"success":     resp2.StatusCode < 500,
+					"status_code": resp2.StatusCode,
+					"latency_ms":  latency,
+					"endpoint":    checkURL,
+					"target":      targetURL,
+				})
+				return
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": false,
+			"error":   err.Error(),
+			"target":  targetURL,
+		})
+		return
+	}
+	defer resp.Body.Close()
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":     resp.StatusCode < 500,
+		"status_code": resp.StatusCode,
+		"latency_ms":  latency,
+		"endpoint":    checkURL,
+		"target":      targetURL,
+	})
 }
 
 func parseAllowedModels(raw string) []string {
