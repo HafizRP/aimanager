@@ -13,6 +13,8 @@ services:
       - PORT=20128
       - HOSTNAME=0.0.0.0
       - DATA_DIR=/app/data
+      - BASE_URL=${BASE_URL}
+      - NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL}
     volumes:
       - ./data/core:/app/data
 

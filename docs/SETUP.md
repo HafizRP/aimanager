@@ -25,7 +25,8 @@ services:
       - DATA_DIR=/app/data
       - PORT=20128
       - HOSTNAME=0.0.0.0
-      - INITIAL_PASSWORD=Kepoloe#123
+      - BASE_URL=${BASE_URL}
+      - NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL}
       - NEXT_TELEMETRY_DISABLED=1
     volumes:
       - ./data/core:/app/data
@@ -63,6 +64,19 @@ To expose AI Manager securely over HTTPS without opening firewall ports:
 1. In Cloudflare Zero Trust dashboard, create a tunnel pointing `aimanager.yourdomain.com` to `http://localhost:20129`.
 2. AI Manager includes built-in middleware to enforce HTTPS redirects and HSTS headers.
 3. Configure `UPSTREAM_URL` to point to `http://127.0.0.1:20128` internally.
+
+### Core domain & OAuth redirect
+
+9router Core builds its OAuth `redirect_uri` from `BASE_URL` (fallback: request `x-forwarded-*` headers). If you serve Core on its own public domain (e.g. for provider OAuth logins):
+
+1. Point `core.yourdomain.com` to `http://localhost:20128` in the same tunnel.
+2. Set in `.env` (values here are placeholders — never commit real domains):
+   ```bash
+   BASE_URL=https://core.yourdomain.com
+   NEXT_PUBLIC_BASE_URL=https://core.yourdomain.com
+   ```
+3. Recreate core: `docker compose up -d --force-recreate core`.
+4. Register the callback URL (e.g. `https://core.yourdomain.com/api/auth/oidc/callback`) in your OAuth provider's authorized redirect URIs — otherwise the provider rejects the login even when `BASE_URL` is correct.
 
 ---
 
