@@ -20,25 +20,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build
+      - name: Build & deploy (docker compose)
         run: |
           set -euo pipefail
-          echo "→ Building..."
-          CGO_ENABLED=0 /home/b14/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/bin/go build -o 9router-gateway ./cmd/gateway
-
-      - name: Restart service
-        run: |
-          set -euo pipefail
-          echo "→ Restarting service..."
-          sudo systemctl restart 9router-gateway.service
-          sleep 2
+          echo "→ Building gateway image..."
+          docker compose build gateway
+          echo "→ Starting core + gateway..."
+          docker compose up -d
+          sleep 5
 
       - name: Verify
         run: |
           set -euo pipefail
           echo "→ Verifying..."
-          systemctl is-active 9router-gateway.service
-          curl -sf http://127.0.0.1:20129/healthz && echo " healthz OK"
+          docker compose ps --format "{{.Name}} {{.Status}}" | tee /tmp/compose-ps.txt
+          grep -q "^9router_gateway Up" /tmp/compose-ps.txt
+          grep -q "^9router Up" /tmp/compose-ps.txt
+          curl -sf http://127.0.0.1:20129/healthz && echo " gateway healthz OK"
+          curl -sf -o /dev/null -w "core: %{http_code}\n" --max-time 8 http://127.0.0.1:20128/ || true
+          docker logs 9router_gateway --since 2m 2>&1 | grep -iE "WRN|ERR" | grep -v "9router route" || echo " no warnings/errors"
           echo "✅ Deploy complete"
 
       - name: Notify Telegram (success)
