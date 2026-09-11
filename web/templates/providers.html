@@ -9,6 +9,9 @@
     <p class="text-dim small mb-0">Manage upstream AI accounts (Antigravity, Kiro AI, OpenAI-compatible nodes) connected to 9router Core.</p>
   </div>
   <div class="d-flex align-items-center gap-2">
+    <button type="button" class="btn btn-sm btn-modern-ghost" id="btnGroupProviders" onclick="toggleProviderGrouping()" title="Toggle grouping by provider type">
+      <i class="bi bi-collection"></i> <span id="groupLabel">Grouped</span>
+    </button>
     <button type="button" class="btn-modern-primary d-inline-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#addProviderModal">
       <i class="bi bi-plus-lg"></i> Add Connection
     </button>
@@ -33,7 +36,7 @@
       <tbody>
         {{ if .Providers }}
           {{ range .Providers }}
-            <tr id="provider-row-{{ .ID }}">
+            <tr id="provider-row-{{ .ID }}" data-provider="{{ .Provider }}" data-pname="{{ if .Name }}{{ .Name }}{{ else }}{{ .Provider }}{{ end }}">
               <td>
                 <div class="d-flex align-items-center gap-2">
                   <div class="kpi-icon {{ if eq .Provider "antigravity" }}kpi-icon-indigo{{ else if eq .Provider "kiro" }}kpi-icon-amber{{ else }}kpi-icon-cyan{{ end }}" style="width: 32px; height: 32px; font-size: 0.85rem; border-radius: 8px;">
@@ -153,6 +156,49 @@
 </div>
 
 <script>
+let providersGrouped = true;
+
+function providerTypeLabel(t) {
+  if (t === 'antigravity') return 'Antigravity (Google)';
+  if (t === 'kiro') return 'Kiro AI';
+  if ((t || '').indexOf('openai-compatible') === 0) return 'OpenAI Compatible Nodes';
+  return t || 'Other';
+}
+
+function applyProviderGrouping() {
+  document.querySelectorAll('.provider-group-header').forEach(el => el.remove());
+  const tbody = document.querySelector('#providersTable tbody');
+  if (!tbody) return;
+  const rows = Array.from(tbody.querySelectorAll('tr[id^="provider-row-"]'));
+  if (!providersGrouped) {
+    rows.sort((a, b) => (a.getAttribute('data-pname') || '').localeCompare(b.getAttribute('data-pname') || ''));
+    rows.forEach(r => tbody.appendChild(r));
+    document.getElementById('groupLabel').textContent = 'Flat';
+    return;
+  }
+  const groups = {};
+  rows.forEach(r => {
+    const t = r.getAttribute('data-provider') || 'other';
+    (groups[t] = groups[t] || []).push(r);
+  });
+  Object.keys(groups).sort().forEach(t => {
+    const g = groups[t];
+    g.sort((a, b) => (a.getAttribute('data-pname') || '').localeCompare(b.getAttribute('data-pname') || ''));
+    const header = document.createElement('tr');
+    header.className = 'provider-group-header';
+    header.innerHTML = `<td colspan="7" style="background: rgba(56,189,248,0.06);"><span class="fw-bold text-light small">${providerTypeLabel(t)}</span> <span class="badge-modern badge-gray font-monospace ms-1">${g.length}</span></td>`;
+    tbody.appendChild(header);
+    g.forEach(r => tbody.appendChild(r));
+  });
+  document.getElementById('groupLabel').textContent = 'Grouped';
+}
+
+function toggleProviderGrouping() {
+  providersGrouped = !providersGrouped;
+  applyProviderGrouping();
+}
+
+document.addEventListener('DOMContentLoaded', applyProviderGrouping);
 function handleProvTypeChange() {
   const type = document.getElementById('newProvType').value;
   const urlGrp = document.getElementById('baseUrlGroup');

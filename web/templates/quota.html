@@ -1,0 +1,73 @@
+{{ define "title" }}Quota Overview - AI Manager{{ end }}
+
+{{ define "content" }}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+  <div>
+    <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
+      <i class="bi bi-pie-chart-fill text-emerald"></i> Quota Overview
+    </h4>
+    <p class="text-dim small mb-0">Live upstream quota allowances per connected account.</p>
+  </div>
+  <div class="d-flex align-items-center gap-2">
+    <button type="button" class="btn btn-sm btn-modern-ghost" id="btnRefreshQuota" onclick="loadQuotas(true)">
+      <i class="bi bi-arrow-clockwise" id="quotaSpin"></i> Refresh
+    </button>
+  </div>
+</div>
+
+<div id="quotaRoot" class="d-flex flex-column gap-3">
+  <div class="card-modern p-4"><p class="text-dim small mb-0">Loading quotas…</p></div>
+</div>
+
+<script>
+function quotaBar(pct) {
+  const p = Math.max(0, Math.min(100, pct || 0));
+  const color = p > 50 ? '#34d399' : p > 15 ? '#fbbf24' : '#fb7185';
+  return `<div class="progress" style="height:6px;background:rgba(255,255,255,0.06);"><div class="progress-bar" style="width:${p}%;background:${color};"></div></div>`;
+}
+function quotaTypeLabel(t) {
+  if (t === 'antigravity') return 'Antigravity (Google)';
+  if (t === 'kiro') return 'Kiro AI';
+  if ((t || '').indexOf('openai-compatible') === 0) return 'OpenAI Compatible Nodes';
+  return t || 'Other';
+}
+function accountCard(a) {
+      const quotas = a.quotas || {};
+      const rows = Object.entries(quotas).map(([k, q]) =>
+        `<div class="py-2 border-bottom border-secondary border-opacity-10">
+           <div class="d-flex justify-content-between align-items-center gap-2 mb-1">
+             <span class="text-light small">${q.display_name || k}</span>
+             <span class="text-dim small font-monospace">${q.remaining ?? '-'} / ${q.total ?? '-'}${q.reset_at_wib ? ' · resets ' + q.reset_at_wib : ''}</span>
+           </div>${quotaBar(q.remaining_percentage)}
+         </div>`).join('');
+      return `<div class="card-modern p-4 mb-3">
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <span class="fw-bold text-light">${a.name || a.email || a.id}</span>
+          <span class="badge-modern badge-indigo font-monospace">${a.provider || ''}</span>
+          <span class="badge-modern ${a.status === 'ready' ? 'badge-emerald' : 'badge-gray'}">${a.status || 'unknown'}</span>
+        </div>${rows || '<p class="text-dim small mb-0">No quota pools.</p>'}</div>`;
+}
+async function loadQuotas(refresh) {
+  const spin = document.getElementById('quotaSpin');
+  spin.classList.add('spin-animation');
+  try {
+    const res = await fetch('/api/upstream/quotas' + (refresh ? '?refresh=true' : ''));
+    const data = await res.json();
+    const root = document.getElementById('quotaRoot');
+    const accounts = data.accounts || [];
+    if (!accounts.length) { root.innerHTML = '<div class="card-modern p-4"><p class="text-dim small mb-0">No upstream accounts connected.</p></div>'; return; }
+    const groups = {};
+    accounts.forEach(a => { const t = a.provider || 'other'; (groups[t] = groups[t] || []).push(a); });
+    root.innerHTML = Object.keys(groups).sort().map(t =>
+      `<div class="d-flex align-items-center gap-2 mt-2 mb-1"><span class="fw-bold text-light">${quotaTypeLabel(t)}</span><span class="badge-modern badge-gray font-monospace">${groups[t].length}</span></div>` +
+      groups[t].map(accountCard).join('')
+    ).join('');
+  } catch (e) {
+    document.getElementById('quotaRoot').innerHTML = '<div class="card-modern p-4"><p class="text-rose small mb-0">Failed to load quotas.</p></div>';
+  } finally {
+    spin.classList.remove('spin-animation');
+  }
+}
+document.addEventListener('DOMContentLoaded', () => loadQuotas(false));
+</script>
+{{ end }}
