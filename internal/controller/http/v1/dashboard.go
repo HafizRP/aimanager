@@ -27,6 +27,9 @@ func (h *Handler) DashboardPage(w http.ResponseWriter, r *http.Request) {
 	if h.quotaManager != nil {
 		quotaReport, _ = h.quotaManager.FetchAllQuotas(ctx, r.URL.Query().Get("refresh") == "true")
 	}
+	if user == nil || !user.IsAdmin() {
+		quotaReport = quotaReport.RedactedCopy()
+	}
 
 	successMsg := r.URL.Query().Get("msg")
 	errorMsg := r.URL.Query().Get("error")
@@ -99,6 +102,9 @@ func (h *Handler) APIUpstreamQuotas(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+	if user := GetUserFromContext(ctx); user == nil || !user.IsAdmin() {
+		report = report.RedactedCopy()
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(report)

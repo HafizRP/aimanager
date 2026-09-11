@@ -9,6 +9,7 @@ import (
 	"math"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -123,6 +124,62 @@ type UpstreamQuotaReport struct {
 	FetchedAt      time.Time                    `json:"fetched_at"`
 	FetchedAtWIB   string                       `json:"fetched_at_wib"`
 	ModelSummaries map[string]ModelQuotaSummary `json:"model_summaries"`
+}
+
+// RedactedCopy returns a copy of the report with account identities replaced
+// by per-provider labels ("Antigravity #1"), for viewers without admin rights.
+// Nil-safe: returns nil when the report is nil.
+func (r *UpstreamQuotaReport) RedactedCopy() *UpstreamQuotaReport {
+	if r == nil {
+		return nil
+	}
+	out := *r
+	counters := map[string]int{}
+	labelByEmail := map[string]string{}
+	labelByID := map[string]string{}
+	labelOf := func(provider, email, id string) string {
+		key := email
+		if key == "" {
+			key = "id:" + id
+		}
+		if label, ok := labelByEmail[key]; ok {
+			return label
+		}
+		counters[provider]++
+		tmp := ProviderAccount{Provider: provider}
+		label := tmp.DisplayProvider() + " #" + strconv.Itoa(counters[provider])
+		labelByEmail[key] = label
+		if id != "" {
+			labelByID[id] = label
+		}
+		return label
+	}
+	out.Accounts = make([]ProviderAccount, len(r.Accounts))
+	for i, acc := range r.Accounts {
+		label := labelOf(acc.Provider, acc.Email, acc.ID)
+		acc.Name = label
+		acc.Email = ""
+		out.Accounts[i] = acc
+	}
+	if r.ModelSummaries != nil {
+		out.ModelSummaries = make(map[string]ModelQuotaSummary, len(r.ModelSummaries))
+		for modelID, sum := range r.ModelSummaries {
+			details := make([]ModelAccountDetail, len(sum.AccountDetails))
+			for i, det := range sum.AccountDetails {
+				if label, ok := labelByEmail[det.Email]; ok {
+					det.AccountName = label
+					det.Email = ""
+				} else if det.Email != "" {
+					det.AccountName = "Account #?"
+					det.Email = ""
+				}
+				details[i] = det
+			}
+			sum.AccountDetails = details
+			out.ModelSummaries[modelID] = sum
+		}
+	}
+	return &out
 }
 
 // QuotaManager fetches and caches upstream account quotas.

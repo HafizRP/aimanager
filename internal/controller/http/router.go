@@ -170,6 +170,13 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 		authRouter.Get("/benchmark", h.BenchmarkPage)
 		authRouter.Post("/api/benchmark/run", h.APIBenchmarkRun)
 
+		// Workspace: Skills, Endpoint Hub, Profile, Usage Analytics
+		authRouter.Get("/skills", h.SkillsPage)
+		authRouter.Get("/endpoint", h.EndpointPage)
+		authRouter.Get("/profile", h.ProfilePage)
+		authRouter.Get("/usage", h.UsagePage)
+		authRouter.Get("/api/usage/stats", h.APIUsageStats)
+
 		// Cache Analytics (self-service for users, full stats for admin)
 		authRouter.Get("/cache-analytics", h.CacheAnalyticsPage)
 		authRouter.Get("/api/cache/stats", h.APICacheStats)
@@ -223,6 +230,11 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 			adminOnly.Post("/api/models/alias", h.APIModelAliasSet)
 			adminOnly.Delete("/api/models/alias", h.APIModelAliasDelete)
 			adminOnly.Post("/api/models/alias/delete", h.APIModelAliasDelete)
+
+			// 9router Core: Quota overview & Console Log viewer
+			adminOnly.Get("/quota", h.QuotaPage)
+			adminOnly.Get("/console-log", h.ConsoleLogPage)
+			adminOnly.Get("/api/console-logs", h.APIConsoleLogs)
 
 			// Admin Billing Actions
 			adminOnly.Post("/api/billing/manual-credit", h.ManualCreditTokens)
