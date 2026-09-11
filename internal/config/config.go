@@ -27,6 +27,9 @@ type Config struct {
 	MidtransClientKey    string
 	MidtransIsProduction bool
 	MidtransMerchantID   string
+	TelegramBotToken     string
+	TelegramChatID       string
+	TelegramThreadID     string
 }
 
 // LoadConfig reads environment variables and returns a populated Config.
@@ -53,6 +56,10 @@ func LoadConfig() *Config {
 	midtransIsProduction := getEnvAsBool("MIDTRANS_IS_PRODUCTION", false)
 	midtransMerchantID := getEnv("MIDTRANS_MERCHANT_ID", "")
 
+	telegramBotToken := getEnv("TG_BOT_TOKEN", "")
+	telegramChatID := getEnv("TG_CHAT_ID", "")
+	telegramThreadID := getEnv("TG_THREAD_ID", "")
+
 	return &Config{
 		Port:                 port,
 		Host:                 host,
@@ -68,6 +75,9 @@ func LoadConfig() *Config {
 		MidtransClientKey:    midtransClientKey,
 		MidtransIsProduction: midtransIsProduction,
 		MidtransMerchantID:   midtransMerchantID,
+		TelegramBotToken:     telegramBotToken,
+		TelegramChatID:       telegramChatID,
+		TelegramThreadID:     telegramThreadID,
 	}
 }
 

@@ -155,6 +155,8 @@ func (h *Handler) EditUser(w http.ResponseWriter, r *http.Request) {
 
 	quotaStr := r.FormValue("token_quota")
 	quota, _ := strconv.ParseInt(quotaStr, 10, 64)
+	dailyStr := r.FormValue("daily_token_quota")
+	dailyQuota, _ := strconv.ParseInt(dailyStr, 10, 64)
 
 	var allowedModelsJSON string
 	if r.FormValue("allow_all") == "true" {
@@ -170,13 +172,14 @@ func (h *Handler) EditUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, err := h.users.UpdateUser(r.Context(), usecase.UpdateUserInput{
-		ID:            userID,
-		Name:          strings.TrimSpace(r.FormValue("name")),
-		Username:      strings.TrimSpace(r.FormValue("username")),
-		Role:          strings.TrimSpace(r.FormValue("role")),
-		TokenQuota:    quota,
-		AllowedModels: allowedModelsJSON,
-		IsActive:      r.FormValue("is_active") == "true",
+		ID:              userID,
+		Name:            strings.TrimSpace(r.FormValue("name")),
+		Username:        strings.TrimSpace(r.FormValue("username")),
+		Role:            strings.TrimSpace(r.FormValue("role")),
+		TokenQuota:      quota,
+		DailyTokenQuota: dailyQuota,
+		AllowedModels:   allowedModelsJSON,
+		IsActive:        r.FormValue("is_active") == "true",
 	})
 	if err != nil {
 		http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)

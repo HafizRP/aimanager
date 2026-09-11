@@ -23,6 +23,7 @@ type User struct {
 	Role          string     `json:"role"`        // "admin" or "user"
 	TokenQuota    int64      `json:"token_quota"` // 0 = unlimited
 	TokensUsed    int64      `json:"tokens_used"`
+	DailyTokenQuota int64    `json:"daily_token_quota"` // WIB-day budget; 0 = unlimited
 	AllowedModels string     `json:"allowed_models"` // JSON array string e.g. ["*"] or ["ag/gemini-3.8-flash-low"]
 	RateLimitRPM  int        `json:"rate_limit_rpm"`
 	RateLimitTPM  int64      `json:"rate_limit_tpm"`
@@ -73,6 +74,7 @@ type APIKey struct {
 	AllowedModels  string     `json:"allowed_models"` // Optional model scope
 	RateLimitRPM   int        `json:"rate_limit_rpm"`
 	MaxTokensLimit int        `json:"max_tokens_limit"` // Lifetime token budget; 0 = unlimited
+	DailyTokenQuota int       `json:"daily_token_quota"`  // WIB-day budget; 0 = unlimited
 	IsActive       bool       `json:"is_active"`
 	CreatedAt      time.Time  `json:"created_at"`
 	LastUsedAt     *time.Time `json:"last_used_at,omitempty"`
@@ -255,4 +257,15 @@ func IsModelAllowed(requested string, allowedList []string) bool {
 		}
 	}
 	return false
+}
+
+// SecurityEvent is one anomaly/self-heal/budget finding for the radar page.
+type SecurityEvent struct {
+	ID        int64     `json:"id"`
+	Kind      string    `json:"kind"` // error_spike | usage_spike | new_ip | budget_cutoff | self_heal
+	UserID    string    `json:"user_id"`
+	APIKeyID  string    `json:"api_key_id"`
+	Detail    string    `json:"detail"`
+	Action    string    `json:"action"`
+	CreatedAt time.Time `json:"created_at"`
 }

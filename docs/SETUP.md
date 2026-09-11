@@ -84,3 +84,12 @@ To expose AI Manager securely over HTTPS without opening firewall ports:
 - Ensure `127.0.0.1:20128` is NOT bound to `0.0.0.0`.
 - Generate a strong `SESSION_SECRET` (at least 32 characters).
 - Rotate default admin password on first login.
+
+## 5. Telegram Alerts (optional)
+Budget cutoffs, anomaly radar, and self-heal events notify via Telegram when configured in `.env`:
+```bash
+TG_BOT_TOKEN=<same token as the deploy workflow secret>
+TG_CHAT_ID=-1003823512531
+TG_THREAD_ID=39
+```
+Empty = silent (events still logged on the Radar page).

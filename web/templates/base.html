@@ -179,6 +179,10 @@
               <i class="bi bi-tag text-warning"></i>
               <span>Pricing</span>
             </a>
+            <a class="sidebar-link {{ if eq .ActivePage "radar" }}active{{ end }}" href="/radar">
+              <i class="bi bi-radar text-rose"></i>
+              <span>Anomaly Radar</span>
+            </a>
           </div>
         {{ else }}
           <!-- Account Settings (Standard User) -->

@@ -36,9 +36,16 @@ type Repository interface {
 	UpdateKeyLastUsed(ctx context.Context, id string) error
 	UpdateKeyTokenUsage(ctx context.Context, id string, tokens int) error
 	GetAPIKeyTokenUsage(ctx context.Context, id string) (int64, error)
+	UpdateKeyBudgets(ctx context.Context, id string, maxTokensLimit, dailyQuota int) error
+	GetTodayTokenUsageByUser(ctx context.Context, userID string) (int64, error)
+	GetTodayTokenUsageByKey(ctx context.Context, keyID string) (int64, error)
+	GetKeyWindowStats(ctx context.Context, since time.Time) ([]KeyWindowStats, error)
+	GetKeyBaselineTokens(ctx context.Context, days int) (map[string]float64, error)
 
 	// Logs
 	CreateRequestLog(ctx context.Context, log *entity.RequestLog) error
+	CreateSecurityEvent(ctx context.Context, ev *entity.SecurityEvent) error
+	ListSecurityEvents(ctx context.Context, limit int) ([]entity.SecurityEvent, error)
 	GetRequestLogs(ctx context.Context, limit, offset int, userID, modelFilter string, statusFilter int) ([]entity.RequestLog, int, error)
 	GetRequestLogsCursor(ctx context.Context, limit int, cursor, direction, userID, modelFilter string, statusFilter int) ([]entity.RequestLog, *entity.CursorPageInfo, error)
 
@@ -108,14 +115,14 @@ func parseTimeFlexible(s string) time.Time {
 
 // GetUserByID returns a user by its unique ID.
 func (r *SQLiteRepo) GetUserByID(ctx context.Context, id string) (*entity.User, error) {
-	query := `SELECT id, COALESCE(username, ''), name, COALESCE(password_hash, ''), role, token_quota, tokens_used, allowed_models, 
+	query := `SELECT id, COALESCE(username, ''), name, COALESCE(password_hash, ''), role, token_quota, tokens_used, COALESCE(daily_token_quota, 0), allowed_models, 
 	                 COALESCE(rate_limit_rpm, 0), COALESCE(rate_limit_tpm, 0), is_active, created_at, updated_at, last_login_at 
 	          FROM users WHERE id = ?`
 	var u entity.User
 	var createdAt, updatedAt string
 	var lastLogin sql.NullString
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
-		&u.ID, &u.Username, &u.Name, &u.PasswordHash, &u.Role, &u.TokenQuota, &u.TokensUsed, &u.AllowedModels,
+		&u.ID, &u.Username, &u.Name, &u.PasswordHash, &u.Role, &u.TokenQuota, &u.TokensUsed, &u.DailyTokenQuota, &u.AllowedModels,
 		&u.RateLimitRPM, &u.RateLimitTPM, &u.IsActive, &createdAt, &updatedAt, &lastLogin,
 	)
 	if err != nil {
@@ -134,14 +141,14 @@ func (r *SQLiteRepo) GetUserByID(ctx context.Context, id string) (*entity.User, 
 
 // GetUserByUsername returns a user matched by username or name (case-insensitive).
 func (r *SQLiteRepo) GetUserByUsername(ctx context.Context, username string) (*entity.User, error) {
-	query := `SELECT id, COALESCE(username, ''), name, COALESCE(password_hash, ''), role, token_quota, tokens_used, allowed_models, 
+	query := `SELECT id, COALESCE(username, ''), name, COALESCE(password_hash, ''), role, token_quota, tokens_used, COALESCE(daily_token_quota, 0), allowed_models, 
 	                 COALESCE(rate_limit_rpm, 0), COALESCE(rate_limit_tpm, 0), is_active, created_at, updated_at, last_login_at 
 	          FROM users WHERE LOWER(username) = LOWER(?) OR LOWER(name) = LOWER(?) LIMIT 1`
 	var u entity.User
 	var createdAt, updatedAt string
 	var lastLogin sql.NullString
 	err := r.db.QueryRowContext(ctx, query, username, username).Scan(
-		&u.ID, &u.Username, &u.Name, &u.PasswordHash, &u.Role, &u.TokenQuota, &u.TokensUsed, &u.AllowedModels,
+		&u.ID, &u.Username, &u.Name, &u.PasswordHash, &u.Role, &u.TokenQuota, &u.TokensUsed, &u.DailyTokenQuota, &u.AllowedModels,
 		&u.RateLimitRPM, &u.RateLimitTPM, &u.IsActive, &createdAt, &updatedAt, &lastLogin,
 	)
 	if err != nil {
@@ -161,7 +168,7 @@ func (r *SQLiteRepo) GetUserByUsername(ctx context.Context, username string) (*e
 // GetAllUsers returns every user ordered by creation time descending.
 func (r *SQLiteRepo) GetAllUsers(ctx context.Context) ([]entity.User, error) {
 	query := `
-		SELECT u.id, COALESCE(u.username, ''), u.name, COALESCE(u.password_hash, ''), u.role, u.token_quota, u.tokens_used, u.allowed_models,
+		SELECT u.id, COALESCE(u.username, ''), u.name, COALESCE(u.password_hash, ''), u.role, u.token_quota, u.tokens_used, COALESCE(u.daily_token_quota, 0), u.allowed_models,
 		       COALESCE(u.rate_limit_rpm, 0), COALESCE(u.rate_limit_tpm, 0), u.is_active, u.created_at, u.updated_at, u.last_login_at,
 		       (SELECT COUNT(*) FROM api_keys WHERE user_id = u.id) as key_count
 		FROM users u
@@ -178,7 +185,7 @@ func (r *SQLiteRepo) GetAllUsers(ctx context.Context) ([]entity.User, error) {
 		var u entity.User
 		var createdAt, updatedAt string
 		var lastLogin sql.NullString
-		if err := rows.Scan(&u.ID, &u.Username, &u.Name, &u.PasswordHash, &u.Role, &u.TokenQuota, &u.TokensUsed, &u.AllowedModels,
+		if err := rows.Scan(&u.ID, &u.Username, &u.Name, &u.PasswordHash, &u.Role, &u.TokenQuota, &u.TokensUsed, &u.DailyTokenQuota, &u.AllowedModels,
 			&u.RateLimitRPM, &u.RateLimitTPM, &u.IsActive, &createdAt, &updatedAt, &lastLogin, &u.KeyCount); err != nil {
 			return nil, err
 		}
@@ -206,9 +213,9 @@ func (r *SQLiteRepo) CreateUser(ctx context.Context, u *entity.User) error {
 // UpdateUser overwrites mutable fields of an existing user.
 func (r *SQLiteRepo) UpdateUser(ctx context.Context, u *entity.User) error {
 	query := `UPDATE users 
-	          SET username = ?, name = ?, role = ?, token_quota = ?, allowed_models = ?, is_active = ?, updated_at = datetime('now')
+	          SET username = ?, name = ?, role = ?, token_quota = ?, daily_token_quota = ?, allowed_models = ?, is_active = ?, updated_at = datetime('now')
 	          WHERE id = ?`
-	_, err := r.db.ExecContext(ctx, query, u.Username, u.Name, u.Role, u.TokenQuota, u.AllowedModels, u.IsActive, u.ID)
+	_, err := r.db.ExecContext(ctx, query, u.Username, u.Name, u.Role, u.TokenQuota, u.DailyTokenQuota, u.AllowedModels, u.IsActive, u.ID)
 	return err
 }
 
@@ -276,7 +283,7 @@ func (r *SQLiteRepo) DeductTokens(ctx context.Context, userID string, tokens int
 
 // GetAPIKeyByKey looks up an API key by its raw key string.
 func (r *SQLiteRepo) GetAPIKeyByKey(ctx context.Context, key string) (*entity.APIKey, error) {
-	query := `SELECT k.id, k.user_id, k.key, k.name, COALESCE(k.allowed_models, ''), COALESCE(k.rate_limit_rpm, 0), COALESCE(k.max_tokens_limit, 0), k.is_active, k.created_at, k.last_used_at, k.expires_at, COALESCE(k.tokens_used, 0), u.name 
+	query := `SELECT k.id, k.user_id, k.key, k.name, COALESCE(k.allowed_models, ''), COALESCE(k.rate_limit_rpm, 0), COALESCE(k.max_tokens_limit, 0), COALESCE(k.daily_token_quota, 0), k.is_active, k.created_at, k.last_used_at, k.expires_at, COALESCE(k.tokens_used, 0), u.name 
 	          FROM api_keys k 
 	          JOIN users u ON k.user_id = u.id 
 	          WHERE k.key = ?`
@@ -285,7 +292,7 @@ func (r *SQLiteRepo) GetAPIKeyByKey(ctx context.Context, key string) (*entity.AP
 	var lastUsed sql.NullString
 	var expiresAt sql.NullString
 	err := r.db.QueryRowContext(ctx, query, key).Scan(
-		&k.ID, &k.UserID, &k.Key, &k.Name, &k.AllowedModels, &k.RateLimitRPM, &k.MaxTokensLimit, &k.IsActive, &createdAt, &lastUsed, &expiresAt, &k.TokenUsage, &k.UserName,
+		&k.ID, &k.UserID, &k.Key, &k.Name, &k.AllowedModels, &k.RateLimitRPM, &k.MaxTokensLimit, &k.DailyTokenQuota, &k.IsActive, &createdAt, &lastUsed, &expiresAt, &k.TokenUsage, &k.UserName,
 	)
 	if err != nil {
 		return nil, err
@@ -308,7 +315,7 @@ func (r *SQLiteRepo) GetAPIKeyByKey(ctx context.Context, key string) (*entity.AP
 
 // GetAPIKeysByUserID returns all API keys belonging to a user.
 func (r *SQLiteRepo) GetAPIKeysByUserID(ctx context.Context, userID string) ([]entity.APIKey, error) {
-	query := `SELECT id, user_id, key, name, COALESCE(allowed_models, ''), COALESCE(rate_limit_rpm, 0), COALESCE(max_tokens_limit, 0), is_active, created_at, last_used_at, expires_at, COALESCE(tokens_used, 0) 
+	query := `SELECT id, user_id, key, name, COALESCE(allowed_models, ''), COALESCE(rate_limit_rpm, 0), COALESCE(max_tokens_limit, 0), COALESCE(daily_token_quota, 0), is_active, created_at, last_used_at, expires_at, COALESCE(tokens_used, 0) 
 	          FROM api_keys WHERE user_id = ? ORDER BY created_at DESC`
 	rows, err := r.db.QueryContext(ctx, query, userID)
 	if err != nil {
@@ -322,7 +329,7 @@ func (r *SQLiteRepo) GetAPIKeysByUserID(ctx context.Context, userID string) ([]e
 		var createdAt string
 		var lastUsed sql.NullString
 		var expiresAt sql.NullString
-		if err := rows.Scan(&k.ID, &k.UserID, &k.Key, &k.Name, &k.AllowedModels, &k.RateLimitRPM, &k.MaxTokensLimit, &k.IsActive, &createdAt, &lastUsed, &expiresAt, &k.TokenUsage); err != nil {
+		if err := rows.Scan(&k.ID, &k.UserID, &k.Key, &k.Name, &k.AllowedModels, &k.RateLimitRPM, &k.MaxTokensLimit, &k.DailyTokenQuota, &k.IsActive, &createdAt, &lastUsed, &expiresAt, &k.TokenUsage); err != nil {
 			return nil, err
 		}
 		k.CreatedAt = parseTimeFlexible(createdAt)
@@ -345,7 +352,7 @@ func (r *SQLiteRepo) GetAPIKeysByUserID(ctx context.Context, userID string) ([]e
 
 // GetAllAPIKeys returns every API key across all users.
 func (r *SQLiteRepo) GetAllAPIKeys(ctx context.Context) ([]entity.APIKey, error) {
-	query := `SELECT k.id, k.user_id, k.key, k.name, COALESCE(k.allowed_models, ''), COALESCE(k.rate_limit_rpm, 0), COALESCE(k.max_tokens_limit, 0), k.is_active, k.created_at, k.last_used_at, k.expires_at, COALESCE(k.tokens_used, 0), u.name 
+	query := `SELECT k.id, k.user_id, k.key, k.name, COALESCE(k.allowed_models, ''), COALESCE(k.rate_limit_rpm, 0), COALESCE(k.max_tokens_limit, 0), COALESCE(k.daily_token_quota, 0), k.is_active, k.created_at, k.last_used_at, k.expires_at, COALESCE(k.tokens_used, 0), u.name 
 	          FROM api_keys k 
 	          JOIN users u ON k.user_id = u.id 
 	          ORDER BY k.created_at DESC`
@@ -361,7 +368,7 @@ func (r *SQLiteRepo) GetAllAPIKeys(ctx context.Context) ([]entity.APIKey, error)
 		var createdAt string
 		var lastUsed sql.NullString
 		var expiresAt sql.NullString
-		if err := rows.Scan(&k.ID, &k.UserID, &k.Key, &k.Name, &k.AllowedModels, &k.RateLimitRPM, &k.MaxTokensLimit, &k.IsActive, &createdAt, &lastUsed, &expiresAt, &k.TokenUsage, &k.UserName); err != nil {
+		if err := rows.Scan(&k.ID, &k.UserID, &k.Key, &k.Name, &k.AllowedModels, &k.RateLimitRPM, &k.MaxTokensLimit, &k.DailyTokenQuota, &k.IsActive, &createdAt, &lastUsed, &expiresAt, &k.TokenUsage, &k.UserName); err != nil {
 			return nil, err
 		}
 		k.CreatedAt = parseTimeFlexible(createdAt)
@@ -384,9 +391,9 @@ func (r *SQLiteRepo) GetAllAPIKeys(ctx context.Context) ([]entity.APIKey, error)
 
 // CreateAPIKey inserts a new API key record.
 func (r *SQLiteRepo) CreateAPIKey(ctx context.Context, k *entity.APIKey) error {
-	query := `INSERT INTO api_keys (id, user_id, key, name, allowed_models, rate_limit_rpm, max_tokens_limit, is_active, expires_at, created_at) 
-	          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
-	_, err := r.db.ExecContext(ctx, query, k.ID, k.UserID, k.Key, k.Name, k.AllowedModels, k.RateLimitRPM, k.MaxTokensLimit, k.IsActive, formatNullableTime(k.ExpiresAt))
+	query := `INSERT INTO api_keys (id, user_id, key, name, allowed_models, rate_limit_rpm, max_tokens_limit, daily_token_quota, is_active, expires_at, created_at) 
+	          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+	_, err := r.db.ExecContext(ctx, query, k.ID, k.UserID, k.Key, k.Name, k.AllowedModels, k.RateLimitRPM, k.MaxTokensLimit, k.DailyTokenQuota, k.IsActive, formatNullableTime(k.ExpiresAt))
 	return err
 }
 
@@ -437,6 +444,114 @@ func (r *SQLiteRepo) GetAPIKeyTokenUsage(ctx context.Context, id string) (int64,
 	var used int64
 	err := r.db.QueryRowContext(ctx, `SELECT COALESCE(tokens_used, 0) FROM api_keys WHERE id = ?`, id).Scan(&used)
 	return used, err
+}
+
+// UpdateKeyBudgets sets a key's lifetime and daily token budgets.
+func (r *SQLiteRepo) UpdateKeyBudgets(ctx context.Context, id string, maxTokensLimit, dailyQuota int) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE api_keys SET max_tokens_limit = ?, daily_token_quota = ? WHERE id = ?`, maxTokensLimit, dailyQuota, id)
+	return err
+}
+
+// wibDayExpr matches request_logs rows created during the current WIB day.
+const wibDayExpr = `date(created_at, '+7 hours') = date('now', '+7 hours')`
+
+// GetTodayTokenUsageByUser sums tokens spent by a user during the current WIB day.
+func (r *SQLiteRepo) GetTodayTokenUsageByUser(ctx context.Context, userID string) (int64, error) {
+	var total int64
+	err := r.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(total_tokens), 0) FROM request_logs WHERE user_id = ? AND `+wibDayExpr, userID).Scan(&total)
+	return total, err
+}
+
+// GetTodayTokenUsageByKey sums tokens spent on a key during the current WIB day.
+func (r *SQLiteRepo) GetTodayTokenUsageByKey(ctx context.Context, keyID string) (int64, error) {
+	var total int64
+	err := r.db.QueryRowContext(ctx, `SELECT COALESCE(SUM(total_tokens), 0) FROM request_logs WHERE api_key_id = ? AND `+wibDayExpr, keyID).Scan(&total)
+	return total, err
+}
+
+// CreateSecurityEvent records an anomaly/self-heal/budget finding.
+func (r *SQLiteRepo) CreateSecurityEvent(ctx context.Context, ev *entity.SecurityEvent) error {
+	_, err := r.db.ExecContext(ctx, `INSERT INTO security_events (kind, user_id, api_key_id, detail, action, created_at) VALUES (?, ?, ?, ?, ?, datetime('now'))`,
+		ev.Kind, ev.UserID, ev.APIKeyID, ev.Detail, ev.Action)
+	return err
+}
+
+// ListSecurityEvents returns recent findings, newest first.
+func (r *SQLiteRepo) ListSecurityEvents(ctx context.Context, limit int) ([]entity.SecurityEvent, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	rows, err := r.db.QueryContext(ctx, `SELECT id, kind, user_id, api_key_id, detail, action, created_at FROM security_events ORDER BY id DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []entity.SecurityEvent
+	for rows.Next() {
+		var ev entity.SecurityEvent
+		var createdAt string
+		if err := rows.Scan(&ev.ID, &ev.Kind, &ev.UserID, &ev.APIKeyID, &ev.Detail, &ev.Action, &createdAt); err != nil {
+			return nil, err
+		}
+		ev.CreatedAt = parseTimeFlexible(createdAt)
+		out = append(out, ev)
+	}
+	return out, rows.Err()
+}
+
+// KeyWindowStats aggregates per-key request/error counts over a time window.
+type KeyWindowStats struct {
+	KeyID    string
+	UserID   string
+	UserName string
+	KeyName  string
+	Requests int64
+	Errors   int64
+	Tokens   int64
+	IPCount  int64
+}
+
+// GetKeyWindowStats aggregates per-key traffic since the given UTC time.
+func (r *SQLiteRepo) GetKeyWindowStats(ctx context.Context, since time.Time) ([]KeyWindowStats, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT l.api_key_id, l.user_id, COALESCE(u.name, ''), COALESCE(k.name, ''),
+		COUNT(*), SUM(CASE WHEN l.status_code >= 400 THEN 1 ELSE 0 END), COALESCE(SUM(l.total_tokens), 0), COUNT(DISTINCT l.client_ip)
+		FROM request_logs l LEFT JOIN users u ON l.user_id = u.id LEFT JOIN api_keys k ON l.api_key_id = k.id
+		WHERE l.created_at >= ? GROUP BY l.api_key_id`, since.UTC().Format("2006-01-02 15:04:05"))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []KeyWindowStats
+	for rows.Next() {
+		var s KeyWindowStats
+		if err := rows.Scan(&s.KeyID, &s.UserID, &s.UserName, &s.KeyName, &s.Requests, &s.Errors, &s.Tokens, &s.IPCount); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
+// GetKeyBaselineTokens returns avg daily tokens per key over the past N days (excl. today).
+func (r *SQLiteRepo) GetKeyBaselineTokens(ctx context.Context, days int) (map[string]float64, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT api_key_id, COALESCE(SUM(total_tokens), 0) * 1.0 / ? FROM request_logs
+		WHERE date(created_at, '+7 hours') < date('now', '+7 hours')
+		AND date(created_at, '+7 hours') >= date('now', '+7 hours', ?)
+		GROUP BY api_key_id`, days, fmt.Sprintf("-%d days", days))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make(map[string]float64)
+	for rows.Next() {
+		var id string
+		var avg float64
+		if err := rows.Scan(&id, &avg); err != nil {
+			return nil, err
+		}
+		out[id] = avg
+	}
+	return out, rows.Err()
 }
 
 // Request logs

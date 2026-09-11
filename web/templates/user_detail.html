@@ -497,6 +497,10 @@
               <label class="form-label small text-muted">Token Quota (0 for Unlimited)</label>
               <input type="number" name="token_quota" class="form-control form-control-modern font-monospace" value="{{ .TargetUser.TokenQuota }}" min="0" step="10000">
             </div>
+            <div class="col-md-6">
+              <label class="form-label small text-muted">Daily Budget WIB (0 for Unlimited)</label>
+              <input type="number" name="daily_token_quota" class="form-control form-control-modern font-monospace" value="{{ .TargetUser.DailyTokenQuota }}" min="0" step="10000">
+            </div>
           </div>
 
           <div class="mb-4">

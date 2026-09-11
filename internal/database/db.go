@@ -155,6 +155,19 @@ func migrate(db *sql.DB) error {
 	_, _ = db.Exec(`ALTER TABLE api_keys ADD COLUMN expires_at DATETIME;`)
 	_, _ = db.Exec(`ALTER TABLE api_keys ADD COLUMN max_tokens_limit INTEGER DEFAULT 0;`)
 	_, _ = db.Exec(`ALTER TABLE api_keys ADD COLUMN tokens_used INTEGER DEFAULT 0;`)
+	_, _ = db.Exec(`ALTER TABLE users ADD COLUMN daily_token_quota INTEGER DEFAULT 0;`)
+	_, _ = db.Exec(`ALTER TABLE api_keys ADD COLUMN daily_token_quota INTEGER DEFAULT 0;`)
+	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS security_events (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		kind TEXT NOT NULL,
+		user_id TEXT NOT NULL DEFAULT '',
+		api_key_id TEXT NOT NULL DEFAULT '',
+		detail TEXT NOT NULL DEFAULT '',
+		action TEXT NOT NULL DEFAULT '',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);`)
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_security_events_created_at ON security_events(created_at);`)
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_security_events_kind ON security_events(kind);`)
 	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_api_keys_expires_at ON api_keys(expires_at);`)
 	_, _ = db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username);`)
 

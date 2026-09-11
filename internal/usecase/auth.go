@@ -311,13 +311,14 @@ func (s *UserService) CreateUser(ctx context.Context, in CreateUserInput) (*enti
 
 // UpdateUserInput is the parsed payload for updating a user.
 type UpdateUserInput struct {
-	ID            string
-	Name          string
-	Username      string
-	Role          string
-	TokenQuota    int64
-	AllowedModels string
-	IsActive      bool
+	ID              string
+	Name            string
+	Username        string
+	Role            string
+	TokenQuota      int64
+	DailyTokenQuota int64
+	AllowedModels   string
+	IsActive        bool
 }
 
 // UpdateUser applies allowed profile updates.
@@ -352,6 +353,11 @@ func (s *UserService) UpdateUser(ctx context.Context, in UpdateUserInput) (*enti
 		in.TokenQuota = 0
 	}
 	user.TokenQuota = in.TokenQuota
+
+	if in.DailyTokenQuota < 0 {
+		in.DailyTokenQuota = 0
+	}
+	user.DailyTokenQuota = in.DailyTokenQuota
 
 	if strings.TrimSpace(in.AllowedModels) != "" {
 		user.AllowedModels = in.AllowedModels
@@ -443,13 +449,14 @@ func NewKeyService(store Store, sync KeySyncer) *KeyService {
 
 // CreateKeyInput is the parsed payload for creating an API key.
 type CreateKeyInput struct {
-	UserID         string
-	Name           string
-	CustomKey      string
-	AllowedModels  string
-	RateLimitRPM   int
-	MaxTokensLimit int
-	ExpiresAt      *time.Time
+	UserID          string
+	Name            string
+	CustomKey       string
+	AllowedModels   string
+	RateLimitRPM    int
+	MaxTokensLimit  int
+	DailyTokenQuota int
+	ExpiresAt       *time.Time
 }
 
 // CreateKey creates an API key and syncs it to 9router Core.
@@ -484,18 +491,24 @@ func (s *KeyService) CreateKey(ctx context.Context, in CreateKeyInput) (*entity.
 		maxTokensLimit = 0
 	}
 
+	dailyQuota := in.DailyTokenQuota
+	if dailyQuota < 0 {
+		dailyQuota = 0
+	}
+
 	allowedModels := normalizeAllowedModels(in.AllowedModels)
 
 	key := &entity.APIKey{
-		ID:             uuid.New().String(),
-		UserID:         in.UserID,
-		Key:            finalKey,
-		Name:           name,
-		AllowedModels:  allowedModels,
-		RateLimitRPM:   rateLimitRPM,
-		MaxTokensLimit: maxTokensLimit,
-		IsActive:       true,
-		ExpiresAt:      in.ExpiresAt,
+		ID:              uuid.New().String(),
+		UserID:          in.UserID,
+		Key:             finalKey,
+		Name:            name,
+		AllowedModels:   allowedModels,
+		RateLimitRPM:    rateLimitRPM,
+		MaxTokensLimit:  maxTokensLimit,
+		DailyTokenQuota: dailyQuota,
+		IsActive:        true,
+		ExpiresAt:       in.ExpiresAt,
 	}
 
 	if err := s.store.CreateAPIKey(ctx, key); err != nil {
