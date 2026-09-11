@@ -1,0 +1,21 @@
+# Secrets & local state — jangan masuk image
+.env
+.env.*
+data/
+*.db
+*.db-*
+
+# Git & CI
+.git
+.github
+.gitignore
+
+# Binary & build artifacts
+9router-gateway
+bin/
+*.log
+/tmp/
+
+# Docs & local helpers
+docs/
+scripts/
