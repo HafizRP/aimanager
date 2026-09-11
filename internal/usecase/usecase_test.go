@@ -247,6 +247,14 @@ func (f *fakeStore) ClearLoginAttempts(ctx context.Context, ip string) error {
 }
 func (f *fakeStore) CleanOldLoginAttempts(ctx context.Context) error { return nil }
 
+func (f *fakeStore) CreateSecurityEvent(ctx context.Context, ev *entity.SecurityEvent) error {
+	return nil
+}
+
+func (f *fakeStore) ListSecurityEvents(ctx context.Context, limit int) ([]entity.SecurityEvent, error) {
+	return nil, nil
+}
+
 // Ensure fakeStore satisfies Store
 var _ Store = (*fakeStore)(nil)
 

@@ -9,6 +9,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"9router-gateway/internal/config"
+	"9router-gateway/internal/notify"
 	"9router-gateway/internal/upstream"
 )
 
@@ -17,6 +18,7 @@ type ProviderKeeper struct {
 	cfg        *config.Config
 	coreClient *upstream.CoreClient
 	quotaMgr   *upstream.QuotaManager
+	notifier   *notify.Sender
 	stopChan   chan struct{}
 }
 
@@ -28,6 +30,11 @@ func NewProviderKeeper(cfg *config.Config, coreClient *upstream.CoreClient, quot
 		quotaMgr:   quotaMgr,
 		stopChan:   make(chan struct{}),
 	}
+}
+
+// SetNotifier attaches the Telegram alert sender (nil-safe, optional).
+func (pk *ProviderKeeper) SetNotifier(s *notify.Sender) {
+	pk.notifier = s
 }
 
 // Start launches the background goroutine that periodically checks provider health.
@@ -118,6 +125,10 @@ func (pk *ProviderKeeper) checkAndReactivate() {
 					Str("name", conn.Name).
 					Str("email", conn.Email).
 					Msg("Auto-reactivated provider account after quota reset window")
+				if pk.notifier != nil {
+					pk.notifier.Send(context.Background(), "keeper:reactivate:"+conn.ID, 12*time.Hour,
+						"✅ Self-heal — connection "+conn.Provider+"/"+conn.Name+" aktif lagi (quota reset), auto-reactivated.")
+				}
 			}
 		}
 	}

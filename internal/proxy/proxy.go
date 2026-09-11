@@ -15,6 +15,7 @@ import (
 
 	"9router-gateway/internal/config"
 	"9router-gateway/internal/entity"
+	"9router-gateway/internal/notify"
 	"9router-gateway/internal/repository"
 )
 
@@ -25,6 +26,25 @@ type GatewayProxy struct {
 	httpClient  *http.Client
 	rateLimiter *RateLimiter
 	cache       *ResponseCache
+	health      *UpstreamHealth
+	notifier    *notify.Sender
+}
+
+// Health returns the upstream health tracker for dashboards and APIs.
+func (p *GatewayProxy) Health() *UpstreamHealth {
+	return p.health
+}
+
+// SetNotifier attaches the Telegram alert sender (nil-safe, optional).
+func (p *GatewayProxy) SetNotifier(s *notify.Sender) {
+	p.notifier = s
+}
+
+func (p *GatewayProxy) alert(dedup, msg string) {
+	if p.notifier == nil {
+		return
+	}
+	p.notifier.Send(context.Background(), dedup, 6*time.Hour, msg)
 }
 
 // NewGatewayProxy builds a GatewayProxy with rate limiting and response caching enabled.
@@ -37,6 +57,7 @@ func NewGatewayProxy(cfg *config.Config, repo repository.Repository) *GatewayPro
 		},
 		rateLimiter: NewRateLimiter(),
 		cache:       NewResponseCache(),
+		health:      NewUpstreamHealth(),
 	}
 }
 
@@ -112,6 +133,26 @@ func (p *GatewayProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		msg := fmt.Sprintf("API key token budget exhausted (%d / %d tokens used). Contact admin to increase the budget.", key.TokenUsage, key.MaxTokensLimit)
 		p.writeJSONError(w, http.StatusTooManyRequests, msg, "insufficient_quota")
 		return
+	}
+
+	// 2b. Daily Token Budget Guard (WIB day; admins exempt like lifetime quota)
+	if !user.IsAdmin() && user.DailyTokenQuota > 0 {
+		if today, err := p.repo.GetTodayTokenUsageByUser(ctx, user.ID); err == nil && today >= user.DailyTokenQuota {
+			msg := fmt.Sprintf("Daily token budget exhausted (%d / %d tokens today). Resets at midnight WIB.", today, user.DailyTokenQuota)
+			p.writeJSONError(w, http.StatusTooManyRequests, msg, "insufficient_quota")
+			p.alert("budget:user:"+user.ID, "⛔ Daily budget cutoff — user "+user.Username+" ("+fmt.Sprint(today)+" / "+fmt.Sprint(user.DailyTokenQuota)+" tokens today)")
+			_ = p.repo.CreateSecurityEvent(ctx, &entity.SecurityEvent{Kind: "budget_cutoff", UserID: user.ID, Detail: msg, Action: "blocked"})
+			return
+		}
+	}
+	if key.DailyTokenQuota > 0 {
+		if today, err := p.repo.GetTodayTokenUsageByKey(ctx, key.ID); err == nil && int64(today) >= int64(key.DailyTokenQuota) {
+			msg := fmt.Sprintf("API key daily budget exhausted (%d / %d tokens today). Resets at midnight WIB.", today, key.DailyTokenQuota)
+			p.writeJSONError(w, http.StatusTooManyRequests, msg, "insufficient_quota")
+			p.alert("budget:key:"+key.ID, "⛔ Daily budget cutoff — key "+key.Name+" ("+fmt.Sprint(today)+" / "+fmt.Sprint(key.DailyTokenQuota)+" tokens today)")
+			_ = p.repo.CreateSecurityEvent(ctx, &entity.SecurityEvent{Kind: "budget_cutoff", UserID: user.ID, APIKeyID: key.ID, Detail: msg, Action: "blocked"})
+			return
+		}
 	}
 
 	// 3. Handle Special Endpoint: GET /v1/models (Model Whitelist Filtering)
@@ -194,6 +235,46 @@ func (p *GatewayProxy) handleGetModels(w http.ResponseWriter, r *http.Request, u
 	_ = json.NewEncoder(w).Encode(modelsResp)
 }
 
+// doUpstreamWithRetry performs one initial attempt plus a single retry on
+// transport errors and retryable statuses (429/502/503/504). Safe for both
+// buffered and streaming paths: retries only happen before any byte is
+// forwarded to the client.
+func (p *GatewayProxy) doUpstreamWithRetry(req *http.Request, bodyBytes []byte) (*http.Response, int) {
+	attempts := 0
+	for {
+		attempts++
+		// Re-clone the body each attempt (http.Client consumes it).
+		req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+		req.ContentLength = int64(len(bodyBytes))
+		resp, err := p.httpClient.Do(req)
+		if err != nil {
+			p.health.Record(0, true)
+			if attempts < 2 && req.Context().Err() == nil {
+				select {
+				case <-req.Context().Done():
+					return nil, attempts
+				case <-time.After(500 * time.Millisecond):
+				}
+				continue
+			}
+			return nil, attempts
+		}
+		if retryableStatus(resp.StatusCode) && attempts < 2 && req.Context().Err() == nil {
+			p.health.Record(resp.StatusCode, false)
+			_, _ = io.Copy(io.Discard, resp.Body)
+			_ = resp.Body.Close()
+			select {
+			case <-req.Context().Done():
+				return nil, attempts
+			case <-time.After(500 * time.Millisecond):
+			}
+			continue
+		}
+		p.health.Record(resp.StatusCode, false)
+		return resp, attempts
+	}
+}
+
 func (p *GatewayProxy) handleForwardRequest(w http.ResponseWriter, r *http.Request, user *entity.User, key *entity.APIKey, startTime time.Time, clientIP string) {
 	// Read body for inspection
 	bodyBytes, err := io.ReadAll(r.Body)
@@ -266,9 +347,14 @@ func (p *GatewayProxy) handleForwardRequest(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	// Exact Response Cache Check (Non-streaming completions)
+	// Exact Response Cache Check (Non-streaming completions; bypassable via
+	// Cache-Control: no-cache or X-No-Cache: 1 for fresh debugging)
 	var cacheKey string
-	if !isStreamRequested && reqBodyMap != nil && r.Method == http.MethodPost {
+	bypassCache := r.Header.Get("X-No-Cache") == "1" || strings.Contains(r.Header.Get("Cache-Control"), "no-cache")
+	if bypassCache {
+		w.Header().Set("X-Cache", "BYPASS")
+	}
+	if !bypassCache && !isStreamRequested && reqBodyMap != nil && r.Method == http.MethodPost {
 		temp := 0.7
 		if t, ok := reqBodyMap["temperature"].(float64); ok {
 			temp = t
@@ -323,10 +409,13 @@ func (p *GatewayProxy) handleForwardRequest(w http.ResponseWriter, r *http.Reque
 	upstreamReq.Header.Set("Authorization", "Bearer "+authKey)
 	upstreamReq.Header.Set("X-Forwarded-For", clientIP)
 
-	resp, err := p.httpClient.Do(upstreamReq)
-	if err != nil {
+	resp, attempts := p.doUpstreamWithRetry(upstreamReq, bodyBytes)
+	if attempts > 1 {
+		w.Header().Set("X-Gateway-Retried", "1")
+	}
+	if resp == nil {
 		duration := time.Since(startTime).Milliseconds()
-		errMsg := "Upstream 9router connection error: " + err.Error()
+		errMsg := "Upstream 9router connection error after retry"
 		p.writeJSONError(w, http.StatusBadGateway, errMsg, "upstream_error")
 
 		_ = p.repo.CreateRequestLog(r.Context(), &entity.RequestLog{

@@ -52,6 +52,7 @@ type Handler struct {
 	quotaManager *upstream.QuotaManager
 	coreClient   *upstream.CoreClient
 	cache        *proxy.ResponseCache
+	gwProxy      *proxy.GatewayProxy
 	templates    map[string]*template.Template
 	httpClient   *http.Client
 
@@ -69,6 +70,11 @@ type Handler struct {
 	billing  *usecase.BillingService
 	logs     *usecase.LogService
 	settings *usecase.SettingsService
+}
+
+// SetGatewayProxy attaches the live gateway proxy (health + cache stats).
+func (h *Handler) SetGatewayProxy(gw *proxy.GatewayProxy) {
+	h.gwProxy = gw
 }
 
 // NewHandler wires the HTTP layer to use case services and pre-parses templates.
@@ -227,6 +233,7 @@ func NewHandler(cfg *config.Config, repo repository.Repository, sync *syncer.Syn
 		"cache_analytics.html", "skills.html", "endpoint.html", "profile.html", "quota.html",
 		"console_log.html", "usage.html", "nodes.html", "mitm.html", "mcp.html",
 		"media.html", "pxpipe.html", "translator.html", "pricing.html",
+		"radar.html",
 		}
 	for _, page := range pages {
 		tmpl, err := template.New("").Funcs(funcMap).ParseFS(web.FS, "templates/base.html", "templates/"+page)

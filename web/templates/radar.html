@@ -1,0 +1,52 @@
+{{ define "title" }}Anomaly Radar - AI Manager{{ end }}
+
+{{ define "content" }}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+  <div>
+    <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
+      <i class="bi bi-radar text-rose"></i> Anomaly Radar
+    </h4>
+    <p class="text-dim small mb-0">Error spikes auto-disable keys · usage spikes & IP bursts alert via Telegram · budget cutoffs logged.</p>
+  </div>
+  <button type="button" class="btn-modern-primary btn-sm" onclick="loadRadar()">Refresh</button>
+</div>
+
+<div class="card-modern p-4 mb-4">
+  <h6 class="fw-bold text-light mb-3">Upstream Health</h6>
+  <div id="upHealth"><p class="text-dim small mb-0">Loading…</p></div>
+</div>
+
+<div class="card-modern p-0 overflow-hidden">
+  <div class="p-3 border-bottom border-secondary border-opacity-10"><h6 class="fw-bold text-light mb-0">Findings</h6></div>
+  <div class="table-responsive"><table class="table table-modern mb-0">
+    <thead><tr><th>Time</th><th>Kind</th><th>Detail</th><th>Action</th></tr></thead>
+    <tbody id="radarBody"><tr><td colspan="4" class="text-dim small">Loading…</td></tr></tbody>
+  </table></div>
+</div>
+
+<script>
+function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function kindBadge(k){
+  const m = { error_spike: ['rose','Error spike'], usage_spike: ['amber','Usage spike'], new_ip: ['indigo','IP burst'], budget_cutoff: ['gray','Budget cutoff'], self_heal: ['emerald','Self-heal'] };
+  const v = m[k] || ['gray', k];
+  return `<span class="badge-modern badge-${v[0]}">${v[1]}</span>`;
+}
+async function loadRadar() {
+  try {
+    const h = await fetch('/api/upstream/health').then(r => r.json());
+    const pct = (h.error_rate * 100).toFixed(1);
+    const dot = h.status === 'ok' ? 'text-emerald' : (h.status === 'degraded' ? 'text-warning' : 'text-rose');
+    document.getElementById('upHealth').innerHTML =
+      `<div class="d-flex flex-wrap align-items-center gap-3 small"><span class="text-light fw-bold"><i class="bi bi-circle-fill ${dot} me-1"></i>${esc(h.status.toUpperCase())}</span>` +
+      `<span class="text-dim font-monospace">${h.total_requests} req · ${h.failures} fail (${pct}%) · consec fails ${h.consecutive_failures}</span></div>`;
+  } catch (e) { document.getElementById('upHealth').innerHTML = '<p class="text-rose small mb-0">Health unavailable.</p>'; }
+  try {
+    const evs = await fetch('/api/radar/events?limit=100').then(r => r.json());
+    document.getElementById('radarBody').innerHTML = evs && evs.length ? evs.map(e =>
+      `<tr><td class="text-dim small font-monospace">${esc(e.created_at)}</td><td>${kindBadge(e.kind)}</td><td class="text-light small">${esc(e.detail)}</td><td class="text-dim small">${esc(e.action)}</td></tr>`).join('')
+      : '<tr><td colspan="4" class="text-dim small">No findings. Quiet is good.</td></tr>';
+  } catch (e) { document.getElementById('radarBody').innerHTML = '<tr><td colspan="4" class="text-rose small">Error: ' + esc(e.message) + '</td></tr>'; }
+}
+document.addEventListener('DOMContentLoaded', loadRadar);
+</script>
+{{ end }}

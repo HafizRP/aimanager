@@ -21,6 +21,7 @@ import (
 	"9router-gateway/internal/controller/http/v1"
 	"9router-gateway/internal/database"
 	"9router-gateway/internal/entity"
+	"9router-gateway/internal/notify"
 	"9router-gateway/internal/proxy"
 	"9router-gateway/internal/repository"
 	"9router-gateway/internal/syncer"
@@ -138,6 +139,9 @@ func Run() error {
 	}
 
 	gwProxy := proxy.NewGatewayProxy(cfg, repo)
+	notifier := notify.NewSender(cfg)
+	gwProxy.SetNotifier(notifier)
+	h.SetGatewayProxy(gwProxy)
 
 	// 7. Assemble Router (composition root)
 	r := controllerhttp.NewRouter(cfg, db, repo, h, gwProxy)
@@ -145,7 +149,12 @@ func Run() error {
 	// 8. Background Provider Keeper (Auto-reactivate quota-reset accounts)
 	coreClient := upstream.NewCoreClient(cfg)
 	keeper := worker.NewProviderKeeper(cfg, coreClient, quotaMgr)
+	keeper.SetNotifier(notifier)
 	go keeper.Start()
+
+	// 8a. Anomaly Radar (error spikes, usage spikes, IP bursts)
+	radar := worker.NewRadar(repo, notifier)
+	go radar.Start()
 
 	// 8b. Warm caches in background so the first page hits are already fast
 	// (quota report + model list); failures are harmless — pages refetch live.

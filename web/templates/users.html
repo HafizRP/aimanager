@@ -113,7 +113,7 @@
                   <!-- Edit Button -->
                   <button class="btn-modern-ghost py-1 px-2 btn-edit-user" 
                           data-id="{{ .ID }}" data-name="{{ .Name }}" data-username="{{ .Username }}" data-role="{{ .Role }}"
-                          data-quota="{{ .TokenQuota }}" data-models="{{ .AllowedModels }}" data-active="{{ .IsActive }}" title="Edit User">
+                          data-quota="{{ .TokenQuota }}" data-daily-quota="{{ .DailyTokenQuota }}" data-models="{{ .AllowedModels }}" data-active="{{ .IsActive }}" title="Edit User">
                     <i class="bi bi-pencil"></i>
                   </button>
 
@@ -303,6 +303,10 @@
               <label class="form-label small text-muted">Token Quota (0 for Unlimited)</label>
               <input type="number" name="token_quota" id="editUserQuota" class="form-control form-control-modern font-monospace" min="0" step="10000">
             </div>
+            <div class="col-md-6">
+              <label class="form-label small text-muted">Daily Budget WIB (0 for Unlimited)</label>
+              <input type="number" name="daily_token_quota" id="editUserDailyQuota" class="form-control form-control-modern font-monospace" min="0" step="10000">
+            </div>
           </div>
 
           <div class="mb-4">
@@ -485,6 +489,7 @@
       const username = this.getAttribute("data-username");
       const role = this.getAttribute("data-role");
       const quota = this.getAttribute("data-quota");
+      const dailyQuota = this.getAttribute("data-daily-quota");
       const modelsRaw = this.getAttribute("data-models");
       const isActive = this.getAttribute("data-active") === "true";
 
@@ -494,6 +499,7 @@
       document.getElementById("editUserUsername").value = username;
       document.getElementById("editUserRole").value = role || "user";
       document.getElementById("editUserQuota").value = quota;
+      document.getElementById("editUserDailyQuota").value = dailyQuota || 0;
       document.getElementById("editUserActive").checked = isActive;
 
       const editAllowAll = document.getElementById("editAllowAllCheck");

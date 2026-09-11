@@ -284,6 +284,12 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 			adminOnly.Get("/api/version", h.APICoreVersion)
 			adminOnly.Get("/api/core-keys", h.APICoreKeys)
 
+			// Overpower: upstream health, anomaly radar, key budgets
+			adminOnly.Get("/api/upstream/health", h.APIUpstreamHealth)
+			adminOnly.Get("/radar", h.RadarPage)
+			adminOnly.Get("/api/radar/events", h.APIRadarEvents)
+			adminOnly.Post("/api/keys/{id}/budget", h.APIKeyBudget)
+
 			// Admin Billing Actions
 			adminOnly.Post("/api/billing/manual-credit", h.ManualCreditTokens)
 			adminOnly.Post("/settings/midtrans", h.UpdateMidtransPost)
