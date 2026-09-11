@@ -10,7 +10,7 @@
   </div>
   <div class="d-flex align-items-center gap-2">
     <div class="badge-modern badge-gray font-monospace" style="font-size: 0.75rem;">
-      Gateway: <span class="text-primary">{{ .BaseURL }}</span>
+      Gateway: <span class="text-primary">{{ .CurrentBaseURL }}</span>
     </div>
   </div>
 </div>
@@ -70,9 +70,9 @@
       <p class="text-dim small mb-3">Export these environment variables in your terminal before launching <code>claude</code>:</p>
 
       <div class="position-relative mb-3">
-        <pre class="code-box p-3 m-0 font-monospace text-light rounded-3" id="claudeSnippet"><code>export ANTHROPIC_BASE_URL="{{ .BaseURL }}"
+        <pre class="code-box p-3 m-0 font-monospace text-light rounded-3" id="claudeSnippet"><code>export ANTHROPIC_BASE_URL="{{ .CurrentBaseURL }}"
 export ANTHROPIC_API_KEY="{{ .UserKey }}"
-export CLAUDE_DEFAULT_MODEL="main"
+export CLAUDE_DEFAULT_MODEL="{{ .UserModel }}"
 claude</code></pre>
         <button type="button" class="btn btn-sm btn-modern-ghost position-absolute top-0 end-0 m-2" onclick="copySnippet('claudeSnippet')">
           <i class="bi bi-clipboard"></i> Copy
@@ -80,7 +80,7 @@ claude</code></pre>
       </div>
 
       <div class="p-3 rounded-3" style="background: rgba(16, 20, 32, 0.7); border: 1px solid var(--border-subtle);">
-        <div class="text-emerald small font-monospace"><i class="bi bi-check-circle me-1"></i> Tip: Use "main" as model to automatically failover from Claude Sonnet to Gemini 3.8 Flash if rate limits hit!</div>
+        <div class="text-emerald small font-monospace"><i class="bi bi-check-circle me-1"></i> Tip: Model below follows your account allowed list — "{{ .UserModel }}" auto-failovers if rate limits hit!</div>
       </div>
     </div>
 
@@ -108,7 +108,7 @@ claude</code></pre>
       </div>
 
       <div class="position-relative mb-3">
-        <pre class="code-box p-3 m-0 font-monospace text-light rounded-3" id="cursorUrlSnippet"><code>{{ .BaseURL }}</code></pre>
+        <pre class="code-box p-3 m-0 font-monospace text-light rounded-3" id="cursorUrlSnippet"><code>{{ .CurrentBaseURL }}</code></pre>
         <button type="button" class="btn btn-sm btn-modern-ghost position-absolute top-0 end-0 m-2" onclick="copySnippet('cursorUrlSnippet')">
           <i class="bi bi-clipboard"></i> Copy
         </button>
@@ -139,9 +139,9 @@ claude</code></pre>
       </div>
 
       <div class="position-relative mb-3">
-        <pre class="code-box p-3 m-0 font-monospace text-light rounded-3" id="codexSnippet"><code>export OPENAI_BASE_URL="{{ .BaseURL }}"
+        <pre class="code-box p-3 m-0 font-monospace text-light rounded-3" id="codexSnippet"><code>export OPENAI_BASE_URL="{{ .CurrentBaseURL }}"
 export OPENAI_API_KEY="{{ .UserKey }}"
-export CODEX_MODEL="main"
+export CODEX_MODEL="{{ .UserModel }}"
 codex</code></pre>
         <button type="button" class="btn btn-sm btn-modern-ghost position-absolute top-0 end-0 m-2" onclick="copySnippet('codexSnippet')">
           <i class="bi bi-clipboard"></i> Copy
@@ -164,9 +164,10 @@ codex</code></pre>
       <p class="text-dim small mb-3">In the Cline extension settings, select <strong>OpenAI Compatible</strong> provider:</p>
 
       <ul class="text-dim small d-flex flex-column gap-2 mb-3">
-        <li><strong>Base URL:</strong> <code class="text-primary font-monospace">{{ .BaseURL }}</code></li>
+        <li><strong>Provider:</strong> <code class="text-primary font-monospace">aimanager</code> (OpenAI Compatible)</li>
+        <li><strong>Base URL:</strong> <code class="text-primary font-monospace">{{ .CurrentBaseURL }}</code></li>
         <li><strong>API Key:</strong> <code class="text-primary font-monospace">{{ .UserKey }}</code></li>
-        <li><strong>Model ID:</strong> <code class="text-primary font-monospace">main</code> or <code class="text-light font-monospace">ag/gemini-3.8-flash-high</code></li>
+        <li><strong>Model ID:</strong> <code class="text-primary font-monospace">{{ .UserModel }}</code></li>
       </ul>
     </div>
 
@@ -186,10 +187,10 @@ codex</code></pre>
 
       <div class="position-relative mb-3">
         <pre class="code-box p-3 m-0 font-monospace text-light rounded-3" id="hermesSnippet"><code>llm:
-  provider: custom
-  base_url: "{{ .BaseURL }}"
+  provider: aimanager
+  base_url: "{{ .CurrentBaseURL }}"
   api_key: "{{ .UserKey }}"
-  model: "main"</code></pre>
+  model: "{{ .UserModel }}"</code></pre>
         <button type="button" class="btn btn-sm btn-modern-ghost position-absolute top-0 end-0 m-2" onclick="copySnippet('hermesSnippet')">
           <i class="bi bi-clipboard"></i> Copy
         </button>
@@ -209,9 +210,9 @@ codex</code></pre>
       </div>
 
       <div class="position-relative mb-3">
-        <pre class="code-box p-3 m-0 font-monospace text-light rounded-3" id="copilotSnippet"><code>export OPENCODE_BASE_URL="{{ .BaseURL }}"
+        <pre class="code-box p-3 m-0 font-monospace text-light rounded-3" id="copilotSnippet"><code>export OPENCODE_BASE_URL="{{ .CurrentBaseURL }}"
 export OPENCODE_API_KEY="{{ .UserKey }}"
-export OPENCODE_MODEL="main"</code></pre>
+export OPENCODE_MODEL="{{ .UserModel }}"</code></pre>
         <button type="button" class="btn btn-sm btn-modern-ghost position-absolute top-0 end-0 m-2" onclick="copySnippet('copilotSnippet')">
           <i class="bi bi-clipboard"></i> Copy
         </button>
