@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -53,6 +54,12 @@ type Handler struct {
 	cache        *proxy.ResponseCache
 	templates    map[string]*template.Template
 	httpClient   *http.Client
+
+	// Upstream model list cache (60s TTL): /v1/models rarely changes and
+	// every ModelsPage render used to block on it.
+	modelsMu    sync.RWMutex
+	modelsCache []UpstreamModelItem
+	modelsTime  time.Time
 
 	// Use case services
 	auth     *usecase.AuthService
@@ -479,6 +486,28 @@ func (h *Handler) deriveCurrentBaseURL(r *http.Request) string {
 }
 
 func (h *Handler) fetchUpstreamModels(ctx context.Context) ([]UpstreamModelItem, error) {
+	h.modelsMu.RLock()
+	if time.Since(h.modelsTime) < 60*time.Second && h.modelsCache != nil {
+		cached := h.modelsCache
+		h.modelsMu.RUnlock()
+		return cached, nil
+	}
+	h.modelsMu.RUnlock()
+
+	items, err := h.refreshUpstreamModels(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+// WarmUpstreamModels forces a model list refresh (startup cache priming).
+func (h *Handler) WarmUpstreamModels(ctx context.Context) ([]UpstreamModelItem, error) {
+	return h.refreshUpstreamModels(ctx)
+}
+
+func (h *Handler) refreshUpstreamModels(ctx context.Context) ([]UpstreamModelItem, error) {
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, h.cfg.GetUpstreamURL()+"/v1/models", nil)
 	if err != nil {
 		return nil, err
@@ -519,5 +548,9 @@ func (h *Handler) fetchUpstreamModels(ctx context.Context) ([]UpstreamModelItem,
 	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
 		return nil, err
 	}
+	h.modelsMu.Lock()
+	h.modelsCache = res.Data
+	h.modelsTime = time.Now()
+	h.modelsMu.Unlock()
 	return res.Data, nil
 }

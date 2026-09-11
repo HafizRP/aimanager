@@ -147,6 +147,19 @@ func Run() error {
 	keeper := worker.NewProviderKeeper(cfg, coreClient, quotaMgr)
 	go keeper.Start()
 
+	// 8b. Warm caches in background so the first page hits are already fast
+	// (quota report + model list); failures are harmless — pages refetch live.
+	go func() {
+		warmCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if _, err := quotaMgr.FetchAllQuotas(warmCtx, true); err != nil {
+			log.Warn().Err(err).Msg("Startup quota warmup failed")
+		}
+		if _, err := h.WarmUpstreamModels(warmCtx); err != nil {
+			log.Warn().Err(err).Msg("Startup models warmup failed")
+		}
+	}()
+
 	// 9. Background Cleanup Daemon (expired sessions and old login attempts)
 	go func() {
 		ticker := time.NewTicker(15 * time.Minute)
