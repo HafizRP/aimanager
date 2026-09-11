@@ -16,9 +16,17 @@ env:
 jobs:
   deploy:
     runs-on: [self-hosted, linux, x64]
+    defaults:
+      run:
+        working-directory: /home/b14/9router-gateway
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Sync server checkout to this commit
+        run: |
+          set -euo pipefail
+          echo "→ Syncing /home/b14/9router-gateway to $GITHUB_SHA..."
+          git fetch origin
+          git reset --hard "$GITHUB_SHA"
+          git status --short | head -5 || true
 
       - name: Build & deploy (docker compose)
         run: |
