@@ -47,12 +47,13 @@ jobs:
           set -euo pipefail
           SHA_SHORT="${GITHUB_SHA:0:7}"
           printf -v MSG '✅ *Deploy sukses* — `aimanager`\n• Branch: `%s`\n• Commit: `%s` — %s\n• Event: %s\n• Run: %s\n• Service: aktif & healthz OK' "$GITHUB_REF_NAME" "$SHA_SHORT" "$GITHUB_SHA" "$GITHUB_EVENT_NAME" "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          curl -sf -X POST "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
+          echo "token_len=${#TG_BOT_TOKEN} chat=${TG_CHAT_ID%%:*}"
+          curl -s -X POST "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
             --data-urlencode chat_id="${TG_CHAT_ID%%:*}" \
             --data-urlencode message_thread_id="${TG_CHAT_ID##*:}" \
             --data-urlencode text="${MSG}" \
-            -d parse_mode=Markdown
-          echo " → Telegram sent"
+            -d parse_mode=Markdown | head -c 600
+          echo " → HTTP done (curl exit $?)"
 
       - name: Notify Telegram (failure)
         if: failure()
@@ -60,9 +61,10 @@ jobs:
           set -euo pipefail
           SHA_SHORT="${GITHUB_SHA:0:7}"
           printf -v MSG '❌ *Deploy GAGAL* — `aimanager`\n• Branch: `%s`\n• Commit: `%s` — %s\n• Event: %s\n• Run: %s\n• Detail: %s' "$GITHUB_REF_NAME" "$SHA_SHORT" "$GITHUB_SHA" "$GITHUB_EVENT_NAME" "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          curl -sf -X POST "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
+          echo "token_len=${#TG_BOT_TOKEN} chat=${TG_CHAT_ID%%:*}"
+          curl -s -X POST "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
             --data-urlencode chat_id="${TG_CHAT_ID%%:*}" \
             --data-urlencode message_thread_id="${TG_CHAT_ID##*:}" \
             --data-urlencode text="${MSG}" \
-            -d parse_mode=Markdown
-          echo " → Telegram sent"
+            -d parse_mode=Markdown | head -c 600
+          echo " → HTTP done (curl exit $?)"
