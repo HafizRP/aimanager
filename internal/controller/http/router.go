@@ -116,6 +116,12 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 	staticFS, err := fs.Sub(web.FS, "static")
 	if err == nil {
 		r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
+		// PWA: service worker must be served from root scope, manifest canonical URL.
+		r.Handle("/sw.js", http.StripPrefix("/", http.FileServer(http.FS(staticFS))))
+		r.Handle("/manifest.webmanifest", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/manifest+json")
+			http.ServeFileFS(w, r, staticFS, "manifest.webmanifest")
+		}))
 	}
 
 	// Reverse Proxy / Gateway routes (OpenAI & Anthropic compatible API)
