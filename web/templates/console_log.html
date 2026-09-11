@@ -1,0 +1,44 @@
+{{ define "title" }}Console Log - AI Manager{{ end }}
+
+{{ define "content" }}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+  <div>
+    <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
+      <i class="bi bi-terminal-split text-info"></i> Console Log
+    </h4>
+    <p class="text-dim small mb-0">Live 9router Core server console output (token refresh, routing, errors).</p>
+  </div>
+  <div class="d-flex align-items-center gap-2">
+    <button type="button" class="btn btn-sm btn-modern-ghost" id="btnLiveLog">Pause</button>
+    <button type="button" class="btn btn-sm btn-modern-ghost" onclick="loadConsoleLogs()">Refresh</button>
+  </div>
+</div>
+
+<div class="card-modern p-0 overflow-hidden">
+  <pre class="m-0 p-3 font-monospace text-light" id="consoleOut" style="font-size: 0.75rem; max-height: 60vh; overflow: auto; white-space: pre-wrap;">Loading…</pre>
+</div>
+
+<script>
+let liveLogOn = true, liveLogTimer = null;
+async function loadConsoleLogs() {
+  try {
+    const res = await fetch('/api/console-logs');
+    const data = await res.json();
+    const logs = data.logs || [];
+    document.getElementById('consoleOut').textContent = logs.length ? logs.join('\n') : '(empty)';
+  } catch (e) {
+    document.getElementById('consoleOut').textContent = 'Failed to load console logs.';
+  }
+}
+document.getElementById('btnLiveLog').addEventListener('click', function () {
+  liveLogOn = !liveLogOn;
+  this.textContent = liveLogOn ? 'Pause' : 'Live';
+  if (liveLogOn && !liveLogTimer) liveLogTimer = setInterval(loadConsoleLogs, 5000);
+  if (!liveLogOn && liveLogTimer) { clearInterval(liveLogTimer); liveLogTimer = null; }
+});
+document.addEventListener('DOMContentLoaded', () => {
+  loadConsoleLogs();
+  liveLogTimer = setInterval(loadConsoleLogs, 5000);
+});
+</script>
+{{ end }}

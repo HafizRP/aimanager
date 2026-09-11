@@ -1,0 +1,78 @@
+{{ define "title" }}Agent Skills - AI Manager{{ end }}
+
+{{ define "content" }}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+  <div>
+    <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
+      <i class="bi bi-puzzle-fill text-emerald"></i> Agent Skills
+    </h4>
+    <p class="text-dim small mb-0">Copy a snippet and paste it to your AI agent — no install needed. Values are pre-filled for your account.</p>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-12 col-lg-6">
+    <div class="card-modern p-4 h-100">
+      <h6 class="fw-bold text-light mb-1">Universal Agent Prompt</h6>
+      <p class="text-dim small mb-3">Paste to any OpenAI-compatible agent (Hermes, OpenCode, Cline).</p>
+      <div class="position-relative">
+        <pre class="code-box p-3 m-0 font-monospace text-light rounded-3" id="skillUniversal"><code>Use AI Manager as your LLM provider:
+- Base URL: {{ .CurrentBaseURL }}
+- API Key: {{ .UserKey }}
+- Model: {{ .UserModel }}</code></pre>
+        <button type="button" class="btn btn-sm btn-modern-ghost position-absolute top-0 end-0 m-2" onclick="copySkill('skillUniversal')">
+          <i class="bi bi-clipboard"></i> Copy
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12 col-lg-6">
+    <div class="card-modern p-4 h-100">
+      <h6 class="fw-bold text-light mb-1">Environment Block</h6>
+      <p class="text-dim small mb-3">Drop-in env vars for shell-based agents.</p>
+      <div class="position-relative">
+        <pre class="code-box p-3 m-0 font-monospace text-light rounded-3" id="skillEnv"><code>export AIMANAGER_BASE_URL="{{ .CurrentBaseURL }}"
+export AIMANAGER_API_KEY="{{ .UserKey }}"
+export AIMANAGER_MODEL="{{ .UserModel }}"</code></pre>
+        <button type="button" class="btn btn-sm btn-modern-ghost position-absolute top-0 end-0 m-2" onclick="copySkill('skillEnv')">
+          <i class="bi bi-clipboard"></i> Copy
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-12">
+    <div class="card-modern p-4">
+      <h6 class="fw-bold text-light mb-1">Claude Skill File</h6>
+      <p class="text-dim small mb-3">Save as <code>aimanager/SKILL.md</code> for Claude Code / Hermes sub-agents.</p>
+      <div class="position-relative">
+        <pre class="code-box p-3 m-0 font-monospace text-light rounded-3" id="skillFile"><code>---
+name: aimanager
+description: Use the AI Manager gateway for all LLM calls.
+---
+
+# AI Manager
+- Provider: aimanager (OpenAI-compatible)
+- Base URL: {{ .CurrentBaseURL }}
+- API key: {{ .UserKey }} (header: Authorization: Bearer &lt;key&gt;)
+- Default model: {{ .UserModel }}
+- Chat endpoint: {{ .CurrentBaseURL }}/chat/completions
+- Models endpoint: {{ .CurrentBaseURL }}/models</code></pre>
+        <button type="button" class="btn btn-sm btn-modern-ghost position-absolute top-0 end-0 m-2" onclick="copySkill('skillFile')">
+          <i class="bi bi-clipboard"></i> Copy
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function copySkill(id) {
+  const text = document.getElementById(id).innerText;
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => alert('Copied!')).catch(() => alert('Copy failed — select manually.'));
+  } else { alert('Copy not supported — select manually.'); }
+}
+</script>
+{{ end }}

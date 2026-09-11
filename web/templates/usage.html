@@ -1,0 +1,77 @@
+{{ define "title" }}Usage Analytics - AI Manager{{ end }}
+
+{{ define "content" }}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+  <div>
+    <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
+      <i class="bi bi-bar-chart-fill text-primary"></i> Usage Analytics
+    </h4>
+    <p class="text-dim small mb-0">Upstream request volume, tokens, and cost grouped by provider, model, account, and endpoint.</p>
+  </div>
+  <div class="d-flex align-items-center gap-2">
+    <button type="button" class="btn btn-sm btn-modern-ghost" onclick="loadUsage()">
+      <i class="bi bi-arrow-clockwise"></i> Refresh
+    </button>
+  </div>
+</div>
+
+<div class="row g-3 mb-4" id="usageCards"></div>
+
+<div class="card-modern p-0 overflow-hidden mb-4">
+  <div class="p-3 border-bottom border-secondary border-opacity-10"><h6 class="fw-bold text-light mb-0">By Provider</h6></div>
+  <div class="table-responsive"><table class="table table-modern mb-0">
+    <thead><tr><th>Provider</th><th>Requests</th><th>Prompt Tokens</th><th>Completion Tokens</th><th>Cost</th></tr></thead>
+    <tbody id="usageProviders"><tr><td colspan="5" class="text-dim small">Loading…</td></tr></tbody>
+  </table></div>
+</div>
+
+<div class="card-modern p-0 overflow-hidden">
+  <div class="p-3 border-bottom border-secondary border-opacity-10"><h6 class="fw-bold text-light mb-0">By Model</h6></div>
+  <div class="table-responsive"><table class="table table-modern mb-0">
+    <thead><tr><th>Model</th><th>Requests</th><th>Tokens</th></tr></thead>
+    <tbody id="usageModels"><tr><td colspan="3" class="text-dim small">Loading…</td></tr></tbody>
+  </table></div>
+</div>
+
+<script>
+function fmt(n) {
+  n = Number(n) || 0;
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
+  if (n >= 1e6) return (n / 1e6).toFixed(2) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return String(Math.round(n));
+}
+function bar(pct) {
+  const p = Math.max(0, Math.min(100, pct || 0));
+  return `<div class="progress" style="height:6px;background:rgba(255,255,255,0.06);"><div class="progress-bar" style="width:${p}%;background:linear-gradient(90deg,#38bdf8,#818cf8);"></div></div>`;
+}
+async function loadUsage() {
+  try {
+    const data = await (await fetch('/api/usage/stats')).json();
+    const cards = [
+      ['Total Requests', fmt(data.totalRequests)],
+      ['Prompt Tokens', fmt(data.totalPromptTokens)],
+      ['Completion Tokens', fmt(data.totalCompletionTokens)],
+      ['Cached Tokens', fmt(data.totalCachedTokens)],
+      ['Est. Cost', '$' + (Number(data.totalCost) || 0).toFixed(2)],
+    ];
+    document.getElementById('usageCards').innerHTML = cards.map(([l, v]) =>
+      `<div class="col-6 col-lg"><div class="card-modern p-3"><div class="text-dim small">${l}</div><div class="fw-bold text-light fs-5 font-monospace">${v}</div></div></div>`).join('');
+    const prov = data.byProvider || {};
+    const maxReq = Math.max(1, ...Object.values(prov).map(p => Number(p.requests) || 0));
+    document.getElementById('usageProviders').innerHTML = Object.entries(prov).map(([k, p]) =>
+      `<tr><td class="font-monospace small text-primary">${k}</td><td class="small">${fmt(p.requests)}<div class="mt-1">${bar((Number(p.requests) || 0) / maxReq * 100)}</div></td><td class="small font-monospace">${fmt(p.promptTokens)}</td><td class="small font-monospace">${fmt(p.completionTokens)}</td><td class="small font-monospace">$${(Number(p.cost) || 0).toFixed(2)}</td></tr>`).join('') || '<tr><td colspan="5" class="text-dim small">No data.</td></tr>';
+    const mods = data.byModel || {};
+    const maxM = Math.max(1, ...Object.values(mods).map(m => Number(m.requests) || Number(m.total) || 0));
+    document.getElementById('usageModels').innerHTML = Object.entries(mods).map(([k, m]) => {
+      const req = Number(m.requests) || Number(m.total) || 0;
+      const tok = Number(m.promptTokens || 0) + Number(m.completionTokens || 0) || Number(m.tokens) || 0;
+      return `<tr><td class="font-monospace small text-primary">${k}</td><td class="small">${fmt(req)}<div class="mt-1">${bar(req / maxM * 100)}</div></td><td class="small font-monospace">${fmt(tok)}</td></tr>`;
+    }).join('') || '<tr><td colspan="3" class="text-dim small">No data.</td></tr>';
+  } catch (e) {
+    document.getElementById('usageProviders').innerHTML = '<tr><td colspan="5" class="text-rose small">Failed to load.</td></tr>';
+  }
+}
+document.addEventListener('DOMContentLoaded', loadUsage);
+</script>
+{{ end }}

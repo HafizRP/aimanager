@@ -442,3 +442,29 @@ func (c *CoreClient) TranslatorTranslate(ctx context.Context, payload map[string
 	_ = json.Unmarshal(data, &res)
 	return res, nil
 }
+
+// -------------------------------------------------------------
+// Read-only views (Usage analytics, Console logs)
+// -------------------------------------------------------------
+
+// UsageStats proxies GET /api/usage/stats from 9router Core.
+func (c *CoreClient) UsageStats(ctx context.Context) (map[string]interface{}, error) {
+	data, err := c.doRequest(ctx, http.MethodGet, "/api/usage/stats", nil)
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]interface{}
+	_ = json.Unmarshal(data, &res)
+	return res, nil
+}
+
+// ConsoleLogs proxies GET /api/translator/console-logs from 9router Core.
+func (c *CoreClient) ConsoleLogs(ctx context.Context) (map[string]interface{}, error) {
+	data, err := c.doRequest(ctx, http.MethodGet, "/api/translator/console-logs", nil)
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]interface{}
+	_ = json.Unmarshal(data, &res)
+	return res, nil
+}

@@ -1,0 +1,66 @@
+{{ define "title" }}Endpoint Hub - AI Manager{{ end }}
+
+{{ define "content" }}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+  <div>
+    <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
+      <i class="bi bi-plug-fill text-info"></i> Endpoint Hub
+    </h4>
+    <p class="text-dim small mb-0">Every HTTP entrypoint of this gateway and its upstream core.</p>
+  </div>
+  <div class="badge-modern badge-gray font-monospace" style="font-size: 0.75rem;">
+    Gateway: <span class="text-primary">{{ .CurrentBaseURL }}</span>
+  </div>
+</div>
+
+<div class="card-modern p-0 overflow-hidden">
+  <div class="table-responsive">
+    <table class="table table-modern mb-0">
+      <thead>
+        <tr><th>Endpoint</th><th>URL</th><th>Purpose</th><th></th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Chat Completions</td>
+          <td class="font-monospace small text-primary">{{ .CurrentBaseURL }}/chat/completions</td>
+          <td class="text-dim small">OpenAI-compatible chat (streaming + non-streaming)</td>
+          <td><button class="btn btn-sm btn-modern-ghost" onclick="copyEp(this)" data-copy="{{ .CurrentBaseURL }}/chat/completions">Copy</button></td>
+        </tr>
+        <tr>
+          <td>Models</td>
+          <td class="font-monospace small text-primary">{{ .CurrentBaseURL }}/models</td>
+          <td class="text-dim small">List available models</td>
+          <td><button class="btn btn-sm btn-modern-ghost" onclick="copyEp(this)" data-copy="{{ .CurrentBaseURL }}/models">Copy</button></td>
+        </tr>
+        <tr>
+          <td>Anthropic Messages</td>
+          <td class="font-monospace small text-primary">{{ .CurrentBaseURL }}/messages</td>
+          <td class="text-dim small">Anthropic-compatible messages API</td>
+          <td><button class="btn btn-sm btn-modern-ghost" onclick="copyEp(this)" data-copy="{{ .CurrentBaseURL }}/messages">Copy</button></td>
+        </tr>
+        <tr>
+          <td>Embeddings</td>
+          <td class="font-monospace small text-primary">{{ .CurrentBaseURL }}/embeddings</td>
+          <td class="text-dim small">OpenAI-compatible embeddings</td>
+          <td><button class="btn btn-sm btn-modern-ghost" onclick="copyEp(this)" data-copy="{{ .CurrentBaseURL }}/embeddings">Copy</button></td>
+        </tr>
+        <tr>
+          <td>Upstream Core</td>
+          <td class="font-monospace small text-dim">{{ .UpstreamURL }}</td>
+          <td class="text-dim small">Internal 9router Core (loopback only, never public)</td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+function copyEp(btn) {
+  const text = btn.getAttribute('data-copy');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => alert('Copied!')).catch(() => alert('Copy failed.'));
+  } else { alert('Copy not supported.'); }
+}
+</script>
+{{ end }}
