@@ -17,6 +17,15 @@
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <!-- Custom Modern Design System -->
   <link href="/static/css/custom.css?v=8" rel="stylesheet">
+  <!-- PWA: installable app -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0b0d14">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="AI Manager">
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
 </head>
 <body>
   <div class="app-wrapper">
@@ -152,6 +161,9 @@
           </div>
         {{ end }}
 
+        <button type="button" class="btn btn-sm w-100 d-none align-items-center justify-content-center gap-2 mb-2 pwa-install-btn" style="border: 1px dashed rgba(56,189,248,0.4); color: #38bdf8; border-radius: 10px; font-size: 0.78rem;">
+          <i class="bi bi-download"></i> Install App
+        </button>
         <div class="d-flex align-items-center justify-content-between" style="font-size: 0.72rem;">
           <div class="status-pill-live" style="font-size:0.68rem; padding: 0.2rem 0.5rem;">
             <span class="pulse-dot"></span>
@@ -178,11 +190,16 @@
           </div>
           <span class="fw-bold text-light fs-6">AI Manager</span>
         </div>
-        <form action="/logout" method="POST" class="m-0">
-          <button type="submit" class="btn-modern-ghost py-1 px-2 text-muted" title="Logout">
-            <i class="bi bi-box-arrow-right"></i>
+        <div class="d-flex align-items-center gap-1">
+          <button type="button" class="btn-modern-ghost py-1 px-2 d-none pwa-install-btn" title="Install App" style="color: #38bdf8;">
+            <i class="bi bi-download"></i>
           </button>
-        </form>
+          <form action="/logout" method="POST" class="m-0">
+            <button type="submit" class="btn-modern-ghost py-1 px-2 text-muted" title="Logout">
+              <i class="bi bi-box-arrow-right"></i>
+            </button>
+          </form>
+        </div>
       </header>
 
       <!-- Flash Messages -->
@@ -218,6 +235,44 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="/static/js/app.js?v=6"></script>
+  <script>
+    // PWA: service worker + install prompt.
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/sw.js').catch(function () {});
+      });
+    }
+    (function () {
+      var deferred = null;
+      var btns = document.querySelectorAll('.pwa-install-btn');
+      function show() {
+        btns.forEach(function (b) { b.classList.remove('d-none'); b.classList.add('d-flex'); });
+      }
+      function isIOS() { return /iphone|ipad|ipod/i.test(navigator.userAgent); }
+      function isStandalone() {
+        return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      }
+      if (isStandalone()) return; // already installed — no button
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        deferred = e;
+        show();
+      });
+      if (isIOS()) show(); // iOS has no beforeinstallprompt — show with manual steps
+      btns.forEach(function (b) {
+        b.addEventListener('click', function () {
+          if (deferred) {
+            deferred.prompt();
+            deferred.userChoice.then(function () { deferred = null; });
+          } else if (isIOS()) {
+            alert('Install AI Manager:\n1. Tap Share (kotak + panah)\n2. Pilih "Add to Home Screen"\n3. Tap Add');
+          } else {
+            alert('Buka menu browser (⋮) lalu pilih "Install app" / "Add to Home screen".');
+          }
+        });
+      });
+    })();
+  </script>
   <script>
     // Responsive tables: add data-label to each td from its column header.
     // Enables stacked-card layout on narrow screens without editing every template.
