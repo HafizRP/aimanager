@@ -705,3 +705,103 @@ code {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
 }
+
+/* ===== Responsive: tables become stacked cards on narrow screens ===== */
+@media (max-width: 767.98px) {
+  .table-responsive {
+    overflow: visible !important;
+    border: 0;
+  }
+
+  .table-responsive thead {
+    display: none; /* hide column headers — each cell carries its own label */
+  }
+
+  .table-responsive table,
+  .table-responsive tbody,
+  .table-responsive tr,
+  .table-responsive td {
+    display: block;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .table-responsive tr {
+    margin-bottom: 0.9rem;
+    background: #141418;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 12px;
+    padding: 0.6rem 0.9rem;
+  }
+
+  /* Force text inside cells to wrap instead of overflow */
+  .table-responsive td > * {
+    max-width: 100%;
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+
+  /* Action buttons: larger touch targets on mobile */
+  .table-responsive tbody td:last-child .btn-sm,
+  .table-responsive tbody td:last-child .btn {
+    font-size: 0.8rem;
+    padding: 0.45rem 0.7rem;
+  }
+
+  .table-responsive tbody td:last-child .d-flex {
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  .table-responsive td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.55rem 0 !important;
+    border: 0 !important;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.06) !important;
+    text-align: right;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    min-width: 0 !important;
+  }
+
+  .table-responsive td:last-child {
+    border-bottom: 0 !important;
+  }
+
+  /* Empty-state / merged cells (colspan): keep full-width, centered, non-card */
+  .table-responsive td[colspan] {
+    display: block !important;
+    text-align: center !important;
+    padding: 1.5rem 0.5rem !important;
+    border-bottom: 0 !important;
+  }
+  .table-responsive td[colspan]::before {
+    content: none !important;
+  }
+
+  /* Cell label (from data-label attr) */
+  .table-responsive td[data-label]::before {
+    content: attr(data-label);
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted, #8b8fa3);
+    margin-right: auto;
+    text-align: left;
+    flex-shrink: 0;
+  }
+
+  /* Force text inside cells to wrap instead of overflow */
+  .table-responsive td > * {
+    max-width: 100%;
+    overflow-wrap: break-word;
+  }
+
+  .table-responsive .d-flex {
+    flex-wrap: wrap;
+  }
+}

@@ -239,20 +239,20 @@
       : '<span class="text-dim">0</span>';
 
     return `<tr data-log-id="${log.id}" style="animation: fadeInRow 0.5s ease-out;">
-              <td class="text-dim font-monospace small" style="font-size: 0.78rem;">${formatWIB(log.created_at)}</td>
-              <td>
+              <td data-label="Time" class="text-dim font-monospace small" style="font-size: 0.78rem;">${formatWIB(log.created_at)}</td>
+              <td data-label="User &amp; Key">
                 <div class="fw-bold text-light small">${escapeHtml(log.user_name)}</div>
                 <span class="badge-modern badge-gray" style="font-size: 0.65rem; padding: 0.05rem 0.35rem;">${escapeHtml(log.key_name)}</span>
               </td>
-              <td>${modelPill}</td>
-              <td class="font-monospace small text-dim">
+              <td data-label="Model">${modelPill}</td>
+              <td data-label="Endpoint" class="font-monospace small text-dim">
                 <span class="text-info fw-medium">${escapeHtml(log.method)}</span> ${escapeHtml(log.path)}
               </td>
-              <td>${typeBadge}</td>
-              <td class="font-monospace small">${tokensDisplay}</td>
-              <td>${statusBadge}</td>
-              <td class="text-dim small font-monospace">${log.duration_ms}ms</td>
-              <td class="text-dim small font-monospace">${escapeHtml(log.client_ip)}</td>
+              <td data-label="Type">${typeBadge}</td>
+              <td data-label="Tokens (In/Out/Total)" class="font-monospace small">${tokensDisplay}</td>
+              <td data-label="Status">${statusBadge}</td>
+              <td data-label="Duration" class="text-dim small font-monospace">${log.duration_ms}ms</td>
+              <td data-label="Client IP" class="text-dim small font-monospace">${escapeHtml(log.client_ip)}</td>
             </tr>`;
   }
 
