@@ -278,10 +278,9 @@
             <span class="text-dim small" style="font-size: 0.72rem;">OpenAI ↔ Anthropic ↔ Gemini payloads</span>
           </div>
         </div>
-        <div class="form-check form-switch m-0">
-          <input class="form-check-input" type="checkbox" role="switch" id="translatorEnabled" {{ if .Settings.enableTranslator }}checked{{ end }}>
-        </div>
+        {{ if .Settings.enableTranslator }}<span class="badge-modern badge-emerald">Enabled</span>{{ else }}<span class="badge-modern badge-gray">Disabled</span>{{ end }}
       </div>
+      <p class="text-dim small mb-2" style="font-size: 0.72rem;">Translator is managed via the <code>ENABLE_TRANSLATOR</code> env var on 9router Core — it cannot be toggled from settings (core ignores the key on save).</p>
       <p class="text-dim small mb-2">Test translation of a sample OpenAI-style body (step 2):</p>
       <textarea class="form-control form-control-modern form-control-sm font-monospace mb-2" id="translatorInput" rows="3">{"model": "x", "messages": [{"role": "user", "content": "hello"}]}</textarea>
       <div class="d-flex gap-2 mb-2">
@@ -344,8 +343,7 @@ async function saveSettings() {
     pxpipeEnabled: document.getElementById('pxpipeEnabled').checked,
     pxpipeAutoInstall: document.getElementById('pxpipeAutoInstall').checked,
     pxpipeMinChars: parseInt(document.getElementById('pxpipeMinChars').value, 10) || 25000,
-    pxpipeTimeoutMs: parseInt(document.getElementById('pxpipeTimeoutMs').value, 10) || 15000,
-    enableTranslator: document.getElementById('translatorEnabled').checked
+    pxpipeTimeoutMs: parseInt(document.getElementById('pxpipeTimeoutMs').value, 10) || 15000
   };
 
   try {
