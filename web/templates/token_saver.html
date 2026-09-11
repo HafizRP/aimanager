@@ -167,8 +167,127 @@
           </div>
         </div>
         <div class="text-dim small mb-2" style="font-size: 0.72rem;">Route upstream provider requests through an HTTP/SOCKS proxy.</div>
-        <input type="url" class="form-control form-control-modern form-control-sm font-monospace" id="outboundProxyUrl" placeholder="http://127.0.0.1:1080" value="{{ if .Settings.outboundProxyUrl }}{{ .Settings.outboundProxyUrl }}{{ end }}">
+        <input type="url" class="form-control form-control-modern form-control-sm font-monospace mb-2" id="outboundProxyUrl" placeholder="http://127.0.0.1:1080" value="{{ if .Settings.outboundProxyUrl }}{{ .Settings.outboundProxyUrl }}{{ end }}">
+        <div class="text-dim small mb-2" style="font-size: 0.72rem;">Bypass proxy for these hosts (comma-separated, no proxy list).</div>
+        <input type="text" class="form-control form-control-modern form-control-sm font-monospace" id="outboundNoProxy" placeholder="localhost,127.0.0.1" value="{{ if .Settings.outboundNoProxy }}{{ .Settings.outboundNoProxy }}{{ end }}">
       </div>
+    </div>
+  </div>
+
+  <!-- Headroom External Compressor -->
+  <div class="col-12 col-lg-6">
+    <div class="card-modern p-4 h-100">
+      <div class="d-flex align-items-start justify-content-between mb-3">
+        <div class="d-flex align-items-center gap-2">
+          <div class="kpi-icon kpi-icon-cyan" style="width: 38px; height: 38px; font-size: 1.1rem; border-radius: 10px;">
+            <i class="bi bi-cpu-fill"></i>
+          </div>
+          <div>
+            <h6 class="fw-bold text-light mb-0">Headroom Compressor</h6>
+            <span class="text-dim small" style="font-size: 0.72rem;">External AST/ML compression proxy</span>
+          </div>
+        </div>
+        <div class="form-check form-switch m-0">
+          <input class="form-check-input" type="checkbox" role="switch" id="headroomEnabled" {{ if .Settings.headroomEnabled }}checked{{ end }}>
+        </div>
+      </div>
+      <p class="text-dim small mb-3">
+        Calls Headroom's <code>/v1/compress</code> before provider routing. Fails open when down.
+        <span class="badge-modern badge-gray font-monospace ms-1" id="headroomStatus">checking…</span>
+      </p>
+      <div class="d-flex flex-column gap-2 mb-3">
+        <input type="url" class="form-control form-control-modern form-control-sm font-monospace" id="headroomUrl" placeholder="http://localhost:8787" value="{{ if .Settings.headroomUrl }}{{ .Settings.headroomUrl }}{{ end }}">
+        <div class="row g-2">
+          <div class="col-6">
+            <label class="form-label small text-muted mb-1">Timeout (ms)</label>
+            <input type="number" class="form-control form-control-modern form-control-sm font-monospace" id="headroomTimeoutMs" value="{{ if .Settings.headroomTimeoutMs }}{{ .Settings.headroomTimeoutMs }}{{ else }}8000{{ end }}">
+          </div>
+          <div class="col-6 d-flex align-items-end">
+            <div class="form-check m-0">
+              <input class="form-check-input" type="checkbox" id="headroomCompressUser" {{ if .Settings.headroomCompressUserMessages }}checked{{ end }}>
+              <label class="form-check-label small text-dim" for="headroomCompressUser">Compress user msgs</label>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="d-flex gap-2">
+        <button type="button" class="btn btn-sm btn-modern-ghost" onclick="serviceAction('headroom','start')">Start</button>
+        <button type="button" class="btn btn-sm btn-modern-ghost" onclick="serviceAction('headroom','stop')">Stop</button>
+        <button type="button" class="btn btn-sm btn-modern-ghost" onclick="serviceAction('headroom','restart')">Restart</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PXPipe Multimodal Compressor -->
+  <div class="col-12 col-lg-6">
+    <div class="card-modern p-4 h-100">
+      <div class="d-flex align-items-start justify-content-between mb-3">
+        <div class="d-flex align-items-center gap-2">
+          <div class="kpi-icon kpi-icon-indigo" style="width: 38px; height: 38px; font-size: 1.1rem; border-radius: 10px;">
+            <i class="bi bi-image-fill"></i>
+          </div>
+          <div>
+            <h6 class="fw-bold text-light mb-0">PXPipe Multimodal</h6>
+            <span class="text-dim small" style="font-size: 0.72rem;">Dense-image compression for 25k+ char prompts</span>
+          </div>
+        </div>
+        <div class="form-check form-switch m-0">
+          <input class="form-check-input" type="checkbox" role="switch" id="pxpipeEnabled" {{ if .Settings.pxpipeEnabled }}checked{{ end }}>
+        </div>
+      </div>
+      <p class="text-dim small mb-3">
+        Renders token-dense contexts as images, cutting input tokens ~35-60%.
+        <span class="badge-modern badge-gray font-monospace ms-1" id="pxpipeStatus">checking…</span>
+        <span class="text-dim font-monospace ms-1" style="font-size: 0.72rem;" id="pxpipeStats"></span>
+      </p>
+      <div class="row g-2 mb-3">
+        <div class="col-4">
+          <label class="form-label small text-muted mb-1">Min chars</label>
+          <input type="number" class="form-control form-control-modern form-control-sm font-monospace" id="pxpipeMinChars" value="{{ if .Settings.pxpipeMinChars }}{{ .Settings.pxpipeMinChars }}{{ else }}25000{{ end }}">
+        </div>
+        <div class="col-4">
+          <label class="form-label small text-muted mb-1">Timeout (ms)</label>
+          <input type="number" class="form-control form-control-modern form-control-sm font-monospace" id="pxpipeTimeoutMs" value="{{ if .Settings.pxpipeTimeoutMs }}{{ .Settings.pxpipeTimeoutMs }}{{ else }}15000{{ end }}">
+        </div>
+        <div class="col-4 d-flex align-items-end">
+          <div class="form-check m-0">
+            <input class="form-check-input" type="checkbox" id="pxpipeAutoInstall" {{ if .Settings.pxpipeAutoInstall }}checked{{ end }}>
+            <label class="form-check-label small text-dim" for="pxpipeAutoInstall">Auto-install</label>
+          </div>
+        </div>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button type="button" class="btn btn-sm btn-modern-ghost" onclick="serviceAction('pxpipe','install')">Install</button>
+        <button type="button" class="btn btn-sm btn-modern-ghost" onclick="serviceAction('pxpipe','start')">Start</button>
+        <button type="button" class="btn btn-sm btn-modern-ghost" onclick="serviceAction('pxpipe','stop')">Stop</button>
+        <button type="button" class="btn btn-sm btn-modern-ghost" onclick="serviceAction('pxpipe','restart')">Restart</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Format Translator -->
+  <div class="col-12 col-lg-6">
+    <div class="card-modern p-4 h-100">
+      <div class="d-flex align-items-start justify-content-between mb-3">
+        <div class="d-flex align-items-center gap-2">
+          <div class="kpi-icon kpi-icon-emerald" style="width: 38px; height: 38px; font-size: 1.1rem; border-radius: 10px;">
+            <i class="bi bi-translate"></i>
+          </div>
+          <div>
+            <h6 class="fw-bold text-light mb-0">Format Translator</h6>
+            <span class="text-dim small" style="font-size: 0.72rem;">OpenAI ↔ Anthropic ↔ Gemini payloads</span>
+          </div>
+        </div>
+        <div class="form-check form-switch m-0">
+          <input class="form-check-input" type="checkbox" role="switch" id="translatorEnabled" {{ if .Settings.enableTranslator }}checked{{ end }}>
+        </div>
+      </div>
+      <p class="text-dim small mb-2">Test translation of a sample OpenAI-style body (step 2):</p>
+      <textarea class="form-control form-control-modern form-control-sm font-monospace mb-2" id="translatorInput" rows="3">{"model": "x", "messages": [{"role": "user", "content": "hello"}]}</textarea>
+      <div class="d-flex gap-2 mb-2">
+        <button type="button" class="btn btn-sm btn-modern-ghost" onclick="translatorTest()">Test Translate</button>
+      </div>
+      <pre class="code-box p-2 m-0 font-monospace text-dim rounded-2 d-none" id="translatorOut" style="font-size: 0.72rem; max-height: 220px; overflow: auto;"></pre>
     </div>
   </div>
 </div>
@@ -216,7 +335,17 @@ async function saveSettings() {
       }
     },
     outboundProxyEnabled: document.getElementById('outboundProxyEnabled').checked,
-    outboundProxyUrl: document.getElementById('outboundProxyUrl').value.trim()
+    outboundProxyUrl: document.getElementById('outboundProxyUrl').value.trim(),
+    outboundNoProxy: document.getElementById('outboundNoProxy').value.trim(),
+    headroomEnabled: document.getElementById('headroomEnabled').checked,
+    headroomUrl: document.getElementById('headroomUrl').value.trim(),
+    headroomTimeoutMs: parseInt(document.getElementById('headroomTimeoutMs').value, 10) || 8000,
+    headroomCompressUserMessages: document.getElementById('headroomCompressUser').checked,
+    pxpipeEnabled: document.getElementById('pxpipeEnabled').checked,
+    pxpipeAutoInstall: document.getElementById('pxpipeAutoInstall').checked,
+    pxpipeMinChars: parseInt(document.getElementById('pxpipeMinChars').value, 10) || 25000,
+    pxpipeTimeoutMs: parseInt(document.getElementById('pxpipeTimeoutMs').value, 10) || 15000,
+    enableTranslator: document.getElementById('translatorEnabled').checked
   };
 
   try {
@@ -240,5 +369,61 @@ async function saveSettings() {
     btn.innerHTML = '<i class="bi bi-check2-circle"></i> Save Settings';
   }
 }
+
+function setBadge(id, text, ok) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = text;
+  el.className = 'badge-modern font-monospace ms-1 ' + (ok === true ? 'badge-emerald' : ok === false ? 'badge-rose' : 'badge-gray');
+}
+
+async function refreshServiceStatus() {
+  try {
+    const hr = await (await fetch('/api/services/headroom/status')).json();
+    setBadge('headroomStatus', hr.running ? ('running' + (hr.version ? ' v' + hr.version : '')) : 'stopped', !!hr.running);
+  } catch (e) { setBadge('headroomStatus', 'unknown', null); }
+  try {
+    const px = await (await fetch('/api/services/pxpipe/status')).json();
+    setBadge('pxpipeStatus', px.running ? 'running' : (px.installed ? 'installed' : 'not installed'), px.running ? true : null);
+    const st = await (await fetch('/api/services/pxpipe/stats')).json();
+    const all = st.windows && st.windows.all ? st.windows.all : null;
+    if (all) {
+      document.getElementById('pxpipeStats').textContent =
+        `saved ${all.tokensSavedEst || 0} tok (${all.savedPct || 0}%) · ${all.requests || 0} req`;
+    }
+  } catch (e) { setBadge('pxpipeStatus', 'unknown', null); }
+}
+
+async function serviceAction(service, action) {
+  setBadge(service + 'Status', action + '…', null);
+  try {
+    const res = await fetch(`/api/services/${service}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Action failed');
+    await refreshServiceStatus();
+  } catch (err) {
+    alert('Error: ' + err.message);
+    await refreshServiceStatus();
+  }
+}
+
+async function translatorTest() {
+  const out = document.getElementById('translatorOut');
+  out.classList.remove('d-none');
+  out.textContent = 'translating…';
+  try {
+    const body = JSON.parse(document.getElementById('translatorInput').value);
+    const res = await fetch('/api/translator/translate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ step: 2, body })
+    });
+    const data = await res.json();
+    out.textContent = JSON.stringify(data, null, 2);
+  } catch (err) {
+    out.textContent = 'Error: ' + err.message;
+  }
+}
+
+document.addEventListener('DOMContentLoaded', refreshServiceStatus);
 </script>
 {{ end }}
