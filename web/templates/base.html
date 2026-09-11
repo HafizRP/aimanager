@@ -332,24 +332,38 @@
   <script>
     // Responsive tables: add data-label to each td from its column header.
     // Enables stacked-card layout on narrow screens without editing every template.
+    // A MutationObserver covers JS-rendered rows (benchmark, usage, pricing, …).
+    function labelTable(table) {
+      var headers = Array.prototype.map.call(
+        table.querySelectorAll('thead th'),
+        function (th) { return th.textContent.trim(); }
+      );
+      if (!headers.length) return;
+      table.querySelectorAll('tbody tr').forEach(function (row) {
+        Array.prototype.forEach.call(row.children, function (td, i) {
+          // Skip merged/empty-state cells (colspan) — they shouldn't become card rows
+          if (td.hasAttribute('colspan')) return;
+          var label = headers[i];
+          if (label && !td.hasAttribute('data-label')) {
+            td.setAttribute('data-label', label);
+          }
+        });
+      });
+    }
     document.addEventListener('DOMContentLoaded', function () {
-      document.querySelectorAll('.table-responsive table').forEach(function (table) {
-        var headers = Array.prototype.map.call(
-          table.querySelectorAll('thead th'),
-          function (th) { return th.textContent.trim(); }
-        );
-        if (!headers.length) return;
-        table.querySelectorAll('tbody tr').forEach(function (row) {
-          Array.prototype.forEach.call(row.children, function (td, i) {
-            // Skip merged/empty-state cells (colspan) — they shouldn't become card rows
-            if (td.hasAttribute('colspan')) return;
-            var label = headers[i];
-            if (label && !td.hasAttribute('data-label')) {
-              td.setAttribute('data-label', label);
-            }
+      document.querySelectorAll('.table-responsive table').forEach(labelTable);
+      if (!window.MutationObserver) return;
+      var obs = new MutationObserver(function (mutations) {
+        mutations.forEach(function (m) {
+          m.addedNodes.forEach(function (node) {
+            if (node.nodeType !== 1) return;
+            if (node.matches && node.matches('.table-responsive table')) labelTable(node);
+            if (node.querySelectorAll) node.querySelectorAll('.table-responsive table').forEach(labelTable);
+            if (node.tagName === 'TR' && node.closest('.table-responsive table')) labelTable(node.closest('.table-responsive table'));
           });
         });
       });
+      obs.observe(document.body, { childList: true, subtree: true });
     });
   </script>
   {{ block "scripts" . }}{{ end }}
