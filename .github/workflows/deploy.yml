@@ -9,6 +9,10 @@ concurrency:
   group: deploy
   cancel-in-progress: true
 
+env:
+  TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+  TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+
 jobs:
   deploy:
     runs-on: [self-hosted, linux, x64]
@@ -36,3 +40,27 @@ jobs:
           systemctl is-active 9router-gateway.service
           curl -sf http://127.0.0.1:20129/healthz && echo " healthz OK"
           echo "✅ Deploy complete"
+
+      - name: Notify Telegram (success)
+        if: success()
+        run: |
+          set -euo pipefail
+          SHA_SHORT="${GITHUB_SHA:0:7}"
+          printf -v MSG '✅ <b>Deploy sukses</b> — <code>aimanager</code>\n• Branch: <code>%s</code>\n• Commit: <code>%s</code> — <code>%s</code>\n• Event: <code>%s</code>\n• Run: <a href="%s">#%s</a>\n• Service: aktif &amp; healthz OK' "$GITHUB_REF_NAME" "$SHA_SHORT" "$GITHUB_SHA" "$GITHUB_EVENT_NAME" "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" "$GITHUB_RUN_NUMBER"
+          curl -sf -X POST "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
+            --data-urlencode chat_id="${TG_CHAT_ID%%:*}" \
+            --data-urlencode message_thread_id="${TG_CHAT_ID##*:}" \
+            --data-urlencode text="${MSG}" \
+            -d parse_mode=HTML 
+
+      - name: Notify Telegram (failure)
+        if: failure()
+        run: |
+          set -euo pipefail
+          SHA_SHORT="${GITHUB_SHA:0:7}"
+          printf -v MSG '❌ <b>Deploy GAGAL</b> — <code>aimanager</code>\n• Branch: <code>%s</code>\n• Commit: <code>%s</code> — <code>%s</code>\n• Event: <code>%s</code>\n• Run: <a href="%s">#%s</a>\n• Detail: <a href="%s">lihat logs</a>' "$GITHUB_REF_NAME" "$SHA_SHORT" "$GITHUB_SHA" "$GITHUB_EVENT_NAME" "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" "$GITHUB_RUN_NUMBER" "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          curl -sf -X POST "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
+            --data-urlencode chat_id="${TG_CHAT_ID%%:*}" \
+            --data-urlencode message_thread_id="${TG_CHAT_ID##*:}" \
+            --data-urlencode text="${MSG}" \
+            -d parse_mode=HTML 
