@@ -12,6 +12,9 @@
     <button type="button" class="btn btn-sm btn-modern-ghost" id="btnGroupProviders" onclick="toggleProviderGrouping()" title="Toggle grouping by provider type">
       <i class="bi bi-collection"></i> <span id="groupLabel">Grouped</span>
     </button>
+    <button type="button" class="btn btn-sm btn-modern-ghost d-inline-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#oauthConnectModal">
+      <i class="bi bi-google"></i> Connect OAuth
+    </button>
     <button type="button" class="btn-modern-primary d-inline-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#addProviderModal">
       <i class="bi bi-plus-lg"></i> Add Connection
     </button>
@@ -155,7 +158,79 @@
   </div>
 </div>
 
+<!-- OAuth Connect Modal -->
+<div class="modal fade" id="oauthConnectModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content card-modern border-0" style="background: var(--bg-surface);">
+      <div class="modal-header border-secondary border-opacity-10">
+        <h5 class="modal-title fw-bold text-light d-flex align-items-center gap-2">
+          <i class="bi bi-google text-warning"></i> Connect via OAuth
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="oauthStep1">
+          <p class="text-dim small">Pick an account type. A Google sign-in page opens; after approving, paste the <code>code</code> from the redirect URL back here.</p>
+          <div class="d-grid gap-2">
+            <button type="button" class="btn btn-outline-light" onclick="oauthStart('antigravity')"><i class="bi bi-google me-2"></i>Antigravity (Google)</button>
+            <button type="button" class="btn btn-outline-light" onclick="oauthStart('kiro-google')"><i class="bi bi-google me-2"></i>Kiro (Google)</button>
+            <button type="button" class="btn btn-outline-light" onclick="oauthStart('kiro-github')"><i class="bi bi-github me-2"></i>Kiro (GitHub)</button>
+          </div>
+        </div>
+        <div id="oauthStep2" class="d-none">
+          <div class="alert alert-info small">Sign-in page opened in a new tab. Approve access, then copy the <code>code</code> value from the URL you land on and paste it below.</div>
+          <div class="mb-2"><label class="form-label text-dim small">Authorization code</label>
+          <input class="form-control form-control-modern font-monospace" id="oauthCode" placeholder="paste code here"></div>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-sm btn-modern-ghost" onclick="oauthBack()">Back</button>
+            <button type="button" class="btn btn-sm btn-modern-primary" onclick="oauthExchange()">Complete Connection</button>
+          </div>
+        </div>
+        <div id="oauthMsg" class="mt-2"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
+let oauthState = null;
+async function oauthStart(provider) {
+  const msg = document.getElementById('oauthMsg');
+  msg.innerHTML = '<p class="text-dim small mb-0">Requesting authorization URL…</p>';
+  try {
+    const res = await fetch('/api/oauth/' + provider + '/authorize?redirect_uri=' + encodeURIComponent('http://localhost:443/callback'));
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Authorize failed');
+    oauthState = { provider, state: data.state, codeVerifier: data.codeVerifier, redirectUri: data.redirectUri || data.redirect_uri || 'http://localhost:443/callback' };
+    window.open(data.authUrl, '_blank', 'noopener,width=520,height=640');
+    document.getElementById('oauthStep1').classList.add('d-none');
+    document.getElementById('oauthStep2').classList.remove('d-none');
+    msg.innerHTML = '';
+  } catch (e) { msg.innerHTML = '<p class="text-rose small mb-0">Error: ' + e.message + '</p>'; }
+}
+function oauthBack() {
+  oauthState = null;
+  document.getElementById('oauthStep2').classList.add('d-none');
+  document.getElementById('oauthStep1').classList.remove('d-none');
+  document.getElementById('oauthMsg').innerHTML = '';
+}
+async function oauthExchange() {
+  const msg = document.getElementById('oauthMsg');
+  const code = document.getElementById('oauthCode').value.trim();
+  if (!code || !oauthState) { msg.innerHTML = '<p class="text-warning small mb-0">Paste the authorization code first.</p>'; return; }
+  msg.innerHTML = '<p class="text-dim small mb-0">Exchanging code…</p>';
+  try {
+    const res = await fetch('/api/oauth/' + oauthState.provider + '/exchange', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ code, state: oauthState.state, codeVerifier: oauthState.codeVerifier, redirectUri: oauthState.redirectUri })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || data.message || 'Exchange failed');
+    msg.innerHTML = '<p class="text-emerald small mb-0">Connected. Reloading…</p>';
+    setTimeout(() => location.reload(), 1200);
+  } catch (e) { msg.innerHTML = '<p class="text-rose small mb-0">Error: ' + e.message + '</p>'; }
+}
+
 let providersGrouped = true;
 
 function providerTypeLabel(t) {

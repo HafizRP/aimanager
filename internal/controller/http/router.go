@@ -255,6 +255,35 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 			adminOnly.Get("/api/mcp/registry", h.APIMCPRegistry)
 			adminOnly.Post("/api/mcp/inspect", h.APIMCPInspect)
 
+			// 9router Core: OAuth connect (Antigravity, Kiro Google/GitHub)
+			adminOnly.Get("/api/oauth/{provider}/authorize", h.APIOAuthAuthorize)
+			adminOnly.Post("/api/oauth/{provider}/exchange", h.APIOAuthExchange)
+
+			// 9router Core: Media providers (TTS voice catalogs)
+			adminOnly.Get("/media", h.MediaPage)
+			adminOnly.Get("/api/media/voices", h.APIMediaVoicesGeneric)
+			adminOnly.Get("/api/media/voices/{engine}", h.APIMediaVoices)
+
+			// 9router Core: PXPipe full detail
+			adminOnly.Get("/pxpipe", h.PxpipePage)
+			adminOnly.Get("/api/pxpipe/logs", h.APIPxpipeLogs)
+			adminOnly.Get("/api/pxpipe/health", h.APIPxpipeHealth)
+
+			// 9router Core: Translator full
+			adminOnly.Get("/translator", h.TranslatorPage)
+			adminOnly.Post("/api/translator/send", h.APITranslatorSend)
+
+			// 9router Core: CLI tool settings generators
+			adminOnly.Get("/api/cli-tools/{tool}-settings", h.APICLIToolSettings)
+
+			// 9router Core: Pricing display
+			adminOnly.Get("/pricing", h.PricingPage)
+			adminOnly.Get("/api/pricing", h.APIPricing)
+
+			// 9router Core: system (version, machine keys)
+			adminOnly.Get("/api/version", h.APICoreVersion)
+			adminOnly.Get("/api/core-keys", h.APICoreKeys)
+
 			// Admin Billing Actions
 			adminOnly.Post("/api/billing/manual-credit", h.ManualCreditTokens)
 			adminOnly.Post("/settings/midtrans", h.UpdateMidtransPost)

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -620,6 +621,158 @@ func (c *CoreClient) MCPRegistry(ctx context.Context) (map[string]interface{}, e
 // MCPInspect asks 9router Core to list tools of an MCP server URL (SSRF-guarded in core).
 func (c *CoreClient) MCPInspect(ctx context.Context, url string) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodPost, "/api/cli-tools/cowork-mcp-tools", map[string]interface{}{"url": url})
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]interface{}
+	_ = json.Unmarshal(data, &res)
+	return res, nil
+}
+
+// -------------------------------------------------------------
+// Parity rest (OAuth connect, Media voices, PXPipe detail,
+// Translator send, CLI settings, Pricing, Core system)
+// -------------------------------------------------------------
+
+// OAuthAuthorize starts an OAuth flow: GET /api/oauth/{provider}/authorize.
+func (c *CoreClient) OAuthAuthorize(ctx context.Context, provider, redirectURI string) (map[string]interface{}, error) {
+	ep := fmt.Sprintf("/api/oauth/%s/authorize?redirect_uri=%s", provider, url.QueryEscape(redirectURI))
+	data, err := c.doRequest(ctx, http.MethodGet, ep, nil)
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]interface{}
+	_ = json.Unmarshal(data, &res)
+	return res, nil
+}
+
+// OAuthExchange completes an OAuth flow: POST /api/oauth/{provider}/exchange.
+func (c *CoreClient) OAuthExchange(ctx context.Context, provider string, payload map[string]interface{}) (map[string]interface{}, error) {
+	data, err := c.doRequest(ctx, http.MethodPost, fmt.Sprintf("/api/oauth/%s/exchange", provider), payload)
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]interface{}
+	_ = json.Unmarshal(data, &res)
+	return res, nil
+}
+
+// KiroSocialAuthorize starts Kiro Google/GitHub OAuth: provider=google|github.
+func (c *CoreClient) KiroSocialAuthorize(ctx context.Context, idp, redirectURI string) (map[string]interface{}, error) {
+	ep := fmt.Sprintf("/api/oauth/kiro/social-authorize?provider=%s&redirect_uri=%s", idp, url.QueryEscape(redirectURI))
+	data, err := c.doRequest(ctx, http.MethodGet, ep, nil)
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]interface{}
+	_ = json.Unmarshal(data, &res)
+	return res, nil
+}
+
+// KiroSocialExchange completes Kiro social OAuth.
+func (c *CoreClient) KiroSocialExchange(ctx context.Context, payload map[string]interface{}) (map[string]interface{}, error) {
+	data, err := c.doRequest(ctx, http.MethodPost, "/api/oauth/kiro/social-exchange", payload)
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]interface{}
+	_ = json.Unmarshal(data, &res)
+	return res, nil
+}
+
+// MediaVoices lists TTS voices for an engine (deepgram/inworld/elevenlabs/minimax)
+// or the generic catalog when engine is "".
+func (c *CoreClient) MediaVoices(ctx context.Context, engine string) (map[string]interface{}, error) {
+	ep := "/api/media-providers/tts/voices"
+	if engine != "" {
+		ep = fmt.Sprintf("/api/media-providers/tts/%s/voices", engine)
+	}
+	data, err := c.doRequest(ctx, http.MethodGet, ep, nil)
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]interface{}
+	if err := json.Unmarshal(data, &res); err != nil {
+		// Core double-encodes this payload as a JSON string; decode once more.
+		var inner string
+		if err2 := json.Unmarshal(data, &inner); err2 == nil {
+			_ = json.Unmarshal([]byte(inner), &res)
+		}
+	}
+	return res, nil
+}
+
+// PxpipeLogs proxies GET /api/pxpipe/logs from 9router Core.
+func (c *CoreClient) PxpipeLogs(ctx context.Context) (map[string]interface{}, error) {
+	data, err := c.doRequest(ctx, http.MethodGet, "/api/pxpipe/logs", nil)
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]interface{}
+	_ = json.Unmarshal(data, &res)
+	return res, nil
+}
+
+// PxpipeHealth proxies GET /api/pxpipe/health from 9router Core.
+func (c *CoreClient) PxpipeHealth(ctx context.Context) (map[string]interface{}, error) {
+	data, err := c.doRequest(ctx, http.MethodGet, "/api/pxpipe/health", nil)
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]interface{}
+	_ = json.Unmarshal(data, &res)
+	return res, nil
+}
+
+// TranslatorSend proxies POST /api/translator/send (needs provider+model+body).
+func (c *CoreClient) TranslatorSend(ctx context.Context, payload map[string]interface{}) (map[string]interface{}, error) {
+	data, err := c.doRequest(ctx, http.MethodPost, "/api/translator/send", payload)
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]interface{}
+	_ = json.Unmarshal(data, &res)
+	return res, nil
+}
+
+// CLIToolSettings proxies GET /api/cli-tools/{tool}-settings (claude, codex,
+// opencode, openclaw, grok-build, kilo, devin, droid, deepseek-tui, jcode,
+// cline, copilot, cowork, hermes).
+func (c *CoreClient) CLIToolSettings(ctx context.Context, tool string) (map[string]interface{}, error) {
+	data, err := c.doRequest(ctx, http.MethodGet, fmt.Sprintf("/api/cli-tools/%s-settings", tool), nil)
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]interface{}
+	_ = json.Unmarshal(data, &res)
+	return res, nil
+}
+
+// Pricing proxies GET /api/pricing (per-model $/1M tokens: gh + tokenrouter).
+func (c *CoreClient) Pricing(ctx context.Context) (map[string]interface{}, error) {
+	data, err := c.doRequest(ctx, http.MethodGet, "/api/pricing", nil)
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]interface{}
+	_ = json.Unmarshal(data, &res)
+	return res, nil
+}
+
+// CoreVersion proxies GET /api/version (currentVersion/latestVersion/hasUpdate).
+func (c *CoreClient) CoreVersion(ctx context.Context) (map[string]interface{}, error) {
+	data, err := c.doRequest(ctx, http.MethodGet, "/api/version", nil)
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]interface{}
+	_ = json.Unmarshal(data, &res)
+	return res, nil
+}
+
+// CoreKeys proxies GET /api/keys (machine API keys registered in core).
+func (c *CoreClient) CoreKeys(ctx context.Context) (map[string]interface{}, error) {
+	data, err := c.doRequest(ctx, http.MethodGet, "/api/keys", nil)
 	if err != nil {
 		return nil, err
 	}
