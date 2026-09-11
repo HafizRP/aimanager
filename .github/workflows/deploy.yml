@@ -47,13 +47,11 @@ jobs:
           set -euo pipefail
           SHA_SHORT="${GITHUB_SHA:0:7}"
           printf -v MSG '✅ <b>Deploy sukses</b> — <code>aimanager</code>\n• Branch: <code>%s</code>\n• Commit: <code>%s</code> — <code>%s</code>\n• Event: <code>%s</code>\n• Run: <a href="%s">#%s</a>\n• Service: aktif &amp; healthz OK' "$GITHUB_REF_NAME" "$SHA_SHORT" "$GITHUB_SHA" "$GITHUB_EVENT_NAME" "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" "$GITHUB_RUN_NUMBER"
-          echo "token_len=${#TG_BOT_TOKEN} chat=${TG_CHAT_ID%%:*}"
-          curl -s -X POST "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
+          curl -sf -X POST "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
             --data-urlencode chat_id="${TG_CHAT_ID%%:*}" \
             --data-urlencode message_thread_id="${TG_CHAT_ID##*:}" \
             --data-urlencode text="${MSG}" \
-            -d parse_mode=HTML | head -c 600
-          echo " → HTTP done (curl exit $?)"
+            -d parse_mode=HTML 
 
       - name: Notify Telegram (failure)
         if: failure()
@@ -61,10 +59,8 @@ jobs:
           set -euo pipefail
           SHA_SHORT="${GITHUB_SHA:0:7}"
           printf -v MSG '❌ <b>Deploy GAGAL</b> — <code>aimanager</code>\n• Branch: <code>%s</code>\n• Commit: <code>%s</code> — <code>%s</code>\n• Event: <code>%s</code>\n• Run: <a href="%s">#%s</a>\n• Detail: <a href="%s">lihat logs</a>' "$GITHUB_REF_NAME" "$SHA_SHORT" "$GITHUB_SHA" "$GITHUB_EVENT_NAME" "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" "$GITHUB_RUN_NUMBER" "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          echo "token_len=${#TG_BOT_TOKEN} chat=${TG_CHAT_ID%%:*}"
-          curl -s -X POST "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
+          curl -sf -X POST "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
             --data-urlencode chat_id="${TG_CHAT_ID%%:*}" \
             --data-urlencode message_thread_id="${TG_CHAT_ID##*:}" \
             --data-urlencode text="${MSG}" \
-            -d parse_mode=HTML | head -c 600
-          echo " → HTTP done (curl exit $?)"
+            -d parse_mode=HTML 
