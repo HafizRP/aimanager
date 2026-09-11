@@ -1,0 +1,38 @@
+name: Deploy
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, linux, x64]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          set -euo pipefail
+          echo "→ Building..."
+          CGO_ENABLED=0 /home/b14/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.26.8.linux-amd64/bin/go build -o 9router-gateway ./cmd/gateway
+
+      - name: Restart service
+        run: |
+          set -euo pipefail
+          echo "→ Restarting service..."
+          sudo systemctl restart 9router-gateway.service
+          sleep 2
+
+      - name: Verify
+        run: |
+          set -euo pipefail
+          echo "→ Verifying..."
+          systemctl is-active 9router-gateway.service
+          curl -sf http://127.0.0.1:20129/healthz && echo " healthz OK"
+          echo "✅ Deploy complete"

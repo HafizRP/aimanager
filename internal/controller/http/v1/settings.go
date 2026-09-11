@@ -73,7 +73,7 @@ func (h *Handler) ModelsPage(w http.ResponseWriter, r *http.Request) {
 
 	aliases, _ := h.coreClient.GetModelAliases(ctx)
 
-	h.render(w, r, "entity.html", "base.html", map[string]interface{}{
+	h.render(w, r, "models.html", "base.html", map[string]interface{}{
 		"ActivePage":  "models",
 		"Models":      modelViews,
 		"Users":       users,
