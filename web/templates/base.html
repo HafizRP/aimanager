@@ -16,7 +16,7 @@
   <!-- Bootstrap Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <!-- Custom Modern Design System -->
-  <link href="/static/css/custom.css?v=7" rel="stylesheet">
+  <link href="/static/css/custom.css?v=8" rel="stylesheet">
 </head>
 <body>
   <div class="app-wrapper">
@@ -218,6 +218,29 @@
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="/static/js/app.js?v=6"></script>
+  <script>
+    // Responsive tables: add data-label to each td from its column header.
+    // Enables stacked-card layout on narrow screens without editing every template.
+    document.addEventListener('DOMContentLoaded', function () {
+      document.querySelectorAll('.table-responsive table').forEach(function (table) {
+        var headers = Array.prototype.map.call(
+          table.querySelectorAll('thead th'),
+          function (th) { return th.textContent.trim(); }
+        );
+        if (!headers.length) return;
+        table.querySelectorAll('tbody tr').forEach(function (row) {
+          Array.prototype.forEach.call(row.children, function (td, i) {
+            // Skip merged/empty-state cells (colspan) — they shouldn't become card rows
+            if (td.hasAttribute('colspan')) return;
+            var label = headers[i];
+            if (label && !td.hasAttribute('data-label')) {
+              td.setAttribute('data-label', label);
+            }
+          });
+        });
+      });
+    });
+  </script>
   {{ block "scripts" . }}{{ end }}
 </body>
 </html>
