@@ -1,0 +1,58 @@
+{{ define "title" }}PXPipe - AI Manager{{ end }}
+
+{{ define "content" }}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+  <div>
+    <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
+      <i class="bi bi-funnel text-info"></i> PXPipe
+    </h4>
+    <p class="text-dim small mb-0">Prompt compression pipeline: readiness, usage timeline, install log.</p>
+  </div>
+  <button type="button" class="btn-modern-primary btn-sm" onclick="refreshPxpipe()">Refresh</button>
+</div>
+
+<div class="card-modern p-4 mb-4">
+  <h6 class="fw-bold text-light mb-3">Readiness Checklist</h6>
+  <div id="pxHealth" class="d-flex flex-column gap-2"><p class="text-dim small mb-0">Loading…</p></div>
+</div>
+
+<div class="card-modern p-4 mb-4">
+  <h6 class="fw-bold text-light mb-1">Usage Timeline</h6>
+  <p class="text-dim small mb-3">Compression events per window (mirrors 9router pxpipe page).</p>
+  <div class="table-responsive"><table class="table table-modern mb-0">
+    <thead><tr><th>Window</th><th class="text-end">Requests</th><th class="text-end">Saved Tokens</th><th class="text-end">Avg Saved %</th></tr></thead>
+    <tbody id="pxWindows"><tr><td colspan="4" class="text-dim small">Loading…</td></tr></tbody>
+  </table></div>
+</div>
+
+<div class="card-modern p-4">
+  <h6 class="fw-bold text-light mb-3">Install / Setup Log</h6>
+  <pre class="p-3 rounded-2 small font-monospace mb-0" style="background:rgba(0,0,0,0.35);max-height:320px;overflow:auto;white-space:pre-wrap;" id="pxLogs">Loading…</pre>
+</div>
+
+<script>
+function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+async function refreshPxpipe() {
+  try {
+    const [h, s, l] = await Promise.all([
+      fetch('/api/pxpipe/health').then(r => r.json()),
+      fetch('/api/services/pxpipe/stats').then(r => r.json()),
+      fetch('/api/pxpipe/logs').then(r => r.json()),
+    ]);
+    const checks = h.checks || [];
+    document.getElementById('pxHealth').innerHTML = checks.length ? checks.map(c =>
+      `<div class="d-flex align-items-center gap-2 small"><i class="bi ${c.ok ? 'bi-check-circle-fill text-emerald' : 'bi-x-circle-fill text-rose'}"></i><span class="text-light">${esc(c.label)}</span>${c.detail ? `<span class="text-dim font-monospace">${esc(c.detail)}</span>` : ''}</div>`).join('')
+      : '<p class="text-dim small mb-0">No checklist data.</p>';
+    const wins = (s && s.windows) || {};
+    const rows = Object.entries(wins);
+    document.getElementById('pxWindows').innerHTML = rows.length ? rows.map(([k, v]) =>
+      `<tr><td class="text-light small">${esc(k)}</td><td class="text-end text-light small font-monospace">${esc(v.requests ?? v.count ?? 0)}</td><td class="text-end text-light small font-monospace">${esc(v.savedTokens ?? v.saved ?? 0)}</td><td class="text-end text-light small font-monospace">${esc(v.avgSavedPct ?? v.avgPct ?? '—')}</td></tr>`).join('')
+      : '<tr><td colspan="4" class="text-dim small">No window data.</td></tr>';
+    document.getElementById('pxLogs').textContent = l.installLog || l.log || JSON.stringify(l, null, 2);
+  } catch (e) {
+    document.getElementById('pxHealth').innerHTML = '<p class="text-rose small mb-0">Error: ' + esc(e.message) + '</p>';
+  }
+}
+document.addEventListener('DOMContentLoaded', refreshPxpipe);
+</script>
+{{ end }}

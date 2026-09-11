@@ -221,7 +221,25 @@ export OPENCODE_MODEL="{{ .UserModel }}"</code></pre>
   </div>
 </div>
 
+<div class="card-modern p-4 mt-4">
+  <h6 class="fw-bold text-light mb-1">Tool Local Configs</h6>
+  <p class="text-dim small mb-3">Read each CLI tool's local settings/config on the core host (installed tools show their config).</p>
+  <div class="d-flex flex-wrap gap-2 mb-3" id="toolCfgBtns"></div>
+  <pre class="p-3 rounded-2 small font-monospace mb-0" style="background:rgba(0,0,0,0.35);max-height:320px;overflow:auto;white-space:pre-wrap;" id="toolCfgOut">Pick a tool above.</pre>
+</div>
+
 <script>
+const cfgTools = ['claude','codex','opencode','openclaw','grok-build','kilo','devin','droid','deepseek-tui','jcode','cline','copilot','cowork','hermes'];
+document.getElementById('toolCfgBtns').innerHTML = cfgTools.map(t =>
+  `<button type="button" class="btn btn-sm btn-outline-secondary" onclick="loadToolCfg('${t}')">${t}</button>`).join('');
+async function loadToolCfg(tool) {
+  const out = document.getElementById('toolCfgOut');
+  out.textContent = 'Loading ' + tool + '…';
+  try {
+    const res = await fetch('/api/cli-tools/' + tool + '-settings');
+    out.textContent = JSON.stringify(await res.json(), null, 2);
+  } catch (e) { out.textContent = 'Error: ' + e.message; }
+}
 function copySnippet(elementId) {
   const el = document.getElementById(elementId);
   const text = el.innerText || el.textContent;

@@ -15,6 +15,7 @@
   <div class="col-lg-5">
     {{ if .IsAdmin }}
       <div class="card-modern p-4 mb-4">
+        <div id="coreVersionBanner"></div>
         <div class="d-flex justify-content-between align-items-center mb-3">
           <h6 class="fw-bold mb-0 text-light d-flex align-items-center gap-2">
             <i class="bi bi-diagram-3 text-primary"></i> Upstream 9router Core
@@ -230,6 +231,24 @@
 
 {{ define "scripts" }}
 <script>
+  // Core version + update check + machine keys
+  (async () => {
+    const banner = document.getElementById("coreVersionBanner");
+    if (!banner) return;
+    try {
+      const v = await fetch("/api/version").then(r => r.json());
+      let html = `<div class="d-flex align-items-center gap-2 small mb-3"><i class="bi bi-cpu text-info"></i><span class="text-light font-monospace">core ${v.currentVersion || "?"}</span>`;
+      if (v.hasUpdate) html += `<span class="badge-modern badge-amber">update available: ${v.latestVersion || ""}</span>`;
+      else html += `<span class="badge-modern badge-emerald">up to date</span>`;
+      banner.innerHTML = html + `</div>`;
+    } catch (e) { banner.innerHTML = `<p class="text-rose small mb-3">Version check failed.</p>`; }
+    try {
+      const k = await fetch("/api/core-keys").then(r => r.json());
+      const keys = k.keys || [];
+      if (keys.length) banner.innerHTML += `<p class="text-dim small mb-3"><i class="bi bi-key me-1"></i>${keys.length} machine key(s) registered in core.</p>`;
+    } catch (e) { /* non-fatal */ }
+  })();
+
   // Upstream Live Checker & Test Ping
   const upstreamLiveBadge = document.getElementById("upstreamLiveBadge");
   const upstreamLiveText = document.getElementById("upstreamLiveText");

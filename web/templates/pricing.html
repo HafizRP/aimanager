@@ -1,0 +1,60 @@
+{{ define "title" }}Pricing - AI Manager{{ end }}
+
+{{ define "content" }}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+  <div>
+    <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
+      <i class="bi bi-tag text-warning"></i> Pricing
+    </h4>
+    <p class="text-dim small mb-0">Per-model rates in USD per 1M tokens, mirroring 9router pricing.</p>
+  </div>
+  <div class="btn-group" role="group" id="priceTabs">
+    <button type="button" class="btn btn-sm btn-outline-secondary active" data-src="tokenrouter">TokenRouter</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-src="gh">GitHub Models</button>
+  </div>
+</div>
+
+<div class="card-modern p-3 mb-4">
+  <input type="search" class="form-control form-control-modern" id="priceSearch" placeholder="Search models…">
+</div>
+
+<div class="card-modern p-0 overflow-hidden">
+  <div class="p-3 border-bottom border-secondary border-opacity-10 d-flex justify-content-between align-items-center">
+    <h6 class="fw-bold text-light mb-0">Rates</h6>
+    <span class="text-dim small" id="priceCount"></span>
+  </div>
+  <div class="table-responsive"><table class="table table-modern mb-0">
+    <thead><tr><th>Model</th><th class="text-end">Input</th><th class="text-end">Output</th><th class="text-end">Cached</th><th class="text-end">Reasoning</th></tr></thead>
+    <tbody id="priceBody"><tr><td colspan="5" class="text-dim small">Loading…</td></tr></tbody>
+  </table></div>
+</div>
+
+<script>
+let priceData = {};
+function money(v){ return (v === undefined || v === null || v === '') ? '—' : '$' + v; }
+async function loadPricing() {
+  try {
+    const res = await fetch('/api/pricing');
+    priceData = await res.json();
+    renderPrices('tokenrouter', '');
+    document.getElementById('priceCount').textContent = Object.keys(priceData.tokenrouter || {}).length + ' models';
+  } catch (e) { document.getElementById('priceBody').innerHTML = '<tr><td colspan="5" class="text-rose small">Error: ' + e.message + '</td></tr>'; }
+}
+function renderPrices(src, q) {
+  q = (q || '').toLowerCase();
+  const table = priceData[src] || {};
+  const rows = Object.entries(table).filter(([k]) => !q || k.toLowerCase().includes(q)).sort((a, b) => a[0].localeCompare(b[0]));
+  document.getElementById('priceBody').innerHTML = rows.length ? rows.map(([k, v]) =>
+    `<tr><td class="text-light small font-monospace">${k}</td><td class="text-end text-light small font-monospace">${money(v.input)}</td><td class="text-end text-light small font-monospace">${money(v.output)}</td><td class="text-end text-light small font-monospace">${money(v.cached)}</td><td class="text-end text-light small font-monospace">${money(v.reasoning)}</td></tr>`).join('')
+    : '<tr><td colspan="5" class="text-dim small">No models found.</td></tr>';
+  document.getElementById('priceCount').textContent = rows.length + ' models';
+}
+document.getElementById('priceSearch').addEventListener('input', e => renderPrices(document.querySelector('#priceTabs button.active').dataset.src, e.target.value));
+document.querySelectorAll('#priceTabs button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#priceTabs button').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  renderPrices(b.dataset.src, document.getElementById('priceSearch').value);
+}));
+document.addEventListener('DOMContentLoaded', loadPricing);
+</script>
+{{ end }}

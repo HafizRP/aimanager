@@ -163,6 +163,22 @@
               <i class="bi bi-boxes text-emerald"></i>
               <span>MCP Inspector</span>
             </a>
+            <a class="sidebar-link {{ if eq .ActivePage "media" }}active{{ end }}" href="/media">
+              <i class="bi bi-speaker text-pink"></i>
+              <span>Media Voices</span>
+            </a>
+            <a class="sidebar-link {{ if eq .ActivePage "pxpipe" }}active{{ end }}" href="/pxpipe">
+              <i class="bi bi-funnel text-info"></i>
+              <span>PXPipe</span>
+            </a>
+            <a class="sidebar-link {{ if eq .ActivePage "translator" }}active{{ end }}" href="/translator">
+              <i class="bi bi-translate text-emerald"></i>
+              <span>Translator</span>
+            </a>
+            <a class="sidebar-link {{ if eq .ActivePage "pricing" }}active{{ end }}" href="/pricing">
+              <i class="bi bi-tag text-warning"></i>
+              <span>Pricing</span>
+            </a>
           </div>
         {{ else }}
           <!-- Account Settings (Standard User) -->

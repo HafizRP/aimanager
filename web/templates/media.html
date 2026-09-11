@@ -1,0 +1,68 @@
+{{ define "title" }}Media Voices - AI Manager{{ end }}
+
+{{ define "content" }}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+  <div>
+    <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
+      <i class="bi bi-speaker text-pink"></i> Media Voices
+    </h4>
+    <p class="text-dim small mb-0">Browse TTS voice catalogs per engine, mirroring 9router media providers.</p>
+  </div>
+  <div class="btn-group" role="group" id="engineTabs">
+    <button type="button" class="btn btn-sm btn-outline-secondary active" data-engine="">Catalog</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-engine="deepgram">Deepgram</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-engine="inworld">Inworld</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-engine="elevenlabs">ElevenLabs</button>
+    <button type="button" class="btn btn-sm btn-outline-secondary" data-engine="minimax">MiniMax</button>
+  </div>
+</div>
+
+<div class="card-modern p-3 mb-4">
+  <input type="search" class="form-control form-control-modern" id="voiceSearch" placeholder="Search voices (name, locale, id)…">
+</div>
+
+<div class="card-modern p-0 overflow-hidden">
+  <div class="p-3 border-bottom border-secondary border-opacity-10 d-flex justify-content-between align-items-center">
+    <h6 class="fw-bold text-light mb-0">Voices</h6>
+    <span class="text-dim small" id="voiceCount"></span>
+  </div>
+  <div class="table-responsive"><table class="table table-modern mb-0">
+    <thead><tr><th>Voice</th><th>Locale</th><th>Language</th><th>Gender</th></tr></thead>
+    <tbody id="voiceBody"><tr><td colspan="4" class="text-dim small">Loading…</td></tr></tbody>
+  </table></div>
+</div>
+
+<script>
+let allVoices = [];
+function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+async function loadVoices(engine) {
+  const body = document.getElementById('voiceBody');
+  body.innerHTML = '<tr><td colspan="4" class="text-dim small">Loading…</td></tr>';
+  try {
+    const res = await fetch(engine ? '/api/media/voices/' + encodeURIComponent(engine) : '/api/media/voices');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Load failed');
+    allVoices = data.voices || data.data || [];
+    if (!allVoices.length && data.byLang) {
+      allVoices = Object.values(data.byLang).flatMap(l => l.voices || []);
+    }
+    renderVoices('');
+    document.getElementById('voiceCount').textContent = allVoices.length + ' voices';
+  } catch (e) { body.innerHTML = '<tr><td colspan="4" class="text-rose small">Error: ' + esc(e.message) + '</td></tr>'; }
+}
+function renderVoices(q) {
+  q = (q || '').toLowerCase();
+  const rows = allVoices.filter(v => !q || [v.name, v.id, v.locale, v.lang, v.langName, v.countryName].filter(Boolean).join(' ').toLowerCase().includes(q));
+  document.getElementById('voiceBody').innerHTML = rows.length ? rows.map(v =>
+    `<tr><td class="text-light small fw-bold font-monospace">${esc(v.name || v.id)}</td><td class="text-dim small font-monospace">${esc(v.locale || '')}</td><td class="text-dim small">${esc(v.langName || v.lang || '')}</td><td class="text-dim small">${esc(v.gender || '')}</td></tr>`).join('')
+    : '<tr><td colspan="4" class="text-dim small">No voices found.</td></tr>';
+}
+document.getElementById('voiceSearch').addEventListener('input', e => renderVoices(e.target.value));
+document.querySelectorAll('#engineTabs button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#engineTabs button').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  loadVoices(b.dataset.engine);
+}));
+document.addEventListener('DOMContentLoaded', () => loadVoices(document.querySelector('#engineTabs button.active').dataset.engine));
+</script>
+{{ end }}
