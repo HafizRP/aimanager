@@ -37,7 +37,17 @@
 
   --cyan: #06b6d4;
   --indigo: #6366f1;
+  --pink: #ec4899;
 }
+
+/* Text accent utilities (used by page header icons across all pages) */
+.text-emerald { color: var(--emerald) !important; }
+.text-amber { color: var(--amber) !important; }
+.text-rose { color: var(--rose) !important; }
+.text-cyan { color: var(--cyan) !important; }
+.text-indigo { color: var(--indigo) !important; }
+.text-pink { color: var(--pink) !important; }
+.text-dim { color: var(--text-dim) !important; }
 
 /* Global Reset & Base */
 html, body {
