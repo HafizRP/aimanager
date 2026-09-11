@@ -1,0 +1,68 @@
+{{ define "title" }}MCP Inspector - AI Manager{{ end }}
+
+{{ define "content" }}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+  <div>
+    <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
+      <i class="bi bi-boxes text-emerald"></i> MCP Inspector
+    </h4>
+    <p class="text-dim small mb-0">Browse the cowork MCP server directory and inspect any server's tools.</p>
+  </div>
+</div>
+
+<div class="card-modern p-4 mb-4">
+  <h6 class="fw-bold text-light mb-1">Inspect Server URL</h6>
+  <p class="text-dim small mb-3">Runs MCP initialize + tools/list through 9router (SSRF-guarded, internal hosts blocked).</p>
+  <div class="d-flex flex-column flex-md-row gap-2">
+    <input type="url" class="form-control form-control-modern font-monospace" id="mcpUrl" placeholder="https://example.com/mcp">
+    <button type="button" class="btn-modern-primary" onclick="mcpInspect()">Inspect</button>
+  </div>
+  <div id="mcpInspectOut" class="mt-3"></div>
+</div>
+
+<div class="card-modern p-0 overflow-hidden">
+  <div class="p-3 border-bottom border-secondary border-opacity-10"><h6 class="fw-bold text-light mb-0">Server Directory</h6></div>
+  <div class="table-responsive"><table class="table table-modern mb-0">
+    <thead><tr><th>Server</th><th>Description</th><th class="text-end">Action</th></tr></thead>
+    <tbody id="mcpRegistryBody"><tr><td colspan="3" class="text-dim small">Loading…</td></tr></tbody>
+  </table></div>
+</div>
+
+<script>
+async function loadRegistry() {
+  try {
+    const data = await (await fetch('/api/mcp/registry')).json();
+    const servers = data.servers || [];
+    document.getElementById('mcpRegistryBody').innerHTML = servers.map(s =>
+      `<tr><td><div class="fw-bold text-light small">${s.title || s.name}</div><div class="text-dim font-monospace" style="font-size:0.72rem;">${s.slug || s.name || ''}</div></td>
+      <td class="text-dim small">${(s.description || '').slice(0, 140)}</td>
+      <td class="text-end"><button type="button" class="btn btn-sm btn-modern-ghost" onclick="mcpUse('${(s.name || '').replace(/'/g, '')}')">Use URL</button></td></tr>`
+    ).join('') || '<tr><td colspan="3" class="text-dim small">Empty directory.</td></tr>';
+  } catch (e) {
+    document.getElementById('mcpRegistryBody').innerHTML = '<tr><td colspan="3" class="text-rose small">Failed to load.</td></tr>';
+  }
+}
+function mcpUse(name) {
+  document.getElementById('mcpUrl').value = name;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+async function mcpInspect() {
+  const out = document.getElementById('mcpInspectOut');
+  const url = document.getElementById('mcpUrl').value.trim();
+  if (!url) { out.innerHTML = '<p class="text-rose small mb-0">Enter a server URL.</p>'; return; }
+  out.innerHTML = '<p class="text-dim small mb-0">Inspecting…</p>';
+  try {
+    const res = await fetch('/api/mcp/inspect', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ url }) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Inspect failed');
+    if (data.requiresAuth) { out.innerHTML = '<p class="text-warning small mb-0">Server requires authentication.</p>'; return; }
+    const tools = data.tools || [];
+    out.innerHTML = tools.length
+      ? `<div class="d-flex flex-column gap-2">` + tools.map(t =>
+        `<div class="p-2 rounded-2" style="background:rgba(255,255,255,0.03);"><div class="fw-bold text-light small font-monospace">${t.name}</div><div class="text-dim small">${t.description || ''}</div></div>`).join('') + `</div>`
+      : '<p class="text-dim small mb-0">No tools exposed.</p>';
+  } catch (e) { out.innerHTML = '<p class="text-rose small mb-0">Error: ' + e.message + '</p>'; }
+}
+document.addEventListener('DOMContentLoaded', loadRegistry);
+</script>
+{{ end }}
