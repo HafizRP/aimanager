@@ -183,9 +183,35 @@ func TestAPIKeyOperations(t *testing.T) {
 	if err := repo.ToggleAPIKeyStatus(ctx, "key-1", false); err != nil {
 		t.Fatalf("ToggleAPIKeyStatus failed: %v", err)
 	}
-	toggledKey, _ := repo.GetAPIKeyByKey(ctx, "sk-gw-test-key-12345")
+	toggledKey, errTog := repo.GetAPIKeyByKey(ctx, "sk-gw-test-key-12345")
+	if errTog != nil {
+		t.Fatalf("GetAPIKeyByKey after toggle failed: %v", errTog)
+	}
 	if toggledKey.IsActive {
 		t.Errorf("expected key to be inactive")
+	}
+
+	// 5b. Token budget accumulation
+	if err := repo.UpdateKeyTokenUsage(ctx, "key-1", 250); err != nil {
+		t.Fatalf("UpdateKeyTokenUsage failed: %v", err)
+	}
+	if err := repo.UpdateKeyTokenUsage(ctx, "key-1", 750); err != nil {
+		t.Fatalf("UpdateKeyTokenUsage failed: %v", err)
+	}
+	used, err := repo.GetAPIKeyTokenUsage(ctx, "key-1")
+	if err != nil {
+		t.Fatalf("GetAPIKeyTokenUsage failed: %v", err)
+	}
+	if used != 1000 {
+		t.Errorf("expected token usage 1000, got %d", used)
+	}
+	// Budget check inside the loaded key
+	loaded, err := repo.GetAPIKeyByKey(ctx, "sk-gw-test-key-12345")
+	if err != nil {
+		t.Fatalf("GetAPIKeyByKey failed: %v", err)
+	}
+	if loaded.TokenUsage != 1000 {
+		t.Errorf("expected loaded TokenUsage 1000, got %d", loaded.TokenUsage)
 	}
 
 	// 6. Delete Key

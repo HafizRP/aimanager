@@ -443,12 +443,13 @@ func NewKeyService(store Store, sync KeySyncer) *KeyService {
 
 // CreateKeyInput is the parsed payload for creating an API key.
 type CreateKeyInput struct {
-	UserID        string
-	Name          string
-	CustomKey     string
-	AllowedModels string
-	RateLimitRPM  int
-	ExpiresAt     *time.Time
+	UserID         string
+	Name           string
+	CustomKey      string
+	AllowedModels  string
+	RateLimitRPM   int
+	MaxTokensLimit int
+	ExpiresAt      *time.Time
 }
 
 // CreateKey creates an API key and syncs it to 9router Core.
@@ -478,17 +479,23 @@ func (s *KeyService) CreateKey(ctx context.Context, in CreateKeyInput) (*entity.
 		rateLimitRPM = 0
 	}
 
+	maxTokensLimit := in.MaxTokensLimit
+	if maxTokensLimit < 0 {
+		maxTokensLimit = 0
+	}
+
 	allowedModels := normalizeAllowedModels(in.AllowedModels)
 
 	key := &entity.APIKey{
-		ID:            uuid.New().String(),
-		UserID:        in.UserID,
-		Key:           finalKey,
-		Name:          name,
-		AllowedModels: allowedModels,
-		RateLimitRPM:  rateLimitRPM,
-		IsActive:      true,
-		ExpiresAt:     in.ExpiresAt,
+		ID:             uuid.New().String(),
+		UserID:         in.UserID,
+		Key:            finalKey,
+		Name:           name,
+		AllowedModels:  allowedModels,
+		RateLimitRPM:   rateLimitRPM,
+		MaxTokensLimit: maxTokensLimit,
+		IsActive:       true,
+		ExpiresAt:      in.ExpiresAt,
 	}
 
 	if err := s.store.CreateAPIKey(ctx, key); err != nil {

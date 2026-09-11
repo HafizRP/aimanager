@@ -135,6 +135,8 @@ func (f *fakeStore) DeleteAPIKey(ctx context.Context, id string) error {
 	return nil
 }
 func (f *fakeStore) UpdateKeyLastUsed(ctx context.Context, id string) error { return nil }
+func (f *fakeStore) UpdateKeyTokenUsage(ctx context.Context, id string, tokens int) error { return nil }
+func (f *fakeStore) GetAPIKeyTokenUsage(ctx context.Context, id string) (int64, error) { return 0, nil }
 
 // RequestLogStore
 func (f *fakeStore) CreateRequestLog(ctx context.Context, l *entity.RequestLog) error { return nil }

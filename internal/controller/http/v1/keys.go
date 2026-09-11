@@ -131,14 +131,16 @@ func (h *Handler) CreateKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rateLimitRPM, _ := strconv.Atoi(r.FormValue("rate_limit_rpm"))
+	maxTokensLimit, _ := strconv.Atoi(r.FormValue("max_tokens_limit"))
 
 	key, err := h.keys.CreateKey(ctx, usecase.CreateKeyInput{
-		UserID:        userID,
-		Name:          strings.TrimSpace(r.FormValue("name")),
-		CustomKey:     strings.TrimSpace(r.FormValue("custom_key")),
-		AllowedModels: strings.TrimSpace(r.FormValue("allowed_models")),
-		RateLimitRPM:  rateLimitRPM,
-		ExpiresAt:     expiresAt,
+		UserID:         userID,
+		Name:           strings.TrimSpace(r.FormValue("name")),
+		CustomKey:      strings.TrimSpace(r.FormValue("custom_key")),
+		AllowedModels:  strings.TrimSpace(r.FormValue("allowed_models")),
+		RateLimitRPM:   rateLimitRPM,
+		MaxTokensLimit: maxTokensLimit,
+		ExpiresAt:      expiresAt,
 	})
 	if err != nil {
 		http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)

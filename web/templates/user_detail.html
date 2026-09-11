@@ -298,6 +298,7 @@
           <th>Key Label</th>
           <th>Secret Token</th>
           <th>Status</th>
+          <th>Budget</th>
           <th>Expires</th>
           <th>Created</th>
           <th>Last Used</th>
@@ -327,6 +328,17 @@
                   <span class="badge-modern badge-emerald"><i class="bi bi-check-circle"></i> Active</span>
                 {{ else }}
                   <span class="badge-modern badge-rose"><i class="bi bi-slash-circle"></i> Revoked</span>
+                {{ end }}
+              </td>
+              <td>
+                {{ if gt .MaxTokensLimit 0 }}
+                  {{ if ge .TokenUsage (toInt64 .MaxTokensLimit) }}
+                    <span class="badge-modern badge-rose font-monospace" style="font-size: 0.68rem;">Exhausted</span>
+                  {{ else }}
+                    <span class="badge-modern badge-indigo font-monospace" style="font-size: 0.68rem;">{{ .TokenUsage }}/{{ .MaxTokensLimit }}</span>
+                  {{ end }}
+                {{ else }}
+                  <span class="text-dim font-monospace small" style="font-size: 0.72rem;">&infin;</span>
                 {{ end }}
               </td>
               <td class="text-dim small font-monospace">
@@ -372,7 +384,7 @@
           {{ end }}
         {{ else }}
           <tr>
-            <td colspan="7" class="text-center text-dim py-4">
+            <td colspan="8" class="text-center text-dim py-4">
               <i class="bi bi-key fs-2 d-block mb-2 opacity-50"></i>
               No API keys assigned to this user yet.
             </td>

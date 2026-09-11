@@ -153,6 +153,8 @@ func migrate(db *sql.DB) error {
 	_, _ = db.Exec(`ALTER TABLE api_keys ADD COLUMN allowed_models TEXT DEFAULT '';`)
 	_, _ = db.Exec(`ALTER TABLE api_keys ADD COLUMN rate_limit_rpm INTEGER DEFAULT 0;`)
 	_, _ = db.Exec(`ALTER TABLE api_keys ADD COLUMN expires_at DATETIME;`)
+	_, _ = db.Exec(`ALTER TABLE api_keys ADD COLUMN max_tokens_limit INTEGER DEFAULT 0;`)
+	_, _ = db.Exec(`ALTER TABLE api_keys ADD COLUMN tokens_used INTEGER DEFAULT 0;`)
 	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_api_keys_expires_at ON api_keys(expires_at);`)
 	_, _ = db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username);`)
 
