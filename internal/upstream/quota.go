@@ -190,6 +190,14 @@ type QuotaManager struct {
 	cache      *UpstreamQuotaReport
 	cacheTime  time.Time
 	cacheTTL   time.Duration
+	// staleTTL bounds how long a stale report may be served while a
+	// background refresh runs (stale-while-revalidate for page renders).
+	staleTTL time.Duration
+	// refreshing guards a single in-flight background refresh.
+	refreshing bool
+	// fetchMu serializes concurrent upstream fetches without blocking
+	// cache readers (mu is only held for quick cache read/writes).
+	fetchMu sync.Mutex
 }
 
 // NewQuotaManager creates a QuotaManager with a short-lived result cache.
@@ -199,7 +207,8 @@ func NewQuotaManager(cfg *config.Config) *QuotaManager {
 		httpClient: &http.Client{
 			Timeout: 6 * time.Second,
 		},
-		cacheTTL: 25 * time.Second,
+		cacheTTL:  25 * time.Second,
+		staleTTL: 5 * time.Minute,
 	}
 }
 
@@ -256,6 +265,37 @@ func (m *QuotaManager) formatWIB(t time.Time) (string, string) {
 	return resetWIB, resetIn
 }
 
+// refreshAsync triggers a single in-flight background refresh with a
+// detached context, so late page renders stay instant while data refreshes.
+func (m *QuotaManager) refreshAsync(ctx context.Context) {
+	m.mu.Lock()
+	if m.refreshing {
+		m.mu.Unlock()
+		return
+	}
+	m.refreshing = true
+	m.mu.Unlock()
+
+	go func() {
+		defer func() {
+			m.mu.Lock()
+			m.refreshing = false
+			m.mu.Unlock()
+		}()
+		bgCtx := ctx
+		if deadline, ok := ctx.Deadline(); ok {
+			var cancel context.CancelFunc
+			bgCtx, cancel = context.WithDeadline(context.WithoutCancel(ctx), deadline.Add(30*time.Second))
+			defer cancel()
+		} else {
+			bgCtx = context.WithoutCancel(ctx)
+		}
+		if _, err := m.FetchAllQuotas(bgCtx, true); err != nil {
+			log.Warn().Err(err).Msg("Background quota refresh failed; keeping stale report")
+		}
+	}()
+}
+
 // FetchAllQuotas fetches live quota data from 9router Core, using the cache unless force is true.
 func (m *QuotaManager) FetchAllQuotas(ctx context.Context, force bool) (*UpstreamQuotaReport, error) {
 	m.mu.RLock()
@@ -264,15 +304,29 @@ func (m *QuotaManager) FetchAllQuotas(ctx context.Context, force bool) (*Upstrea
 		m.mu.RUnlock()
 		return cached, nil
 	}
+	// Stale-while-revalidate: serve the last report instantly while a
+	// background refresh updates it, so page renders never block on upstream.
+	if !force && m.cache != nil && time.Since(m.cacheTime) < m.staleTTL {
+		stale := m.cache
+		m.mu.RUnlock()
+		m.refreshAsync(ctx)
+		return stale, nil
+	}
 	m.mu.RUnlock()
 
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	// Serialize fetchers without holding the cache write lock during the
+	// slow upstream calls, so readers (page renders) never block behind us.
+	m.fetchMu.Lock()
+	defer m.fetchMu.Unlock()
 
 	// Double check cache
+	m.mu.RLock()
 	if !force && m.cache != nil && time.Since(m.cacheTime) < m.cacheTTL {
-		return m.cache, nil
+		cached := m.cache
+		m.mu.RUnlock()
+		return cached, nil
 	}
+	m.mu.RUnlock()
 
 	// 1. Open 9router SQLite to query active provider connections
 	dsn := fmt.Sprintf("%s?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)", m.cfg.GetNineRouterDBPath())
@@ -489,8 +543,11 @@ func (m *QuotaManager) FetchAllQuotas(ctx context.Context, force bool) (*Upstrea
 		ModelSummaries: make(map[string]ModelQuotaSummary),
 	}
 
+	m.mu.Lock()
 	m.cache = report
 	m.cacheTime = time.Now()
+	m.refreshing = false
+	m.mu.Unlock()
 
 	log.Info().Int("accounts_count", len(accounts)).Msg("Fetched upstream model quotas successfully")
 	return report, nil
