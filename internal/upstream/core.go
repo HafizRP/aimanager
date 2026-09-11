@@ -468,3 +468,162 @@ func (c *CoreClient) ConsoleLogs(ctx context.Context) (map[string]interface{}, e
 	_ = json.Unmarshal(data, &res)
 	return res, nil
 }
+
+// -------------------------------------------------------------
+// Control plane (Provider Nodes, MITM Bridge, MCP Inspector)
+// -------------------------------------------------------------
+
+// ProviderNode is a self-hosted OpenAI-compatible endpoint in 9router Core.
+type ProviderNode struct {
+	ID        string `json:"id"`
+	Type      string `json:"type"`
+	Name      string `json:"name"`
+	Prefix    string `json:"prefix"`
+	APIType   string `json:"apiType"`
+	BaseURL   string `json:"baseUrl"`
+	CreatedAt string `json:"createdAt"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
+// GetProviderNodes lists self-hosted provider nodes.
+func (c *CoreClient) GetProviderNodes(ctx context.Context) ([]ProviderNode, error) {
+	data, err := c.doRequest(ctx, http.MethodGet, "/api/provider-nodes", nil)
+	if err != nil {
+		return nil, err
+	}
+	var res struct {
+		Nodes []ProviderNode `json:"nodes"`
+	}
+	if err := json.Unmarshal(data, &res); err != nil {
+		return nil, err
+	}
+	return res.Nodes, nil
+}
+
+// CreateProviderNode creates a self-hosted provider node.
+func (c *CoreClient) CreateProviderNode(ctx context.Context, payload map[string]interface{}) (map[string]interface{}, error) {
+	data, err := c.doRequest(ctx, http.MethodPost, "/api/provider-nodes", payload)
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]interface{}
+	_ = json.Unmarshal(data, &res)
+	return res, nil
+}
+
+// UpdateProviderNode replaces a provider node (core requires full fields).
+func (c *CoreClient) UpdateProviderNode(ctx context.Context, id string, payload map[string]interface{}) (map[string]interface{}, error) {
+	data, err := c.doRequest(ctx, http.MethodPut, fmt.Sprintf("/api/provider-nodes/%s", id), payload)
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]interface{}
+	_ = json.Unmarshal(data, &res)
+	return res, nil
+}
+
+// DeleteProviderNode removes a provider node.
+func (c *CoreClient) DeleteProviderNode(ctx context.Context, id string) error {
+	_, err := c.doRequest(ctx, http.MethodDelete, fmt.Sprintf("/api/provider-nodes/%s", id), nil)
+	return err
+}
+
+// ValidateProviderNode dry-runs a node definition (requires name/prefix/baseUrl/apiKey).
+func (c *CoreClient) ValidateProviderNode(ctx context.Context, payload map[string]interface{}) (map[string]interface{}, error) {
+	data, err := c.doRequest(ctx, http.MethodPost, "/api/provider-nodes/validate", payload)
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]interface{}
+	_ = json.Unmarshal(data, &res)
+	return res, nil
+}
+
+// MitmStatus proxies GET /api/cli-tools/antigravity-mitm from 9router Core.
+func (c *CoreClient) MitmStatus(ctx context.Context) (map[string]interface{}, error) {
+	data, err := c.doRequest(ctx, http.MethodGet, "/api/cli-tools/antigravity-mitm", nil)
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]interface{}
+	_ = json.Unmarshal(data, &res)
+	return res, nil
+}
+
+// MitmStart starts the MITM bridge server (core runs as root: no sudo needed).
+func (c *CoreClient) MitmStart(ctx context.Context, apiKey string) (map[string]interface{}, error) {
+	data, err := c.doRequest(ctx, http.MethodPost, "/api/cli-tools/antigravity-mitm", map[string]interface{}{"apiKey": apiKey})
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]interface{}
+	_ = json.Unmarshal(data, &res)
+	return res, nil
+}
+
+// MitmStop stops the MITM bridge server.
+func (c *CoreClient) MitmStop(ctx context.Context) (map[string]interface{}, error) {
+	data, err := c.doRequest(ctx, http.MethodDelete, "/api/cli-tools/antigravity-mitm", map[string]interface{}{})
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]interface{}
+	_ = json.Unmarshal(data, &res)
+	return res, nil
+}
+
+// MitmDNS toggles per-tool DNS interception (tool: antigravity/kiro/copilot/cursor,
+// action: enable/disable). trust-cert is deliberately NOT proxied (host trust store).
+func (c *CoreClient) MitmDNS(ctx context.Context, tool, action string) (map[string]interface{}, error) {
+	data, err := c.doRequest(ctx, http.MethodPatch, "/api/cli-tools/antigravity-mitm", map[string]interface{}{"tool": tool, "action": action})
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]interface{}
+	_ = json.Unmarshal(data, &res)
+	return res, nil
+}
+
+// MitmAliasGet returns model alias mappings for a tool.
+func (c *CoreClient) MitmAliasGet(ctx context.Context, tool string) (map[string]interface{}, error) {
+	data, err := c.doRequest(ctx, http.MethodGet, fmt.Sprintf("/api/cli-tools/antigravity-mitm/alias?tool=%s", tool), nil)
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]interface{}
+	_ = json.Unmarshal(data, &res)
+	return res, nil
+}
+
+// MitmAliasPut saves model alias mappings for a tool.
+func (c *CoreClient) MitmAliasPut(ctx context.Context, tool string, mappings map[string]interface{}) (map[string]interface{}, error) {
+	data, err := c.doRequest(ctx, http.MethodPut, "/api/cli-tools/antigravity-mitm/alias", map[string]interface{}{"tool": tool, "mappings": mappings})
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]interface{}
+	_ = json.Unmarshal(data, &res)
+	return res, nil
+}
+
+// MCPRegistry proxies the cowork MCP server directory from 9router Core.
+func (c *CoreClient) MCPRegistry(ctx context.Context) (map[string]interface{}, error) {
+	data, err := c.doRequest(ctx, http.MethodGet, "/api/cli-tools/cowork-mcp-registry", nil)
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]interface{}
+	_ = json.Unmarshal(data, &res)
+	return res, nil
+}
+
+// MCPInspect asks 9router Core to list tools of an MCP server URL (SSRF-guarded in core).
+func (c *CoreClient) MCPInspect(ctx context.Context, url string) (map[string]interface{}, error) {
+	data, err := c.doRequest(ctx, http.MethodPost, "/api/cli-tools/cowork-mcp-tools", map[string]interface{}{"url": url})
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]interface{}
+	_ = json.Unmarshal(data, &res)
+	return res, nil
+}

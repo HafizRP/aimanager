@@ -218,7 +218,7 @@ func NewHandler(cfg *config.Config, repo repository.Repository, sync *syncer.Syn
 		"settings.html", "billing.html", "providers.html", "combos.html", "token_saver.html",
 		"models.html", "chat.html", "cli_tools.html", "proxy_pools.html", "benchmark.html",
 		"cache_analytics.html", "skills.html", "endpoint.html", "profile.html", "quota.html",
-		"console_log.html", "usage.html",
+		"console_log.html", "usage.html", "nodes.html", "mitm.html", "mcp.html",
 	}
 	for _, page := range pages {
 		tmpl, err := template.New("").Funcs(funcMap).ParseFS(web.FS, "templates/base.html", "templates/"+page)

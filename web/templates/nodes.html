@@ -1,0 +1,148 @@
+{{ define "title" }}Provider Nodes - AI Manager{{ end }}
+
+{{ define "content" }}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+  <div>
+    <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
+      <i class="bi bi-server text-cyan"></i> Provider Nodes
+    </h4>
+    <p class="text-dim small mb-0">Self-hosted OpenAI-compatible endpoints (prefix-routed models).</p>
+  </div>
+  <div class="d-flex align-items-center gap-2">
+    <button type="button" class="btn-modern-primary d-inline-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#addNodeModal">
+      <i class="bi bi-plus-lg"></i> Add Node
+    </button>
+  </div>
+</div>
+
+<div class="card-modern mb-4">
+  <div class="table-responsive">
+    <table class="table table-modern mb-0" id="nodesTable">
+      <thead>
+        <tr><th>Name</th><th>Prefix</th><th>Type</th><th>API Type</th><th>Base URL</th><th class="text-end">Actions</th></tr>
+      </thead>
+      <tbody>
+        {{ if .Nodes }}
+          {{ range .Nodes }}
+            <tr id="node-row-{{ .ID }}">
+              <td class="fw-bold text-light small">{{ .Name }}</td>
+              <td><span class="badge-modern badge-indigo font-monospace">{{ .Prefix }}</span></td>
+              <td class="text-dim small font-monospace">{{ .Type }}</td>
+              <td class="text-dim small font-monospace">{{ .APIType }}</td>
+              <td class="text-dim small font-monospace">{{ .BaseURL }}</td>
+              <td class="text-end">
+                <button type="button" class="btn btn-sm btn-modern-ghost" onclick="editNode('{{ .ID }}')" title="Edit Node"><i class="bi bi-pencil"></i></button>
+                <button type="button" class="btn btn-sm btn-modern-ghost text-danger" onclick="deleteNode('{{ .ID }}', '{{ .Name }}')" title="Delete Node"><i class="bi bi-trash"></i></button>
+              </td>
+            </tr>
+          {{ end }}
+        {{ else }}
+          <tr><td colspan="6" class="text-center text-dim py-5">
+            <i class="bi bi-server fs-2 d-block mb-2 opacity-50"></i>
+            No provider nodes configured.
+          </td></tr>
+        {{ end }}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="modal fade" id="addNodeModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content card-modern border-0" style="background: var(--bg-surface);">
+      <div class="modal-header border-secondary border-opacity-10">
+        <h5 class="modal-title fw-bold text-light">Add Provider Node</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form onsubmit="submitNode(event)">
+        <input type="hidden" id="nodeId" value="">
+        <div class="modal-body d-flex flex-column gap-3">
+          <div>
+            <label class="form-label small text-muted mb-1">Name</label>
+            <input type="text" class="form-control form-control-modern" id="nodeName" placeholder="e.g. Local VLLM" required>
+          </div>
+          <div class="row g-2">
+            <div class="col-6">
+              <label class="form-label small text-muted mb-1">Prefix</label>
+              <input type="text" class="form-control form-control-modern font-monospace" id="nodePrefix" placeholder="local-" required>
+            </div>
+            <div class="col-6">
+              <label class="form-label small text-muted mb-1">API Type</label>
+              <select class="form-select form-select-modern" id="nodeApiType">
+                <option value="chat">chat</option>
+                <option value="responses">responses</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label class="form-label small text-muted mb-1">Base URL</label>
+            <input type="url" class="form-control form-control-modern font-monospace" id="nodeBaseUrl" placeholder="https://api.openai.com/v1" required>
+          </div>
+          <div>
+            <label class="form-label small text-muted mb-1">API Key</label>
+            <input type="password" class="form-control form-control-modern font-monospace" id="nodeApiKey" placeholder="sk-... (required for validate)">
+          </div>
+          <div id="nodeValidateOut" class="text-dim small"></div>
+        </div>
+        <div class="modal-footer border-secondary border-opacity-10">
+          <button type="button" class="btn btn-sm btn-modern-ghost" onclick="validateNode()">Validate</button>
+          <button type="button" class="btn-modern-ghost" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn-modern-primary" id="btnSaveNode">Save Node</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function nodePayload() {
+  return {
+    name: document.getElementById('nodeName').value.trim(),
+    prefix: document.getElementById('nodePrefix').value.trim(),
+    apiType: document.getElementById('nodeApiType').value,
+    baseUrl: document.getElementById('nodeBaseUrl').value.trim(),
+    apiKey: document.getElementById('nodeApiKey').value
+  };
+}
+async function validateNode() {
+  const out = document.getElementById('nodeValidateOut');
+  out.textContent = 'validating…';
+  try {
+    const res = await fetch('/api/nodes/validate', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(nodePayload()) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Invalid');
+    out.innerHTML = '<span class="text-emerald">Valid ✓</span>';
+  } catch (e) { out.innerHTML = '<span class="text-rose">Invalid: ' + e.message + '</span>'; }
+}
+async function submitNode(e) {
+  e.preventDefault();
+  const id = document.getElementById('nodeId').value;
+  const method = id ? 'PUT' : 'POST';
+  const url = id ? `/api/nodes/${encodeURIComponent(id)}` : '/api/nodes';
+  try {
+    const res = await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(nodePayload()) });
+    if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.error || 'Save failed'); }
+    window.location.reload();
+  } catch (err) { alert('Error: ' + err.message); }
+}
+function editNode(id) {
+  const row = document.getElementById('node-row-' + CSS.escape(id));
+  if (!row) return;
+  const cells = row.querySelectorAll('td');
+  document.getElementById('nodeId').value = id;
+  document.getElementById('nodeName').value = cells[0].innerText.trim();
+  document.getElementById('nodePrefix').value = row.querySelector('.badge-modern').innerText.trim();
+  document.getElementById('nodeBaseUrl').value = cells[4].innerText.trim();
+  document.getElementById('nodeApiKey').value = '';
+  new bootstrap.Modal(document.getElementById('addNodeModal')).show();
+}
+async function deleteNode(id, name) {
+  if (!confirm(`Delete node "${name}"?`)) return;
+  try {
+    const res = await fetch(`/api/nodes/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('Delete failed');
+    document.getElementById('node-row-' + CSS.escape(id)).remove();
+  } catch (err) { alert('Error: ' + err.message); }
+}
+</script>
+{{ end }}

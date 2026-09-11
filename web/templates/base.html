@@ -151,6 +151,18 @@
               <i class="bi bi-terminal-split text-info"></i>
               <span>Console Log</span>
             </a>
+            <a class="sidebar-link {{ if eq .ActivePage "nodes" }}active{{ end }}" href="/nodes">
+              <i class="bi bi-server text-cyan"></i>
+              <span>Provider Nodes</span>
+            </a>
+            <a class="sidebar-link {{ if eq .ActivePage "mitm" }}active{{ end }}" href="/mitm">
+              <i class="bi bi-shuffle text-warning"></i>
+              <span>MITM Bridge</span>
+            </a>
+            <a class="sidebar-link {{ if eq .ActivePage "mcp" }}active{{ end }}" href="/mcp">
+              <i class="bi bi-boxes text-emerald"></i>
+              <span>MCP Inspector</span>
+            </a>
           </div>
         {{ else }}
           <!-- Account Settings (Standard User) -->

@@ -236,6 +236,25 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 			adminOnly.Get("/console-log", h.ConsoleLogPage)
 			adminOnly.Get("/api/console-logs", h.APIConsoleLogs)
 
+			// 9router Core: Provider Nodes (self-hosted endpoints)
+			adminOnly.Get("/nodes", h.NodesPage)
+			adminOnly.Post("/api/nodes", h.APINodesCreate)
+			adminOnly.Put("/api/nodes/{id}", h.APINodesUpdate)
+			adminOnly.Delete("/api/nodes/{id}", h.APINodesDelete)
+			adminOnly.Post("/api/nodes/validate", h.APINodesValidate)
+
+			// 9router Core: MITM Bridge control
+			adminOnly.Get("/mitm", h.MitmPage)
+			adminOnly.Get("/api/mitm/status", h.APIMitmStatus)
+			adminOnly.Post("/api/mitm/start", h.APIMitmStart)
+			adminOnly.Post("/api/mitm/stop", h.APIMitmStop)
+			adminOnly.Post("/api/mitm/dns", h.APIMitmDNS)
+
+			// 9router Core: MCP registry + inspector
+			adminOnly.Get("/mcp", h.MCPPage)
+			adminOnly.Get("/api/mcp/registry", h.APIMCPRegistry)
+			adminOnly.Post("/api/mcp/inspect", h.APIMCPInspect)
+
 			// Admin Billing Actions
 			adminOnly.Post("/api/billing/manual-credit", h.ManualCreditTokens)
 			adminOnly.Post("/settings/midtrans", h.UpdateMidtransPost)

@@ -1,0 +1,80 @@
+{{ define "title" }}MITM Bridge - AI Manager{{ end }}
+
+{{ define "content" }}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+  <div>
+    <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
+      <i class="bi bi-shuffle text-warning"></i> MITM Bridge
+    </h4>
+    <p class="text-dim small mb-0">Intercept Antigravity / Copilot / Kiro IDE traffic into 9Router.</p>
+  </div>
+  <div class="d-flex align-items-center gap-2">
+    <span class="badge-modern badge-gray font-monospace" id="mitmRunBadge">checking…</span>
+    <button type="button" class="btn btn-sm btn-modern-ghost" onclick="mitmAction('start')">Start Server</button>
+    <button type="button" class="btn btn-sm btn-modern-ghost" onclick="mitmAction('stop')">Stop Server</button>
+  </div>
+</div>
+
+<div class="alert p-3 mb-4 d-flex gap-2" style="background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.25); border-radius: 12px;">
+  <i class="bi bi-exclamation-triangle text-warning"></i>
+  <span class="text-dim small">Bridge binds <code>:443</code> and rewrites host DNS on <strong>this server</strong>. Only IDEs pointed at this host are affected. Cert trust (<code>trust-cert</code>) is intentionally not exposed here — run it in the 9router dashboard on the machine itself.</span>
+</div>
+
+<div class="row g-3 mb-4" id="mitmCards"></div>
+
+<div class="card-modern p-4">
+  <h6 class="fw-bold text-light mb-3">Per-Tool DNS Interception</h6>
+  <div class="table-responsive"><table class="table table-modern mb-0">
+    <thead><tr><th>Tool</th><th>Status</th><th class="text-end">Action</th></tr></thead>
+    <tbody id="mitmDnsBody"><tr><td colspan="3" class="text-dim small">Loading…</td></tr></tbody>
+  </table></div>
+</div>
+
+<script>
+const MITM_TOOLS = ['antigravity', 'kiro', 'copilot', 'cursor'];
+function setMitmBadge(running, pid) {
+  const el = document.getElementById('mitmRunBadge');
+  el.textContent = running ? ('running' + (pid ? ' · pid ' + pid : '')) : 'stopped';
+  el.className = 'badge-modern font-monospace ' + (running ? 'badge-emerald' : 'badge-gray');
+}
+async function loadMitm() {
+  try {
+    const st = await (await fetch('/api/mitm/status')).json();
+    setMitmBadge(!!st.running, st.pid);
+    const dns = st.dnsStatus || {};
+    document.getElementById('mitmCards').innerHTML = [
+      ['Server', st.running ? 'running' : 'stopped', st.pid ? 'pid ' + st.pid : ''],
+      ['CA Cert', st.certExists ? 'exists' : 'missing', st.certTrusted ? 'trusted' : 'untrusted'],
+      ['Sudo/Root', st.isAdmin ? 'root' : (st.hasCachedPassword ? 'cached' : (st.needsSudoPassword ? 'password needed' : 'ok')), ''],
+    ].map(([l, v, s]) => `<div class="col-6 col-lg-4"><div class="card-modern p-3"><div class="text-dim small">${l}</div><div class="fw-bold text-light">${v}</div><div class="text-dim small font-monospace">${s}</div></div></div>`).join('');
+    document.getElementById('mitmDnsBody').innerHTML = MITM_TOOLS.map(t => {
+      const on = !!dns[t];
+      return `<tr><td class="fw-bold text-light small text-capitalize">${t}</td>
+        <td>${on ? '<span class="badge-modern badge-emerald">intercepting</span>' : '<span class="badge-modern badge-gray">off</span>'}</td>
+        <td class="text-end"><button type="button" class="btn btn-sm btn-modern-ghost" onclick="mitmDns('${t}', ${on ? "'disable'" : "'enable'"})">${on ? 'Disable' : 'Enable'}</button></td></tr>`;
+    }).join('');
+  } catch (e) {
+    setMitmBadge(false);
+    document.getElementById('mitmDnsBody').innerHTML = '<tr><td colspan="3" class="text-rose small">Failed to load status.</td></tr>';
+  }
+}
+async function mitmAction(action) {
+  if (action === 'start' && !confirm('Start MITM bridge on :443 of this server?')) return;
+  try {
+    const res = await fetch(`/api/mitm/${action}`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Action failed');
+    await loadMitm();
+  } catch (e) { alert('Error: ' + e.message); }
+}
+async function mitmDns(tool, action) {
+  try {
+    const res = await fetch('/api/mitm/dns', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ tool, action }) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'DNS toggle failed');
+    await loadMitm();
+  } catch (e) { alert('Error: ' + e.message); }
+}
+document.addEventListener('DOMContentLoaded', loadMitm);
+</script>
+{{ end }}
