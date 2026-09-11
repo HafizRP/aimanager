@@ -301,8 +301,9 @@ func (c *CoreClient) GetSettings(ctx context.Context) (map[string]interface{}, e
 }
 
 // UpdateSettings applies partial updates to 9router Core settings.
+// Core accepts PATCH (not POST) on /api/settings.
 func (c *CoreClient) UpdateSettings(ctx context.Context, updates map[string]interface{}) error {
-	_, err := c.doRequest(ctx, http.MethodPost, "/api/settings", updates)
+	_, err := c.doRequest(ctx, http.MethodPatch, "/api/settings", updates)
 	return err
 }
 
@@ -386,6 +387,54 @@ func (c *CoreClient) DeleteProxyPool(ctx context.Context, id string) error {
 // TestProxyPool asks 9router Core to test connectivity for a proxy pool.
 func (c *CoreClient) TestProxyPool(ctx context.Context, id string) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodPost, fmt.Sprintf("/api/proxy-pools/%s/test", id), nil)
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]interface{}
+	_ = json.Unmarshal(data, &res)
+	return res, nil
+}
+
+// -------------------------------------------------------------
+// Service operations (Headroom, PXPipe, Translator)
+// -------------------------------------------------------------
+
+// ServiceStatus proxies GET /api/{service}/status from 9router Core.
+func (c *CoreClient) ServiceStatus(ctx context.Context, service string) (map[string]interface{}, error) {
+	data, err := c.doRequest(ctx, http.MethodGet, fmt.Sprintf("/api/%s/status", service), nil)
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]interface{}
+	_ = json.Unmarshal(data, &res)
+	return res, nil
+}
+
+// ServiceStats proxies GET /api/{service}/stats from 9router Core.
+func (c *CoreClient) ServiceStats(ctx context.Context, service string) (map[string]interface{}, error) {
+	data, err := c.doRequest(ctx, http.MethodGet, fmt.Sprintf("/api/%s/stats", service), nil)
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]interface{}
+	_ = json.Unmarshal(data, &res)
+	return res, nil
+}
+
+// ServiceAction proxies POST /api/{service}/{action} to 9router Core.
+func (c *CoreClient) ServiceAction(ctx context.Context, service, action string, payload map[string]interface{}) (map[string]interface{}, error) {
+	data, err := c.doRequest(ctx, http.MethodPost, fmt.Sprintf("/api/%s/%s", service, action), payload)
+	if err != nil {
+		return nil, err
+	}
+	var res map[string]interface{}
+	_ = json.Unmarshal(data, &res)
+	return res, nil
+}
+
+// TranslatorTranslate proxies POST /api/translator/translate to 9router Core.
+func (c *CoreClient) TranslatorTranslate(ctx context.Context, payload map[string]interface{}) (map[string]interface{}, error) {
+	data, err := c.doRequest(ctx, http.MethodPost, "/api/translator/translate", payload)
 	if err != nil {
 		return nil, err
 	}

@@ -207,6 +207,12 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 			adminOnly.Get("/token-saver", h.TokenSaverPage)
 			adminOnly.Post("/api/token-saver/save", h.APITokenSaverSave)
 
+			// 9router Core: Managed service operations (Headroom, PXPipe, Translator)
+			adminOnly.Get("/api/services/{service}/status", h.APIServiceStatus)
+			adminOnly.Get("/api/services/{service}/stats", h.APIServiceStats)
+			adminOnly.Post("/api/services/{service}/{action}", h.APIServiceAction)
+			adminOnly.Post("/api/translator/translate", h.APITranslatorTranslate)
+
 			// 9router Core: Proxy Pools
 			adminOnly.Get("/proxy-pools", h.ProxyPoolsPage)
 			adminOnly.Post("/api/proxy-pools/create", h.APIProxyPoolsCreate)
