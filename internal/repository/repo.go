@@ -34,6 +34,8 @@ type Repository interface {
 	ToggleAPIKeyStatus(ctx context.Context, id string, isActive bool) error
 	DeleteAPIKey(ctx context.Context, id string) error
 	UpdateKeyLastUsed(ctx context.Context, id string) error
+	UpdateKeyTokenUsage(ctx context.Context, id string, tokens int) error
+	GetAPIKeyTokenUsage(ctx context.Context, id string) (int64, error)
 
 	// Logs
 	CreateRequestLog(ctx context.Context, log *entity.RequestLog) error
@@ -274,7 +276,7 @@ func (r *SQLiteRepo) DeductTokens(ctx context.Context, userID string, tokens int
 
 // GetAPIKeyByKey looks up an API key by its raw key string.
 func (r *SQLiteRepo) GetAPIKeyByKey(ctx context.Context, key string) (*entity.APIKey, error) {
-	query := `SELECT k.id, k.user_id, k.key, k.name, COALESCE(k.allowed_models, ''), COALESCE(k.rate_limit_rpm, 0), k.is_active, k.created_at, k.last_used_at, k.expires_at, u.name 
+	query := `SELECT k.id, k.user_id, k.key, k.name, COALESCE(k.allowed_models, ''), COALESCE(k.rate_limit_rpm, 0), COALESCE(k.max_tokens_limit, 0), k.is_active, k.created_at, k.last_used_at, k.expires_at, COALESCE(k.tokens_used, 0), u.name 
 	          FROM api_keys k 
 	          JOIN users u ON k.user_id = u.id 
 	          WHERE k.key = ?`
@@ -283,7 +285,7 @@ func (r *SQLiteRepo) GetAPIKeyByKey(ctx context.Context, key string) (*entity.AP
 	var lastUsed sql.NullString
 	var expiresAt sql.NullString
 	err := r.db.QueryRowContext(ctx, query, key).Scan(
-		&k.ID, &k.UserID, &k.Key, &k.Name, &k.AllowedModels, &k.RateLimitRPM, &k.IsActive, &createdAt, &lastUsed, &expiresAt, &k.UserName,
+		&k.ID, &k.UserID, &k.Key, &k.Name, &k.AllowedModels, &k.RateLimitRPM, &k.MaxTokensLimit, &k.IsActive, &createdAt, &lastUsed, &expiresAt, &k.TokenUsage, &k.UserName,
 	)
 	if err != nil {
 		return nil, err
@@ -306,7 +308,7 @@ func (r *SQLiteRepo) GetAPIKeyByKey(ctx context.Context, key string) (*entity.AP
 
 // GetAPIKeysByUserID returns all API keys belonging to a user.
 func (r *SQLiteRepo) GetAPIKeysByUserID(ctx context.Context, userID string) ([]entity.APIKey, error) {
-	query := `SELECT id, user_id, key, name, COALESCE(allowed_models, ''), COALESCE(rate_limit_rpm, 0), is_active, created_at, last_used_at, expires_at 
+	query := `SELECT id, user_id, key, name, COALESCE(allowed_models, ''), COALESCE(rate_limit_rpm, 0), COALESCE(max_tokens_limit, 0), is_active, created_at, last_used_at, expires_at, COALESCE(tokens_used, 0) 
 	          FROM api_keys WHERE user_id = ? ORDER BY created_at DESC`
 	rows, err := r.db.QueryContext(ctx, query, userID)
 	if err != nil {
@@ -320,7 +322,7 @@ func (r *SQLiteRepo) GetAPIKeysByUserID(ctx context.Context, userID string) ([]e
 		var createdAt string
 		var lastUsed sql.NullString
 		var expiresAt sql.NullString
-		if err := rows.Scan(&k.ID, &k.UserID, &k.Key, &k.Name, &k.AllowedModels, &k.RateLimitRPM, &k.IsActive, &createdAt, &lastUsed, &expiresAt); err != nil {
+		if err := rows.Scan(&k.ID, &k.UserID, &k.Key, &k.Name, &k.AllowedModels, &k.RateLimitRPM, &k.MaxTokensLimit, &k.IsActive, &createdAt, &lastUsed, &expiresAt, &k.TokenUsage); err != nil {
 			return nil, err
 		}
 		k.CreatedAt = parseTimeFlexible(createdAt)
@@ -343,7 +345,7 @@ func (r *SQLiteRepo) GetAPIKeysByUserID(ctx context.Context, userID string) ([]e
 
 // GetAllAPIKeys returns every API key across all users.
 func (r *SQLiteRepo) GetAllAPIKeys(ctx context.Context) ([]entity.APIKey, error) {
-	query := `SELECT k.id, k.user_id, k.key, k.name, COALESCE(k.allowed_models, ''), COALESCE(k.rate_limit_rpm, 0), k.is_active, k.created_at, k.last_used_at, k.expires_at, u.name 
+	query := `SELECT k.id, k.user_id, k.key, k.name, COALESCE(k.allowed_models, ''), COALESCE(k.rate_limit_rpm, 0), COALESCE(k.max_tokens_limit, 0), k.is_active, k.created_at, k.last_used_at, k.expires_at, COALESCE(k.tokens_used, 0), u.name 
 	          FROM api_keys k 
 	          JOIN users u ON k.user_id = u.id 
 	          ORDER BY k.created_at DESC`
@@ -359,7 +361,7 @@ func (r *SQLiteRepo) GetAllAPIKeys(ctx context.Context) ([]entity.APIKey, error)
 		var createdAt string
 		var lastUsed sql.NullString
 		var expiresAt sql.NullString
-		if err := rows.Scan(&k.ID, &k.UserID, &k.Key, &k.Name, &k.AllowedModels, &k.RateLimitRPM, &k.IsActive, &createdAt, &lastUsed, &expiresAt, &k.UserName); err != nil {
+		if err := rows.Scan(&k.ID, &k.UserID, &k.Key, &k.Name, &k.AllowedModels, &k.RateLimitRPM, &k.MaxTokensLimit, &k.IsActive, &createdAt, &lastUsed, &expiresAt, &k.TokenUsage, &k.UserName); err != nil {
 			return nil, err
 		}
 		k.CreatedAt = parseTimeFlexible(createdAt)
@@ -382,9 +384,9 @@ func (r *SQLiteRepo) GetAllAPIKeys(ctx context.Context) ([]entity.APIKey, error)
 
 // CreateAPIKey inserts a new API key record.
 func (r *SQLiteRepo) CreateAPIKey(ctx context.Context, k *entity.APIKey) error {
-	query := `INSERT INTO api_keys (id, user_id, key, name, allowed_models, rate_limit_rpm, is_active, expires_at, created_at) 
-	          VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
-	_, err := r.db.ExecContext(ctx, query, k.ID, k.UserID, k.Key, k.Name, k.AllowedModels, k.RateLimitRPM, k.IsActive, formatNullableTime(k.ExpiresAt))
+	query := `INSERT INTO api_keys (id, user_id, key, name, allowed_models, rate_limit_rpm, max_tokens_limit, is_active, expires_at, created_at) 
+	          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+	_, err := r.db.ExecContext(ctx, query, k.ID, k.UserID, k.Key, k.Name, k.AllowedModels, k.RateLimitRPM, k.MaxTokensLimit, k.IsActive, formatNullableTime(k.ExpiresAt))
 	return err
 }
 
@@ -418,6 +420,23 @@ func (r *SQLiteRepo) UpdateKeyLastUsed(ctx context.Context, id string) error {
 	query := `UPDATE api_keys SET last_used_at = datetime('now') WHERE id = ?`
 	_, err := r.db.ExecContext(ctx, query, id)
 	return err
+}
+
+// UpdateKeyTokenUsage adds tokens to a key's lifetime spent counter.
+func (r *SQLiteRepo) UpdateKeyTokenUsage(ctx context.Context, id string, tokens int) error {
+	if tokens <= 0 {
+		return nil
+	}
+	query := `UPDATE api_keys SET tokens_used = COALESCE(tokens_used, 0) + ? WHERE id = ?`
+	_, err := r.db.ExecContext(ctx, query, tokens, id)
+	return err
+}
+
+// GetAPIKeyTokenUsage returns the lifetime tokens spent on a key.
+func (r *SQLiteRepo) GetAPIKeyTokenUsage(ctx context.Context, id string) (int64, error) {
+	var used int64
+	err := r.db.QueryRowContext(ctx, `SELECT COALESCE(tokens_used, 0) FROM api_keys WHERE id = ?`, id).Scan(&used)
+	return used, err
 }
 
 // Request logs

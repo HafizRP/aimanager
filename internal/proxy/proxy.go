@@ -107,6 +107,13 @@ func (p *GatewayProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 2a. Per-Key Lifetime Token Budget Check
+	if key.MaxTokensLimit > 0 && key.TokenUsage >= int64(key.MaxTokensLimit) {
+		msg := fmt.Sprintf("API key token budget exhausted (%d / %d tokens used). Contact admin to increase the budget.", key.TokenUsage, key.MaxTokensLimit)
+		p.writeJSONError(w, http.StatusTooManyRequests, msg, "insufficient_quota")
+		return
+	}
+
 	// 3. Handle Special Endpoint: GET /v1/models (Model Whitelist Filtering)
 	if (r.URL.Path == "/v1/models" || r.URL.Path == "/models") && r.Method == http.MethodGet {
 		p.handleGetModels(w, r, user, key)
@@ -435,6 +442,7 @@ func (p *GatewayProxy) handleStreamingResponse(w http.ResponseWriter, r *http.Re
 	// Deduct tokens and log
 	_ = p.repo.DeductTokens(context.Background(), user.ID, totalTokens)
 	_ = p.repo.UpdateKeyLastUsed(context.Background(), key.ID)
+	_ = p.repo.UpdateKeyTokenUsage(context.Background(), key.ID, totalTokens)
 	_ = p.repo.CreateRequestLog(context.Background(), &entity.RequestLog{
 		UserID:           user.ID,
 		APIKeyID:         key.ID,
@@ -492,6 +500,7 @@ func (p *GatewayProxy) handleNonStreamingResponse(w http.ResponseWriter, r *http
 		// Deduct tokens
 		_ = p.repo.DeductTokens(context.Background(), user.ID, totalTokens)
 		_ = p.repo.UpdateKeyLastUsed(context.Background(), key.ID)
+		_ = p.repo.UpdateKeyTokenUsage(context.Background(), key.ID, totalTokens)
 
 		// Save response to Exact Match Cache
 		if cacheKey != "" && len(respBytes) > 0 {

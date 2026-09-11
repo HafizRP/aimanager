@@ -66,19 +66,21 @@ func (u *User) HasModelAccess(model string) bool {
 // It belongs to a single user and may be scoped to a subset of models
 // and expire after ExpiresAt.
 type APIKey struct {
-	ID            string     `json:"id"`
-	UserID        string     `json:"user_id"`
-	Key           string     `json:"key"`
-	Name          string     `json:"name"`
-	AllowedModels string     `json:"allowed_models"` // Optional model scope
-	RateLimitRPM  int        `json:"rate_limit_rpm"`
-	IsActive      bool       `json:"is_active"`
-	CreatedAt     time.Time  `json:"created_at"`
-	LastUsedAt    *time.Time `json:"last_used_at,omitempty"`
-	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
+	ID             string     `json:"id"`
+	UserID         string     `json:"user_id"`
+	Key            string     `json:"key"`
+	Name           string     `json:"name"`
+	AllowedModels  string     `json:"allowed_models"` // Optional model scope
+	RateLimitRPM   int        `json:"rate_limit_rpm"`
+	MaxTokensLimit int        `json:"max_tokens_limit"` // Lifetime token budget; 0 = unlimited
+	IsActive       bool       `json:"is_active"`
+	CreatedAt      time.Time  `json:"created_at"`
+	LastUsedAt     *time.Time `json:"last_used_at,omitempty"`
+	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
 
-	// Virtual field for UI
-	UserName string `json:"user_name,omitempty"`
+	// Virtual fields for UI
+	UserName   string `json:"user_name,omitempty"`
+	TokenUsage int64  `json:"token_usage,omitempty"`
 }
 
 // IsExpired reports whether the key has passed its expiry.
