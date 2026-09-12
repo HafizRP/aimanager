@@ -143,7 +143,7 @@ func (f *fakeStore) CreateRequestLog(ctx context.Context, l *entity.RequestLog) 
 func (f *fakeStore) GetRequestLogs(ctx context.Context, limit, offset int, userID, model string, status int) ([]entity.RequestLog, int, error) {
 	return []entity.RequestLog{}, 0, nil
 }
-func (f *fakeStore) GetRequestLogsCursor(ctx context.Context, limit int, cursor, dir, userID, model string, status int) ([]entity.RequestLog, *entity.CursorPageInfo, error) {
+func (f *fakeStore) GetRequestLogsCursor(ctx context.Context, limit int, cursor, dir, userID, model string, status int, startDate, endDate *time.Time) ([]entity.RequestLog, *entity.CursorPageInfo, error) {
 	return []entity.RequestLog{}, &entity.CursorPageInfo{Limit: limit}, nil
 }
 

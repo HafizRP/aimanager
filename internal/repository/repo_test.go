@@ -316,6 +316,56 @@ func TestRequestLogs(t *testing.T) {
 	}
 }
 
+func TestRequestLogsDateRangeFilter(t *testing.T) {
+	repo, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Three logs with distinct WIB-day creation times (stored as UTC).
+	newLog := func(dayOffset int) *entity.RequestLog {
+		return &entity.RequestLog{
+			UserID:      "user-dates",
+			APIKeyID:    "key-dates",
+			Path:        "/v1/chat/completions",
+			Method:      "POST",
+			Model:       "ag/gemini-3.8-flash",
+			TotalTokens: 10,
+			StatusCode:  200,
+			ClientIP:    "127.0.0.1",
+			CreatedAt:   time.Now().UTC().Add(time.Duration(dayOffset) * 24 * time.Hour),
+		}
+	}
+	for i := 0; i < 3; i++ {
+		if err := repo.CreateRequestLog(ctx, newLog(i)); err != nil {
+			t.Fatalf("CreateRequestLog failed: %v", err)
+		}
+	}
+
+	// Filter to only the middle day (WIB start-of-day bounds).
+	loc, _ := time.LoadLocation("Asia/Jakarta")
+	nowWIB := time.Now().In(loc)
+	start := time.Date(nowWIB.Year(), nowWIB.Month(), nowWIB.Day(), 0, 0, 0, 0, loc)
+	end := start.Add(24*time.Hour - time.Second)
+
+	logs, _, err := repo.GetRequestLogsCursor(ctx, 100, "", "next", "", "", 0, &start, &end)
+	if err != nil {
+		t.Fatalf("GetRequestLogsCursor failed: %v", err)
+	}
+	if len(logs) != 1 {
+		t.Fatalf("expected exactly 1 log in the middle WIB day, got %d", len(logs))
+	}
+
+	// No bounds returns all rows.
+	logsAll, _, err := repo.GetRequestLogsCursor(ctx, 100, "", "next", "", "", 0, nil, nil)
+	if err != nil {
+		t.Fatalf("GetRequestLogsCursor (no bounds) failed: %v", err)
+	}
+	if len(logsAll) != 3 {
+		t.Fatalf("expected 3 logs without bounds, got %d", len(logsAll))
+	}
+}
+
 func TestCleanExpiredSessionsAndLoginAttempts(t *testing.T) {
 	repo, cleanup := setupTestRepo(t)
 	defer cleanup()

@@ -57,6 +57,14 @@
         <option value="502" {{ if eq $.FilterStatus 502 }}selected{{ end }}>502 Bad Gateway</option>
       </select>
     </div>
+    <div class="col-md-3">
+      <label class="form-label small text-muted mb-1">From (WIB)</label>
+      <input type="date" name="start_date" class="form-control form-control-modern form-control-sm" value="{{ .FilterStart }}" id="filterStartDate">
+    </div>
+    <div class="col-md-3">
+      <label class="form-label small text-muted mb-1">To (WIB)</label>
+      <input type="date" name="end_date" class="form-control form-control-modern form-control-sm" value="{{ .FilterEnd }}" id="filterEndDate">
+    </div>
     <div class="col-md-3 d-flex gap-2">
       <button type="submit" class="btn-modern-primary btn-sm w-100 py-1"><i class="bi bi-funnel"></i> Filter</button>
       <a href="/logs" class="btn-modern-ghost btn-sm text-decoration-none py-1">Reset</a>
@@ -349,7 +357,9 @@ function exportLogs(format) {
   const user = document.getElementById('filterUser')?.value || '';
   const model = document.getElementById('filterModel')?.value || '';
   const status = document.getElementById('filterStatus')?.value || '';
-  const url = `/api/logs/export?format=${format}&user_id=${encodeURIComponent(user)}&model=${encodeURIComponent(model)}&status=${encodeURIComponent(status)}`;
+  const startDate = document.getElementById('filterStartDate')?.value || '';
+  const endDate = document.getElementById('filterEndDate')?.value || '';
+  const url = `/api/logs/export?format=${format}&user_id=${encodeURIComponent(user)}&model=${encodeURIComponent(model)}&status=${encodeURIComponent(status)}&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`;
   window.location.href = url;
 }
 </script>
