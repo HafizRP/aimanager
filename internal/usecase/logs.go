@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"9router-gateway/internal/entity"
 )
@@ -27,6 +28,8 @@ type LogQuery struct {
 	UserID       string
 	ModelFilter  string
 	StatusFilter int
+	StartDate    *time.Time // Inclusive lower bound (UTC)
+	EndDate      *time.Time // Inclusive upper bound (UTC)
 }
 
 // List returns logs and paging info for the query.
@@ -37,7 +40,7 @@ func (s *LogService) List(ctx context.Context, q LogQuery) ([]entity.RequestLog,
 	if q.Direction != "prev" && q.Direction != "next" {
 		q.Direction = "next"
 	}
-	return s.store.GetRequestLogsCursor(ctx, q.Limit, q.Cursor, q.Direction, q.UserID, q.ModelFilter, q.StatusFilter)
+	return s.store.GetRequestLogsCursor(ctx, q.Limit, q.Cursor, q.Direction, q.UserID, q.ModelFilter, q.StatusFilter, q.StartDate, q.EndDate)
 }
 
 // SettingsService handles runtime config persistence.

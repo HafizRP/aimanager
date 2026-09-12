@@ -26,6 +26,8 @@ func (h *Handler) LogsPage(w http.ResponseWriter, r *http.Request) {
 	filterModel := r.URL.Query().Get("model")
 	statusStr := r.URL.Query().Get("status")
 	filterStatus, _ := strconv.Atoi(statusStr)
+	startDate := parseDateParam(r.URL.Query().Get("start_date"), false)
+	endDate := parseDateParam(r.URL.Query().Get("end_date"), true)
 
 	logs, pageInfo, err := h.logs.List(ctx, usecase.LogQuery{
 		Limit:        25,
@@ -34,6 +36,8 @@ func (h *Handler) LogsPage(w http.ResponseWriter, r *http.Request) {
 		UserID:       filterUser,
 		ModelFilter:  filterModel,
 		StatusFilter: filterStatus,
+		StartDate:    startDate,
+		EndDate:      endDate,
 	})
 	if err != nil {
 		logs = nil
@@ -52,6 +56,8 @@ func (h *Handler) LogsPage(w http.ResponseWriter, r *http.Request) {
 		"FilterUser":   filterUser,
 		"FilterModel":  filterModel,
 		"FilterStatus": filterStatus,
+		"FilterStart":  r.URL.Query().Get("start_date"),
+		"FilterEnd":    r.URL.Query().Get("end_date"),
 		"PageInfo":     pageInfo,
 	})
 }
@@ -69,6 +75,8 @@ func (h *Handler) APILogs(w http.ResponseWriter, r *http.Request) {
 	filterModel := r.URL.Query().Get("model")
 	statusStr := r.URL.Query().Get("status")
 	filterStatus, _ := strconv.Atoi(statusStr)
+	startDate := parseDateParam(r.URL.Query().Get("start_date"), false)
+	endDate := parseDateParam(r.URL.Query().Get("end_date"), true)
 
 	logs, pageInfo, err := h.logs.List(ctx, usecase.LogQuery{
 		Limit:        25,
@@ -77,6 +85,8 @@ func (h *Handler) APILogs(w http.ResponseWriter, r *http.Request) {
 		UserID:       filterUser,
 		ModelFilter:  filterModel,
 		StatusFilter: filterStatus,
+		StartDate:    startDate,
+		EndDate:      endDate,
 	})
 	if err != nil {
 		logs = nil
@@ -142,20 +152,25 @@ func (h *Handler) ExportLogs(w http.ResponseWriter, r *http.Request) {
 	filterModel := r.URL.Query().Get("model")
 	statusStr := r.URL.Query().Get("status")
 	filterStatus, _ := strconv.Atoi(statusStr)
+	startDate := parseDateParam(r.URL.Query().Get("start_date"), false)
+	endDate := parseDateParam(r.URL.Query().Get("end_date"), true)
 
 	format := strings.ToLower(r.URL.Query().Get("format"))
 	if format != "json" {
 		format = "csv"
 	}
 
-	// Fetch up to 1000 logs for export
+	// Fetch up to 5000 logs for export (export bypasses the 100-row UI cap;
+	// date-range filtering keeps the payload manageable).
 	logs, _, err := h.logs.List(ctx, usecase.LogQuery{
-		Limit:        1000,
+		Limit:        5000,
 		Cursor:       "",
 		Direction:    "next",
 		UserID:       filterUser,
 		ModelFilter:  filterModel,
 		StatusFilter: filterStatus,
+		StartDate:    startDate,
+		EndDate:      endDate,
 	})
 	if err != nil {
 		http.Error(w, "Failed to retrieve logs", http.StatusInternalServerError)
@@ -205,4 +220,34 @@ func (h *Handler) ExportLogs(w http.ResponseWriter, r *http.Request) {
 			l.ErrorMessage,
 		})
 	}
+}
+
+// parseDateParam parses a user-supplied date (YYYY-MM-DD or full RFC3339) into
+// a UTC time pointer. Date-only input is interpreted as WIB (UTC+7)
+// start-of-day so the filter matches the WIB timestamps users see in the UI.
+// endOfDay makes a date-only input span the full WIB day. Invalid/empty input
+// yields nil (no filter).
+func parseDateParam(s string, endOfDay bool) *time.Time {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	layouts := []string{
+		"2006-01-02",
+		time.RFC3339,
+		"2006-01-02 15:04:05",
+	}
+	for _, layout := range layouts {
+		if t, err := time.Parse(layout, s); err == nil {
+			if layout == "2006-01-02" {
+				loc, _ := time.LoadLocation("Asia/Jakarta")
+				t = time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, loc)
+				if endOfDay {
+					t = t.Add(24*time.Hour - time.Second)
+				}
+			}
+			return &t
+		}
+	}
+	return nil
 }

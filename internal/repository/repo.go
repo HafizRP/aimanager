@@ -47,7 +47,7 @@ type Repository interface {
 	CreateSecurityEvent(ctx context.Context, ev *entity.SecurityEvent) error
 	ListSecurityEvents(ctx context.Context, limit int) ([]entity.SecurityEvent, error)
 	GetRequestLogs(ctx context.Context, limit, offset int, userID, modelFilter string, statusFilter int) ([]entity.RequestLog, int, error)
-	GetRequestLogsCursor(ctx context.Context, limit int, cursor, direction, userID, modelFilter string, statusFilter int) ([]entity.RequestLog, *entity.CursorPageInfo, error)
+	GetRequestLogsCursor(ctx context.Context, limit int, cursor, direction, userID, modelFilter string, statusFilter int, startDate, endDate *time.Time) ([]entity.RequestLog, *entity.CursorPageInfo, error)
 
 	// Stats
 	GetDashboardStats(ctx context.Context, timeframe string) (*entity.DashboardStats, error)
@@ -557,18 +557,23 @@ func (r *SQLiteRepo) GetKeyBaselineTokens(ctx context.Context, days int) (map[st
 // Request logs
 
 // CreateRequestLog inserts a new request log entry.
+// When log.CreatedAt is zero, the DB default (datetime('now')) is used.
 func (r *SQLiteRepo) CreateRequestLog(ctx context.Context, log *entity.RequestLog) error {
 	query := `INSERT INTO request_logs 
 	          (user_id, api_key_id, path, method, model, is_stream, prompt_tokens, completion_tokens, total_tokens, status_code, duration_ms, client_ip, error_message, created_at) 
-	          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`
+	          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))`
 	isStream := 0
 	if log.IsStream {
 		isStream = 1
 	}
+	var createdAt interface{}
+	if !log.CreatedAt.IsZero() {
+		createdAt = log.CreatedAt.UTC().Format("2006-01-02 15:04:05")
+	}
 	_, err := r.db.ExecContext(ctx, query,
 		log.UserID, log.APIKeyID, log.Path, log.Method, log.Model, isStream,
 		log.PromptTokens, log.CompletionTokens, log.TotalTokens, log.StatusCode,
-		log.DurationMs, log.ClientIP, log.ErrorMessage,
+		log.DurationMs, log.ClientIP, log.ErrorMessage, createdAt,
 	)
 	return err
 }
@@ -643,7 +648,7 @@ func (r *SQLiteRepo) GetRequestLogs(ctx context.Context, limit, offset int, user
 }
 
 // GetRequestLogsCursor returns a cursor-paginated page of request logs.
-func (r *SQLiteRepo) GetRequestLogsCursor(ctx context.Context, limit int, cursor, direction, userID, modelFilter string, statusFilter int) ([]entity.RequestLog, *entity.CursorPageInfo, error) {
+func (r *SQLiteRepo) GetRequestLogsCursor(ctx context.Context, limit int, cursor, direction, userID, modelFilter string, statusFilter int, startDate, endDate *time.Time) ([]entity.RequestLog, *entity.CursorPageInfo, error) {
 	if limit <= 0 {
 		limit = 25
 	}
@@ -665,6 +670,14 @@ func (r *SQLiteRepo) GetRequestLogsCursor(ctx context.Context, limit int, cursor
 	if statusFilter > 0 {
 		whereClauses = append(whereClauses, "l.status_code = ?")
 		args = append(args, statusFilter)
+	}
+	if startDate != nil {
+		whereClauses = append(whereClauses, "l.created_at >= ?")
+		args = append(args, startDate.UTC().Format("2006-01-02 15:04:05"))
+	}
+	if endDate != nil {
+		whereClauses = append(whereClauses, "l.created_at <= ?")
+		args = append(args, endDate.UTC().Format("2006-01-02 15:04:05"))
 	}
 
 	whereSQL := strings.Join(whereClauses, " AND ")
