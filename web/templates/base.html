@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-bs-theme="dark">
+<html lang="en" data-bs-theme="{{ if .UITheme }}{{ .UITheme }}{{ else }}dark{{ end }}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -16,7 +16,7 @@
   <!-- Bootstrap Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <!-- Custom Modern Design System -->
-  <link href="/static/css/custom.css?v=8" rel="stylesheet">
+  <link href="/static/css/custom.css?v=9" rel="stylesheet">
   <!-- PWA: installable app -->
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#0b0d14">
@@ -220,6 +220,10 @@
         <button type="button" class="btn btn-sm w-100 d-none align-items-center justify-content-center gap-2 mb-2 pwa-install-btn" style="border: 1px dashed rgba(56,189,248,0.4); color: #38bdf8; border-radius: 10px; font-size: 0.78rem;">
           <i class="bi bi-download"></i> Install App
         </button>
+        <button type="button" id="themeToggle" class="btn-modern-ghost w-100 py-2 mb-2 d-flex align-items-center justify-content-center gap-2" title="Toggle light/dark theme" style="font-size: 0.78rem;">
+          <i class="bi bi-moon-stars" id="themeToggleIcon"></i>
+          <span id="themeToggleLabel">Dark</span>
+        </button>
         <div class="d-flex align-items-center justify-content-between" style="font-size: 0.72rem;">
           <div class="status-pill-live" style="font-size:0.68rem; padding: 0.2rem 0.5rem;">
             <span class="pulse-dot"></span>
@@ -247,6 +251,9 @@
           <span class="fw-bold text-light fs-6">AI Manager</span>
         </div>
         <div class="d-flex align-items-center gap-1">
+          <button type="button" id="themeToggleMobile" class="btn-modern-ghost py-1 px-2 text-muted" title="Toggle light/dark theme">
+            <i class="bi bi-moon-stars" id="themeToggleMobileIcon"></i>
+          </button>
           <button type="button" class="btn-modern-ghost py-1 px-2 d-none pwa-install-btn" title="Install App" style="color: #38bdf8;">
             <i class="bi bi-download"></i>
           </button>
@@ -365,6 +372,45 @@
       });
       obs.observe(document.body, { childList: true, subtree: true });
     });
+  </script>
+  <script>
+    // UI Theme Toggle: persisted via POST /api/theme (server-rendered data-bs-theme is the stored value).
+    (function () {
+      function currentTheme() {
+        return document.documentElement.getAttribute('data-bs-theme') === 'light' ? 'light' : 'dark';
+      }
+      function setIcons(theme) {
+        // Icon previews the theme you will SWITCH TO: in dark mode show a sun (switch to light), in light show a moon.
+        var showMoon = theme === 'light';
+        ['themeToggleIcon', 'themeToggleMobileIcon'].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el) el.className = showMoon ? 'bi bi-moon-stars' : 'bi bi-sun';
+        });
+        var label = document.getElementById('themeToggleLabel');
+        if (label) label.textContent = showMoon ? 'Dark' : 'Light';
+      }
+      function persistTheme(theme) {
+        var csrf = document.querySelector('meta[name="csrf-token"]');
+        var csrfToken = csrf ? csrf.getAttribute('content') : '';
+        fetch('/api/theme', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': csrfToken },
+          body: 'theme=' + encodeURIComponent(theme)
+        }).catch(function () {});
+      }
+      function applyTheme(theme) {
+        document.documentElement.setAttribute('data-bs-theme', theme);
+        setIcons(theme);
+      }
+      function toggleTheme() {
+        var next = currentTheme() === 'dark' ? 'light' : 'dark';
+        applyTheme(next);
+        persistTheme(next);
+      }
+      setIcons(currentTheme());
+      document.getElementById('themeToggle').addEventListener('click', toggleTheme);
+      document.getElementById('themeToggleMobile').addEventListener('click', toggleTheme);
+    })();
   </script>
   {{ block "scripts" . }}{{ end }}
 </body>

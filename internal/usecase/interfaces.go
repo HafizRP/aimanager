@@ -60,6 +60,7 @@ type (
 	SettingsStore interface {
 		SaveSetting(ctx context.Context, key, value string) error
 		GetSetting(ctx context.Context, key string) (string, error)
+		GetSettingDefault(ctx context.Context, key, fallback string) string
 	}
 
 	SessionStore interface {

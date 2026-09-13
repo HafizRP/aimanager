@@ -66,6 +66,7 @@ type Repository interface {
 	// Settings
 	SaveSetting(ctx context.Context, key, value string) error
 	GetSetting(ctx context.Context, key string) (string, error)
+	GetSettingDefault(ctx context.Context, key, fallback string) string
 
 	// Server-Side Sessions
 	CreateSession(ctx context.Context, token, userID string, expiresAt time.Time) error
@@ -1188,6 +1189,15 @@ func (r *SQLiteRepo) GetSetting(ctx context.Context, key string) (string, error)
 	var val string
 	err := r.db.QueryRowContext(ctx, "SELECT value FROM settings WHERE key = ?", key).Scan(&val)
 	return val, err
+}
+
+// GetSettingDefault retrieves a setting value, returning fallback when the key is missing.
+func (r *SQLiteRepo) GetSettingDefault(ctx context.Context, key, fallback string) string {
+	val, err := r.GetSetting(ctx, key)
+	if err != nil || strings.TrimSpace(val) == "" {
+		return fallback
+	}
+	return val
 }
 
 // Server-Side Sessions Implementation
