@@ -122,6 +122,9 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 			w.Header().Set("Content-Type", "application/manifest+json")
 			http.ServeFileFS(w, r, staticFS, "manifest.webmanifest")
 		}))
+		r.Handle("/favicon.ico", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.ServeFileFS(w, r, staticFS, "icons/favicon.ico")
+		}))
 	}
 
 	// Reverse Proxy / Gateway routes (OpenAI & Anthropic compatible API)
