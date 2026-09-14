@@ -245,9 +245,39 @@ export OPENCODE_MODEL="{{ .UserModel }}"</code></pre>
         </button>
       </div>
 
-      <div class="p-3 rounded-3" style="background: rgba(16, 20, 32, 0.7); border: 1px solid var(--border-subtle);">
+      <div class="p-3 rounded-3 mb-3" style="background: rgba(16, 20, 32, 0.7); border: 1px solid var(--border-subtle);">
         <div class="text-dim small font-monospace mb-1">Free models (pick one for <code>OPENCODE_MODEL</code>):</div>
-        <div class="text-light small font-monospace">oc/big-pickle · oc/mimo-v2.5-free · oc/deepseek-v4-flash-free · oc/ling-3.0-flash-free · oc/nemotron-3-ultra-free · oc/north-mini-code-free</div>
+        <div class="text-light small font-monospace">oc/big-pickle · oc/mimo-v2.5-free · oc/deepseek-v4-flash-free · oc/ling-3.0-flash-free · oc/ling-3.0-flash-fin-free · oc/nemotron-3-ultra-free · oc/nemotron-3.5-lightning-free · oc/north-mini-code-free · oc/laguna-s-2.1-free · oc/muse-spark-1.2-contributor-free · oc/muse-spark-1.3-contributor-free</div>
+      </div>
+
+      <p class="text-dim small mb-2"><span class="badge-modern badge-indigo font-monospace me-1">Step 2</span> Picker <code>/models</code> di opencode hanya baca <code>models</code> map di config (tidak auto-fetch <code>/v1/models</code>). Daftarkan model di <code class="font-monospace">~/.config/opencode/opencode.json</code>:</p>
+      <div class="position-relative mb-3">
+        <pre class="code-box p-3 m-0 font-monospace text-light rounded-3" id="opencodeZenModels"><code>{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "aimanager": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "AI Manager",
+      "options": { "baseURL": "{{ .CurrentBaseURL }}" },
+      "models": {
+        "oc/big-pickle": { "name": "big-pickle" },
+        "oc/deepseek-v4-flash-free": { "name": "deepseek-v4-flash-free" },
+        "oc/laguna-s-2.1-free": { "name": "laguna-s-2.1-free" },
+        "oc/ling-3.0-flash-free": { "name": "ling-3.0-flash-free" },
+        "oc/ling-3.0-flash-fin-free": { "name": "ling-3.0-flash-fin-free" },
+        "oc/mimo-v2.5-free": { "name": "mimo-v2.5-free" },
+        "oc/muse-spark-1.2-contributor-free": { "name": "Muse Spark 1.2 Contributor Free" },
+        "oc/muse-spark-1.3-contributor-free": { "name": "Muse Spark 1.3 Contributor Free" },
+        "oc/nemotron-3-ultra-free": { "name": "nemotron-3-ultra-free" },
+        "oc/nemotron-3.5-lightning-free": { "name": "nemotron-3.5-lightning-free" },
+        "oc/north-mini-code-free": { "name": "north-mini-code-free" }
+      }
+    }
+  }
+}</code></pre>
+        <button type="button" class="btn btn-sm btn-modern-ghost position-absolute top-0 end-0 m-2" onclick="copySnippet('opencodeZenModels')">
+          <i class="bi bi-clipboard"></i> Copy
+        </button>
       </div>
     </div>
   </div>
