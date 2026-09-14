@@ -343,3 +343,79 @@ func TestTestUpstreamConnection(t *testing.T) {
 		t.Errorf("expected candidate success true, got %v", respCandidate["success"])
 	}
 }
+
+func TestThemeGetSet(t *testing.T) {
+	tempDir := t.TempDir()
+	db, err := database.InitDB(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("failed to init db: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+	cfg := &config.Config{
+		SessionSecret: "test-secret-32-character-token-key",
+	}
+
+	h, err := NewHandler(cfg, repo, nil, nil)
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+	ctx := context.WithValue(context.Background(), userContextKey, &entity.User{Role: "admin"})
+
+	// Default is dark
+	req := httptest.NewRequest(http.MethodGet, "/api/theme", nil).WithContext(ctx)
+	rr := httptest.NewRecorder()
+	h.GetTheme(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 on GetTheme, got %d", rr.Code)
+	}
+	var resp map[string]interface{}
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode theme response: %v", err)
+	}
+	if resp["theme"] != "dark" {
+		t.Errorf("expected default theme dark, got %v", resp["theme"])
+	}
+
+	// Set to light
+	form := url.Values{}
+	form.Set("theme", "light")
+	reqSet := httptest.NewRequest(http.MethodPost, "/api/theme", strings.NewReader(form.Encode())).WithContext(ctx)
+	reqSet.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rrSet := httptest.NewRecorder()
+	h.SetTheme(rrSet, reqSet)
+	if rrSet.Code != http.StatusOK {
+		t.Fatalf("expected 200 on SetTheme, got %d", rrSet.Code)
+	}
+	var respSet map[string]interface{}
+	if err := json.NewDecoder(rrSet.Body).Decode(&respSet); err != nil {
+		t.Fatalf("failed to decode set-theme response: %v", err)
+	}
+	if respSet["success"] != true || respSet["theme"] != "light" {
+		t.Errorf("expected success+light, got %v", respSet)
+	}
+
+	// Persisted value is returned
+	req2 := httptest.NewRequest(http.MethodGet, "/api/theme", nil).WithContext(ctx)
+	rr2 := httptest.NewRecorder()
+	h.GetTheme(rr2, req2)
+	var resp2 map[string]interface{}
+	if err := json.NewDecoder(rr2.Body).Decode(&resp2); err != nil {
+		t.Fatalf("failed to decode theme response: %v", err)
+	}
+	if resp2["theme"] != "light" {
+		t.Errorf("expected persisted theme light, got %v", resp2["theme"])
+	}
+
+	// Invalid theme rejected
+	formBad := url.Values{}
+	formBad.Set("theme", "neon")
+	reqBad := httptest.NewRequest(http.MethodPost, "/api/theme", strings.NewReader(formBad.Encode())).WithContext(ctx)
+	reqBad.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rrBad := httptest.NewRecorder()
+	h.SetTheme(rrBad, reqBad)
+	if rrBad.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 on invalid theme, got %d", rrBad.Code)
+	}
+}

@@ -214,6 +214,12 @@ func (f *fakeStore) GetSetting(ctx context.Context, k string) (string, error) {
 	}
 	return v, nil
 }
+func (f *fakeStore) GetSettingDefault(ctx context.Context, k, fallback string) string {
+	if v, ok := f.settings[k]; ok {
+		return v
+	}
+	return fallback
+}
 
 // SessionStore
 func (f *fakeStore) CreateSession(ctx context.Context, token, userID string, exp time.Time) error {

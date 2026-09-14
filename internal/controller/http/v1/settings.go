@@ -322,3 +322,32 @@ func (h *Handler) TestUpstreamConnection(w http.ResponseWriter, r *http.Request)
 		"target":      targetURL,
 	})
 }
+
+// GetTheme returns the persisted UI theme (dark|light) for the current user.
+func (h *Handler) GetTheme(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"theme": h.repo.GetSettingDefault(r.Context(), "ui_theme", "dark"),
+	})
+}
+
+// SetTheme persists the UI theme preference (dark|light) for the current user.
+func (h *Handler) SetTheme(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	theme := strings.TrimSpace(r.FormValue("theme"))
+	if theme != "light" && theme != "dark" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "error": "theme must be 'dark' or 'light'"})
+		return
+	}
+	if err := h.repo.SaveSetting(r.Context(), "ui_theme", theme); err != nil {
+		log.Error().Err(err).Msg("Failed to save UI theme setting")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": false, "error": "failed to save theme"})
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"success": true, "theme": theme})
+}

@@ -166,6 +166,10 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 		authRouter.Get("/settings", h.SettingsPage)
 		authRouter.Post("/settings/password", h.UpdatePasswordPost)
 
+		// UI theme preference (dark/light) — persisted per gateway, any user
+		authRouter.Get("/api/theme", h.GetTheme)
+		authRouter.Post("/api/theme", h.SetTheme)
+
 		// Workspace: Chat Playground & CLI Tools Setup Hub & Speed Benchmark
 		authRouter.Get("/chat", h.ChatPage)
 		authRouter.Get("/playground", h.ChatPage)

@@ -40,6 +40,36 @@
   --pink: #ec4899;
 }
 
+/* Light theme overrides — Bootstrap sets data-bs-theme="light" on <html> via the theme toggle */
+[data-bs-theme="light"] {
+  --bg-main: #f4f5f7;
+  --bg-surface: #ffffff;
+  --bg-surface-elevated: #fafafa;
+  --bg-surface-hover: #f0f0f2;
+
+  --border-subtle: rgba(15, 17, 21, 0.08);
+  --border-strong: rgba(15, 17, 21, 0.16);
+  --border-accent: rgba(37, 99, 235, 0.35);
+
+  --text-main: #18181b;
+  --text-muted: #52525b;
+  --text-dim: #8e8e96;
+
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-glow: rgba(37, 99, 235, 0.14);
+
+  --emerald: #059669;
+  --emerald-glow: rgba(5, 150, 105, 0.14);
+  --amber: #d97706;
+  --amber-glow: rgba(217, 119, 6, 0.14);
+  --rose: #e11d48;
+  --rose-glow: rgba(225, 29, 72, 0.14);
+  --cyan: #0891b2;
+  --indigo: #4f46e5;
+  --pink: #db2777;
+}
+
 /* Text accent utilities (used by page header icons across all pages) */
 .text-emerald { color: var(--emerald) !important; }
 .text-amber { color: var(--amber) !important; }

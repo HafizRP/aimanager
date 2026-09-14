@@ -264,6 +264,7 @@ func (h *Handler) render(w http.ResponseWriter, r *http.Request, tmplName, layou
 	currentUser := GetUserFromContext(r.Context())
 	data["CurrentUser"] = currentUser
 	data["CSRFToken"] = h.getCSRFToken(r)
+	data["UITheme"] = h.repo.GetSettingDefault(r.Context(), "ui_theme", "dark")
 	if currentUser != nil {
 		data["IsAdmin"] = currentUser.IsAdmin()
 		data["LoggedIn"] = true
