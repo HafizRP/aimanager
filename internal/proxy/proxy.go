@@ -17,6 +17,7 @@ import (
 	"9router-gateway/internal/entity"
 	"9router-gateway/internal/notify"
 	"9router-gateway/internal/repository"
+	"9router-gateway/internal/upstream"
 )
 
 // GatewayProxy authenticates requests and forwards them to the 9router upstream.
@@ -166,6 +167,32 @@ func (p *GatewayProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *GatewayProxy) handleGetModels(w http.ResponseWriter, r *http.Request, user *entity.User, key *entity.APIKey) {
+	// Merged exposure: core filters oc/* + opencode-go/* (and any future
+	// customModels prefix) out of /v1/models, so fetch via CoreClient which
+	// merges the management catalog back in before whitelist filtering.
+	coreClient := upstream.NewCoreClient(p.cfg)
+	if obj, merged, err := coreClient.GetMergedModels(r.Context()); err == nil && len(merged) > 0 {
+		allowedList := entity.ParseAllowedModels(user.AllowedModels)
+		if entity.HasWildcard(allowedList) {
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"object": obj, "data": merged})
+			return
+		}
+		allowedMap := make(map[string]bool, len(allowedList))
+		for _, m := range allowedList {
+			allowedMap[strings.TrimSpace(m)] = true
+		}
+		filteredData := []map[string]interface{}{}
+		for _, m := range merged {
+			if id, ok := m["id"].(string); ok && allowedMap[id] {
+				filteredData = append(filteredData, m)
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"object": obj, "data": filteredData})
+		return
+	}
+
 	upstreamReq, err := http.NewRequestWithContext(r.Context(), http.MethodGet, p.cfg.GetUpstreamURL()+"/v1/models", nil)
 	if err != nil {
 		p.writeJSONError(w, http.StatusBadGateway, "Failed to create upstream request", "gateway_error")

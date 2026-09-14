@@ -83,6 +83,9 @@ func (p ProviderAccount) DisplayProvider() string {
 	if p.Provider == "kiro" {
 		return "Kiro AI"
 	}
+	if p.Provider == "opencode" || p.Provider == "opencode-go" || p.Provider == "oc" {
+		return "OpenCode Zen"
+	}
 	if strings.HasPrefix(p.Provider, "openai-compatible") {
 		return "OpenAI Compatible"
 	}
@@ -752,6 +755,16 @@ func (m *QuotaManager) GetModelSummary(modelID string, report *UpstreamQuotaRepo
 			}
 		}
 
+		return summary
+	}
+
+	// 3. OpenCode Zen free-tier Models (oc/... / opencode-go/...)
+	// Free shared pool: no per-account connection in providerConnections, so
+	// surface a proper provider label instead of falling through anonymously.
+	// If a future core release adds opencode quota pools, extend here the way
+	// ag/ (rolling window) and kr/ (credit pool) aggregate per-account quotas.
+	if strings.HasPrefix(modelID, "oc/") || strings.HasPrefix(modelID, "opencode-go/") {
+		summary.Provider = "opencode"
 		return summary
 	}
 
