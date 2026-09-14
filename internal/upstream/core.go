@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -18,6 +19,8 @@ import (
 	"time"
 
 	"9router-gateway/internal/config"
+
+	_ "modernc.org/sqlite"
 )
 
 // CoreClient talks to the 9router Core HTTP API.
@@ -779,4 +782,142 @@ func (c *CoreClient) CoreKeys(ctx context.Context) (map[string]interface{}, erro
 	var res map[string]interface{}
 	_ = json.Unmarshal(data, &res)
 	return res, nil
+}
+
+// mergedModelPrefixes are LLM providers known to be filtered out of core's
+// /v1/models exposure list. Used as fallback when the customModels table
+// cannot be read; the primary source is always the core DB customModels scope.
+var mergedModelPrefixes = []string{"oc/", "opencode-go/"}
+
+// customModelIDs reads core kv scope 'customModels' (best-effort) and returns
+// the set of expected OpenAI IDs ("alias/id"). Empty set on any error so the
+// caller falls back to mergedModelPrefixes.
+func (c *CoreClient) customModelIDs(ctx context.Context) map[string]bool {
+	out := map[string]bool{}
+	dsn := fmt.Sprintf("%s?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)", c.cfg.GetNineRouterDBPath())
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return out
+	}
+	defer db.Close()
+	rows, err := db.QueryContext(ctx, "SELECT value FROM kv WHERE scope = 'customModels'")
+	if err != nil {
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			continue
+		}
+		var m struct {
+			ProviderAlias string `json:"providerAlias"`
+			ID            string `json:"id"`
+		}
+		if err := json.Unmarshal([]byte(v), &m); err != nil {
+			continue
+		}
+		if m.ProviderAlias != "" && m.ID != "" {
+			out[m.ProviderAlias+"/"+m.ID] = true
+		}
+	}
+	return out
+}
+
+// GetMergedModels returns core's /v1/models list merged with catalog models
+// that core filters out of OpenAI exposure (notably oc/* + opencode-go/*
+// OpenCode Zen free tier). Primary merge source is the core DB customModels
+// scope (generic guard for future prefixes); mergedModelPrefixes is fallback.
+// Catalog failures degrade gracefully to the raw /v1/models list.
+func (c *CoreClient) GetMergedModels(ctx context.Context) (string, []map[string]interface{}, error) {
+	rawV1, err := c.doRequest(ctx, http.MethodGet, "/v1/models", nil)
+	if err != nil {
+		return "", nil, err
+	}
+	var v1 struct {
+		Object string                   `json:"object"`
+		Data   []map[string]interface{} `json:"data"`
+	}
+	if err := json.Unmarshal(rawV1, &v1); err != nil {
+		return "", nil, err
+	}
+	if v1.Object == "" {
+		v1.Object = "list"
+	}
+	existing := make(map[string]bool, len(v1.Data))
+	for _, m := range v1.Data {
+		if id, ok := m["id"].(string); ok {
+			existing[id] = true
+		}
+	}
+
+	rawCat, err := c.doRequest(ctx, http.MethodGet, "/api/models", nil)
+	if err != nil {
+		return v1.Object, v1.Data, nil
+	}
+	var cat struct {
+		Models []struct {
+			Provider    string                 `json:"provider"`
+			Model       string                 `json:"model"`
+			FullModel   string                 `json:"fullModel"`
+			RoutedModel string                 `json:"routedModel"`
+			Name        string                 `json:"name"`
+			Caps        map[string]interface{} `json:"caps"`
+		} `json:"models"`
+	}
+	if err := json.Unmarshal(rawCat, &cat); err != nil || len(cat.Models) == 0 {
+		return v1.Object, v1.Data, nil
+	}
+
+	want := c.customModelIDs(ctx)
+	useWant := len(want) > 0
+	for _, m := range cat.Models {
+		id := m.FullModel
+		if id == "" {
+			id = m.Provider + "/" + m.Model
+		}
+		if existing[id] {
+			continue
+		}
+		merge := false
+		if useWant {
+			// oc/* free tier is proven reachable without a linked OAuth
+			// account, but core does not register every oc model in
+			// customModels (e.g. oc/muse-spark-*-contributor-free) — so
+			// always merge the oc/ prefix. opencode-go/* stays
+			// customModels-gated: core rejects it with "No active
+			// credentials" when no account is linked.
+			merge = want[id] || strings.HasPrefix(id, "oc/")
+		} else {
+			for _, p := range mergedModelPrefixes {
+				if strings.HasPrefix(id, p) {
+					merge = true
+					break
+				}
+			}
+		}
+		if !merge {
+			continue
+		}
+		entry := map[string]interface{}{
+			"id":       id,
+			"object":   "model",
+			"owned_by": m.Provider,
+		}
+		if m.Name != "" {
+			entry["display_name"] = m.Name
+		}
+		if len(m.Caps) > 0 {
+			entry["capabilities"] = m.Caps
+			if cw, ok := m.Caps["contextWindow"]; ok {
+				entry["context_length"] = cw
+			}
+			if mo, ok := m.Caps["maxOutput"]; ok {
+				entry["max_completion_tokens"] = mo
+			}
+		}
+		v1.Data = append(v1.Data, entry)
+		existing[id] = true
+	}
+	return v1.Object, v1.Data, nil
 }
