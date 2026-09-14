@@ -31,6 +31,11 @@ func InitDB(dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
 
+	// Enforce owner-only file permissions (0600) on database and journal files
+	_ = os.Chmod(dbPath, 0600)
+	_ = os.Chmod(dbPath+"-wal", 0600)
+	_ = os.Chmod(dbPath+"-shm", 0600)
+
 	return db, nil
 }
 

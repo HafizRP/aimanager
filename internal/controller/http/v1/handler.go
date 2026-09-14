@@ -318,11 +318,13 @@ func (h *Handler) clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 	if cookie, err := r.Cookie(sessionCookieName); err == nil && cookie.Value != "" {
 		_ = h.auth.DeleteSession(r.Context(), cookie.Value)
 	}
+	isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   isSecure,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
 	})
@@ -516,6 +518,27 @@ func (h *Handler) WarmUpstreamModels(ctx context.Context) ([]UpstreamModelItem, 
 }
 
 func (h *Handler) refreshUpstreamModels(ctx context.Context) ([]UpstreamModelItem, error) {
+
+	// Merged exposure first: surfaces oc/* + opencode-go/* (and any future
+	// customModels prefix) that core hides from /v1/models.
+	if h.coreClient != nil {
+		if _, merged, err := h.coreClient.GetMergedModels(ctx); err == nil && len(merged) > 0 {
+			items := make([]UpstreamModelItem, 0, len(merged))
+			for _, m := range merged {
+				id, _ := m["id"].(string)
+				owned, _ := m["owned_by"].(string)
+				if id == "" {
+					continue
+				}
+				items = append(items, UpstreamModelItem{ID: id, OwnedBy: owned})
+			}
+			h.modelsMu.Lock()
+			h.modelsCache = items
+			h.modelsTime = time.Now()
+			h.modelsMu.Unlock()
+			return items, nil
+		}
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, h.cfg.GetUpstreamURL()+"/v1/models", nil)
 	if err != nil {
