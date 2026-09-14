@@ -317,11 +317,13 @@ func (h *Handler) clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 	if cookie, err := r.Cookie(sessionCookieName); err == nil && cookie.Value != "" {
 		_ = h.auth.DeleteSession(r.Context(), cookie.Value)
 	}
+	isSecure := r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   isSecure,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
 	})
