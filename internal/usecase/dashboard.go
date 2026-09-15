@@ -128,15 +128,17 @@ func (s *BillingService) GetTransaction(ctx context.Context, orderID string) (*e
 	return tx, nil
 }
 
-// MarkPaid credits tokens and marks the transaction settled.
+// MarkPaid credits tokens and marks the transaction settled atomically.
 func (s *BillingService) MarkPaid(ctx context.Context, tx *entity.Transaction, paymentType, midtransTxID string) error {
 	if tx.Status == "settlement" || tx.Status == "paid" {
 		return nil
 	}
-	if err := s.store.CreditUserTokens(ctx, tx.UserID, tx.Tokens); err != nil {
-		return err
-	}
-	return s.store.UpdateTransactionStatus(ctx, tx.ID, "settlement", paymentType, midtransTxID)
+	return s.store.ExecuteTx(ctx, func(txStore Store) error {
+		if err := txStore.CreditUserTokens(ctx, tx.UserID, tx.Tokens); err != nil {
+			return err
+		}
+		return txStore.UpdateTransactionStatus(ctx, tx.ID, "settlement", paymentType, midtransTxID)
+	})
 }
 
 // MarkFailed records a failed/expired/cancelled transaction.
@@ -144,7 +146,7 @@ func (s *BillingService) MarkFailed(ctx context.Context, tx *entity.Transaction,
 	return s.store.UpdateTransactionStatus(ctx, tx.ID, status, paymentType, midtransTxID)
 }
 
-// ManualCredit credits tokens and records a manual settlement.
+// ManualCredit credits tokens and records a manual settlement atomically.
 func (s *BillingService) ManualCredit(ctx context.Context, userID string, tokens int64) error {
 	if userID == "" || tokens <= 0 || tokens > 1000000000000 {
 		return fmt.Errorf("invalid user or token amount")
@@ -152,9 +154,6 @@ func (s *BillingService) ManualCredit(ctx context.Context, userID string, tokens
 	user, err := s.store.GetUserByID(ctx, userID)
 	if err != nil || user == nil {
 		return fmt.Errorf("user not found")
-	}
-	if err := s.store.CreditUserTokens(ctx, userID, tokens); err != nil {
-		return err
 	}
 	orderID := fmt.Sprintf("MANUAL-%s-%s", time.Now().Format("20060102-150405"), uuid.New().String()[:5])
 	manualTx := &entity.Transaction{
@@ -166,5 +165,10 @@ func (s *BillingService) ManualCredit(ctx context.Context, userID string, tokens
 		Status:      "settlement",
 		PaymentType: "manual_credit",
 	}
-	return s.store.CreateTransaction(ctx, manualTx)
+	return s.store.ExecuteTx(ctx, func(txStore Store) error {
+		if err := txStore.CreditUserTokens(ctx, userID, tokens); err != nil {
+			return err
+		}
+		return txStore.CreateTransaction(ctx, manualTx)
+	})
 }

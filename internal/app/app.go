@@ -21,6 +21,7 @@ import (
 	"9router-gateway/internal/controller/http/v1"
 	"9router-gateway/internal/database"
 	"9router-gateway/internal/entity"
+	"9router-gateway/internal/eventbus"
 	"9router-gateway/internal/notify"
 	"9router-gateway/internal/proxy"
 	"9router-gateway/internal/repository"
@@ -130,26 +131,35 @@ func Run() error {
 		}
 	}
 
-	// 6. Init Handlers & Proxy
+	// 6. Init Core Client, Handlers & Proxy
+	coreClient := upstream.NewCoreClient(cfg)
 	quotaMgr := upstream.NewQuotaManager(cfg)
 	h, err := v1.NewHandler(cfg, repo, keySyncer, quotaMgr)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to initialize web handlers")
 		return err
 	}
+	h.SetCoreClient(coreClient)
 
 	gwProxy := proxy.NewGatewayProxy(cfg, repo)
+	gwProxy.SetCoreClient(coreClient)
 	notifier := notify.NewSender(cfg)
 	gwProxy.SetNotifier(notifier)
 	h.SetGatewayProxy(gwProxy)
 
-	// 7. Assemble Router (composition root)
+	// 7. Event Bus (Observer/Pub-Sub for asynchronous operations)
+	bus := eventbus.NewAsyncEventBus(256)
+	defer bus.Close()
+	eventbus.RegisterKeySyncerSubscriber(bus, keySyncer)
+	eventbus.RegisterAuditLogSubscriber(bus, repo)
+
+	// 8. Assemble Router (composition root)
 	r := controllerhttp.NewRouter(cfg, db, repo, h, gwProxy)
 
-	// 8. Background Provider Keeper (Auto-reactivate quota-reset accounts)
-	coreClient := upstream.NewCoreClient(cfg)
+	// 9. Background Provider Keeper (Auto-reactivate quota-reset accounts)
 	keeper := worker.NewProviderKeeper(cfg, coreClient, quotaMgr)
 	keeper.SetNotifier(notifier)
+	eventbus.RegisterQuotaReactivatorSubscriber(bus, keeper)
 	go keeper.Start()
 
 	// 8a. Anomaly Radar (error spikes, usage spikes, IP bursts)

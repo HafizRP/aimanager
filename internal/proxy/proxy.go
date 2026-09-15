@@ -22,13 +22,25 @@ import (
 
 // GatewayProxy authenticates requests and forwards them to the 9router upstream.
 type GatewayProxy struct {
-	cfg         *config.Config
-	repo        repository.Repository
-	httpClient  *http.Client
-	rateLimiter *RateLimiter
-	cache       *ResponseCache
-	health      *UpstreamHealth
-	notifier    *notify.Sender
+	cfg             *config.Config
+	repo            repository.Repository
+	coreClient      upstream.CoreClient
+	httpClient      *http.Client
+	rateLimiter     *RateLimiter
+	cache           *ResponseCache
+	health          *UpstreamHealth
+	circuitBreakers *CircuitBreakerRegistry
+	notifier        *notify.Sender
+}
+
+// CircuitBreakers returns the circuit breaker registry.
+func (p *GatewayProxy) CircuitBreakers() *CircuitBreakerRegistry {
+	return p.circuitBreakers
+}
+
+// SetCoreClient attaches a custom or mock CoreClient.
+func (p *GatewayProxy) SetCoreClient(c upstream.CoreClient) {
+	p.coreClient = c
 }
 
 // Health returns the upstream health tracker for dashboards and APIs.
@@ -59,6 +71,11 @@ func NewGatewayProxy(cfg *config.Config, repo repository.Repository) *GatewayPro
 		rateLimiter: NewRateLimiter(),
 		cache:       NewResponseCache(),
 		health:      NewUpstreamHealth(),
+		circuitBreakers: NewCircuitBreakerRegistry(CircuitBreakerSettings{
+			FailureThreshold: 3,
+			SuccessThreshold: 2,
+			Timeout:          30 * time.Second,
+		}),
 	}
 }
 
@@ -170,7 +187,10 @@ func (p *GatewayProxy) handleGetModels(w http.ResponseWriter, r *http.Request, u
 	// Merged exposure: core filters oc/* + opencode-go/* (and any future
 	// customModels prefix) out of /v1/models, so fetch via CoreClient which
 	// merges the management catalog back in before whitelist filtering.
-	coreClient := upstream.NewCoreClient(p.cfg)
+	coreClient := p.coreClient
+	if coreClient == nil {
+		coreClient = upstream.NewCoreClient(p.cfg)
+	}
 	if obj, merged, err := coreClient.GetMergedModels(r.Context()); err == nil && len(merged) > 0 {
 		allowedList := entity.ParseAllowedModels(user.AllowedModels)
 		if entity.HasWildcard(allowedList) {
@@ -263,10 +283,9 @@ func (p *GatewayProxy) handleGetModels(w http.ResponseWriter, r *http.Request, u
 }
 
 // doUpstreamWithRetry performs one initial attempt plus a single retry on
-// transport errors and retryable statuses (429/502/503/504). Safe for both
-// buffered and streaming paths: retries only happen before any byte is
-// forwarded to the client.
-func (p *GatewayProxy) doUpstreamWithRetry(req *http.Request, bodyBytes []byte) (*http.Response, int) {
+// transport errors and retryable statuses (429/502/503/504), recording outcomes into
+// both UpstreamHealth and the target CircuitBreaker.
+func (p *GatewayProxy) doUpstreamWithRetry(req *http.Request, bodyBytes []byte, cb *CircuitBreaker) (*http.Response, int) {
 	attempts := 0
 	for {
 		attempts++
@@ -276,6 +295,9 @@ func (p *GatewayProxy) doUpstreamWithRetry(req *http.Request, bodyBytes []byte) 
 		resp, err := p.httpClient.Do(req)
 		if err != nil {
 			p.health.Record(0, true)
+			if cb != nil {
+				cb.RecordFailure()
+			}
 			if attempts < 2 && req.Context().Err() == nil {
 				select {
 				case <-req.Context().Done():
@@ -288,6 +310,9 @@ func (p *GatewayProxy) doUpstreamWithRetry(req *http.Request, bodyBytes []byte) 
 		}
 		if retryableStatus(resp.StatusCode) && attempts < 2 && req.Context().Err() == nil {
 			p.health.Record(resp.StatusCode, false)
+			if cb != nil {
+				cb.RecordFailure()
+			}
 			_, _ = io.Copy(io.Discard, resp.Body)
 			_ = resp.Body.Close()
 			select {
@@ -298,6 +323,13 @@ func (p *GatewayProxy) doUpstreamWithRetry(req *http.Request, bodyBytes []byte) 
 			continue
 		}
 		p.health.Record(resp.StatusCode, false)
+		if cb != nil {
+			if resp.StatusCode >= 500 || resp.StatusCode == 429 {
+				cb.RecordFailure()
+			} else {
+				cb.RecordSuccess()
+			}
+		}
 		return resp, attempts
 	}
 }
@@ -414,6 +446,17 @@ func (p *GatewayProxy) handleForwardRequest(w http.ResponseWriter, r *http.Reque
 		p.cache.RecordMiss()
 	}
 
+	// Circuit Breaker check for upstream / model target
+	targetBreaker := requestedModel
+	if targetBreaker == "" {
+		targetBreaker = "upstream:default"
+	}
+	cb := p.circuitBreakers.GetOrCreate(targetBreaker)
+	if !cb.Allow() {
+		p.writeJSONError(w, http.StatusServiceUnavailable, "Upstream circuit breaker is OPEN for '"+targetBreaker+"'. Request failed fast to prevent timeout latency.", "circuit_breaker_open")
+		return
+	}
+
 	// Prepare outbound upstream request
 	upstreamURL := p.cfg.GetUpstreamURL() + r.URL.RequestURI()
 	upstreamReq, err := http.NewRequestWithContext(r.Context(), r.Method, upstreamURL, bytes.NewBuffer(bodyBytes))
@@ -436,7 +479,7 @@ func (p *GatewayProxy) handleForwardRequest(w http.ResponseWriter, r *http.Reque
 	upstreamReq.Header.Set("Authorization", "Bearer "+authKey)
 	upstreamReq.Header.Set("X-Forwarded-For", clientIP)
 
-	resp, attempts := p.doUpstreamWithRetry(upstreamReq, bodyBytes)
+	resp, attempts := p.doUpstreamWithRetry(upstreamReq, bodyBytes, cb)
 	if attempts > 1 {
 		w.Header().Set("X-Gateway-Retried", "1")
 	}

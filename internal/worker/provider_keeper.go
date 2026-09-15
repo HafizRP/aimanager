@@ -16,14 +16,14 @@ import (
 // ProviderKeeper periodically tests and reactivates idle upstream provider accounts.
 type ProviderKeeper struct {
 	cfg        *config.Config
-	coreClient *upstream.CoreClient
+	coreClient upstream.CoreClient
 	quotaMgr   *upstream.QuotaManager
 	notifier   *notify.Sender
 	stopChan   chan struct{}
 }
 
 // NewProviderKeeper creates a ProviderKeeper wired to the given config and core client.
-func NewProviderKeeper(cfg *config.Config, coreClient *upstream.CoreClient, quotaMgr *upstream.QuotaManager) *ProviderKeeper {
+func NewProviderKeeper(cfg *config.Config, coreClient upstream.CoreClient, quotaMgr *upstream.QuotaManager) *ProviderKeeper {
 	return &ProviderKeeper{
 		cfg:        cfg,
 		coreClient: coreClient,
@@ -58,6 +58,11 @@ func (pk *ProviderKeeper) Start() {
 // Stop signals the background goroutine to shut down.
 func (pk *ProviderKeeper) Stop() {
 	close(pk.stopChan)
+}
+
+// CheckAndReactivateNow triggers an immediate reactive check without waiting for the next timer interval.
+func (pk *ProviderKeeper) CheckAndReactivateNow() {
+	go pk.checkAndReactivate()
 }
 
 func (pk *ProviderKeeper) checkAndReactivate() {

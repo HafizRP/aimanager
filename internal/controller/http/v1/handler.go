@@ -50,7 +50,7 @@ type Handler struct {
 	repo         repository.Repository
 	syncer       *syncer.Syncer
 	quotaManager *upstream.QuotaManager
-	coreClient   *upstream.CoreClient
+	coreClient   upstream.CoreClient
 	cache        *proxy.ResponseCache
 	gwProxy      *proxy.GatewayProxy
 	templates    map[string]*template.Template
@@ -75,6 +75,11 @@ type Handler struct {
 // SetGatewayProxy attaches the live gateway proxy (health + cache stats).
 func (h *Handler) SetGatewayProxy(gw *proxy.GatewayProxy) {
 	h.gwProxy = gw
+}
+
+// SetCoreClient overrides the upstream CoreClient implementation (useful for testing and mocking).
+func (h *Handler) SetCoreClient(c upstream.CoreClient) {
+	h.coreClient = c
 }
 
 // NewHandler wires the HTTP layer to use case services and pre-parses templates.

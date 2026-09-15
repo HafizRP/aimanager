@@ -77,6 +77,11 @@ type (
 		CleanOldLoginAttempts(ctx context.Context) error
 	}
 
+	// UnitOfWork runs multiple repository operations within a single atomic transaction.
+	UnitOfWork interface {
+		ExecuteTx(ctx context.Context, fn func(txStore Store) error) error
+	}
+
 	// Store is the composition of every persistence capability used by use cases.
 	Store interface {
 		UserStore
@@ -87,5 +92,6 @@ type (
 		SettingsStore
 		SessionStore
 		LoginAttemptStore
+		UnitOfWork
 	}
 )

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -411,5 +412,75 @@ func TestCleanExpiredSessionsAndLoginAttempts(t *testing.T) {
 
 	if err := repo.CleanOldLoginAttempts(ctx); err != nil {
 		t.Fatalf("CleanOldLoginAttempts failed: %v", err)
+	}
+}
+
+func TestSQLiteRepo_UnitOfWork(t *testing.T) {
+	repo, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Seed a user
+	u := &entity.User{
+		ID:         "uow-user-1",
+		Username:   "uowuser",
+		Name:       "UoW User",
+		TokenQuota: 1000,
+		IsActive:   true,
+	}
+	if err := repo.CreateUser(ctx, u); err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+
+	// 1. Successful transaction: Credit tokens and update transaction
+	tx := &entity.Transaction{
+		ID:        "uow-tx-1",
+		UserID:    "uow-user-1",
+		PackageID: "pkg-1",
+		Tokens:    500,
+		AmountIDR: 50000,
+		Status:    "pending",
+	}
+	if err := repo.CreateTransaction(ctx, tx); err != nil {
+		t.Fatalf("CreateTransaction failed: %v", err)
+	}
+
+	err := repo.Do(ctx, func(txRepo Repository) error {
+		if err := txRepo.CreditUserTokens(ctx, "uow-user-1", 500); err != nil {
+			return err
+		}
+		return txRepo.UpdateTransactionStatus(ctx, "uow-tx-1", "settlement", "qris", "midtrans-uow-1")
+	})
+	if err != nil {
+		t.Fatalf("Do commit failed: %v", err)
+	}
+
+	// Verify committed state
+	uAfter, _ := repo.GetUserByID(ctx, "uow-user-1")
+	if uAfter.TokenQuota != 1500 {
+		t.Errorf("expected 1500 tokens after commit, got %d", uAfter.TokenQuota)
+	}
+	txAfter, _ := repo.GetTransactionByID(ctx, "uow-tx-1")
+	if txAfter.Status != "settlement" {
+		t.Errorf("expected settlement status, got %s", txAfter.Status)
+	}
+
+	// 2. Failing transaction: Rollback must revert all changes within the tx
+	errRollback := repo.Do(ctx, func(txRepo Repository) error {
+		if err := txRepo.CreditUserTokens(ctx, "uow-user-1", 10000); err != nil {
+			return err
+		}
+		// Return error to trigger rollback
+		return fmt.Errorf("intentional failure to trigger rollback")
+	})
+	if errRollback == nil {
+		t.Fatal("expected error from rolling back transaction, got nil")
+	}
+
+	// Verify rollback state (token quota must remain 1500)
+	uAfterRollback, _ := repo.GetUserByID(ctx, "uow-user-1")
+	if uAfterRollback.TokenQuota != 1500 {
+		t.Errorf("expected token quota to remain 1500 after rollback, got %d", uAfterRollback.TokenQuota)
 	}
 }
