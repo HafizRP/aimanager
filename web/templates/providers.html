@@ -82,7 +82,7 @@
                 </div>
               </td>
               <td class="text-dim font-monospace small" style="font-size: 0.78rem;">
-                {{ .CreatedAt }}
+                {{ formatDate .CreatedAt }}
               </td>
               <td class="text-end">
                 <button type="button" class="btn-modern-ghost btn-sm text-danger border-0 p-1" onclick="deleteProvider('{{ .ID }}', '{{ if .Name }}{{ .Name }}{{ else }}{{ .Provider }}{{ end }}')" title="Delete Provider">

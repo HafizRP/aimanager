@@ -28,6 +28,32 @@ func TestGenerateSecureAPIKey(t *testing.T) {
 	}
 }
 
+func TestParseDateString(t *testing.T) {
+	cases := []struct {
+		in      string
+		wantOK  bool
+		wantUTC string
+	}{
+		{"2026-07-28T03:30:02.914Z", true, "2026-07-28 03:30:02"},
+		{"2026-07-28T03:30:02Z", true, "2026-07-28 03:30:02"},
+		{"2026-07-28T10:30:02+07:00", true, "2026-07-28 03:30:02"},
+		{"2026-07-28 03:30:02", true, "2026-07-28 03:30:02"},
+		{"2026-07-28", true, "2026-07-28 00:00:00"},
+		{"", false, ""},
+		{"not-a-date", false, ""},
+	}
+	for _, c := range cases {
+		got, ok := parseDateString(c.in)
+		if ok != c.wantOK {
+			t.Errorf("parseDateString(%q) ok=%v, want %v", c.in, ok, c.wantOK)
+			continue
+		}
+		if ok && got.UTC().Format("2006-01-02 15:04:05") != c.wantUTC {
+			t.Errorf("parseDateString(%q) = %v, want %v", c.in, got.UTC().Format("2006-01-02 15:04:05"), c.wantUTC)
+		}
+	}
+}
+
 func TestPasswordHashing(t *testing.T) {
 	password := "SecretP@ssword123"
 

@@ -137,6 +137,12 @@ func NewHandler(cfg *config.Config, repo repository.Repository, sync *syncer.Syn
 					return template.HTML(`<span class="text-secondary opacity-60">Never</span>`)
 				}
 				t = *val
+			case string:
+				parsed, ok := parseDateString(val)
+				if !ok {
+					return template.HTML("-")
+				}
+				t = parsed
 			default:
 				return template.HTML("-")
 			}
@@ -256,6 +262,31 @@ func NewHandler(cfg *config.Config, repo repository.Repository, sync *syncer.Syn
 	h.templates["login.html"] = loginTmpl
 
 	return h, nil
+}
+
+// parseDateString parses the datetime shapes seen across the gateway:
+// 9router Core ISO strings (with/without millis, with Z or offset),
+// SQLite "2006-01-02 15:04:05", and date-only. Naive datetimes are
+// assumed UTC (matching DB storage). Returns ok=false when unparseable.
+func parseDateString(s string) (t time.Time, ok bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return time.Time{}, false
+	}
+	layouts := []string{
+		time.RFC3339Nano,
+		time.RFC3339,
+		"2006-01-02T15:04:05.999999999",
+		"2006-01-02T15:04:05",
+		"2006-01-02 15:04:05",
+		"2006-01-02",
+	}
+	for _, layout := range layouts {
+		if parsed, err := time.Parse(layout, s); err == nil {
+			return parsed, true
+		}
+	}
+	return time.Time{}, false
 }
 
 func (h *Handler) render(w http.ResponseWriter, r *http.Request, tmplName, layoutName string, data map[string]interface{}) {
