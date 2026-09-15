@@ -1,4 +1,4 @@
-{{ define "title" }}Upstream Providers - AI Manager{{ end }}
+{{ define "title" }}Upstream Provider Connections - AI Manager{{ end }}
 
 {{ define "content" }}
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
@@ -107,8 +107,8 @@
 <!-- Add Provider Modal -->
 <div class="modal fade" id="addProviderModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content card-modern border-0" style="background: var(--bg-surface);">
-      <div class="modal-header border-secondary border-opacity-10">
+    <div class="modal-content modal-content-modern">
+      <div class="modal-header modal-header-modern">
         <h5 class="modal-title fw-bold text-light d-flex align-items-center gap-2">
           <i class="bi bi-plus-circle text-primary"></i> Add Provider Connection
         </h5>
@@ -149,7 +149,7 @@
             <input type="number" class="form-control form-control-modern" id="newProvPriority" value="1" min="1" max="100">
           </div>
         </div>
-        <div class="modal-footer border-secondary border-opacity-10">
+        <div class="modal-footer modal-footer-modern">
           <button type="button" class="btn-modern-ghost" data-bs-dismiss="modal">Cancel</button>
           <button type="submit" class="btn-modern-primary" id="btnSaveProvider">Save Connection</button>
         </div>
@@ -161,8 +161,8 @@
 <!-- OAuth Connect Modal -->
 <div class="modal fade" id="oauthConnectModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content card-modern border-0" style="background: var(--bg-surface);">
-      <div class="modal-header border-secondary border-opacity-10">
+    <div class="modal-content modal-content-modern">
+      <div class="modal-header modal-header-modern">
         <h5 class="modal-title fw-bold text-light d-flex align-items-center gap-2">
           <i class="bi bi-google text-warning"></i> Connect via OAuth
         </h5>

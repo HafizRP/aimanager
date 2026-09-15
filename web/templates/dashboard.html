@@ -1,7 +1,16 @@
 {{ define "title" }}Dashboard - AI Manager{{ end }}
 
 {{ define "content" }}
-{{ if not .IsAdmin }}
+{{ if .IsAdmin }}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+  <div>
+    <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
+      <i class="bi bi-speedometer2 text-primary"></i> Dashboard
+    </h4>
+    <p class="text-dim small mb-0">Fleet-wide LLM traffic, token quotas, cost savings, and upstream provider health.</p>
+  </div>
+</div>
+{{ else }}
   <!-- Standard User Banner -->
   <div class="mb-4 d-flex flex-column flex-md-row align-items-md-center justify-content-between p-3 card-modern" style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(255, 255, 255, 0.02)); border-color: rgba(59, 130, 246, 0.2);">
     <div>
