@@ -513,15 +513,22 @@ func (p *GatewayProxy) handleForwardRequest(w http.ResponseWriter, r *http.Reque
 	isSSE := strings.Contains(contentType, "text/event-stream") || isStreamRequested
 
 	if isSSE && resp.StatusCode == http.StatusOK {
-		p.handleStreamingResponse(w, r, resp, user, key, requestedModel, startTime, clientIP)
+		p.handleStreamingResponse(w, r, resp, user, key, requestedModel, startTime, clientIP, truncatePayload(bodyBytes, 8192))
 		return
 	}
 
 	// Non-streaming response
-	p.handleNonStreamingResponse(w, r, resp, user, key, requestedModel, startTime, clientIP, len(bodyBytes), cacheKey)
+	p.handleNonStreamingResponse(w, r, resp, user, key, requestedModel, startTime, clientIP, len(bodyBytes), truncatePayload(bodyBytes, 8192), cacheKey)
 }
 
-func (p *GatewayProxy) handleStreamingResponse(w http.ResponseWriter, r *http.Request, resp *http.Response, user *entity.User, key *entity.APIKey, model string, startTime time.Time, clientIP string) {
+func truncatePayload(b []byte, max int) string {
+	if len(b) > max {
+		return string(b[:max])
+	}
+	return string(b)
+}
+
+func (p *GatewayProxy) handleStreamingResponse(w http.ResponseWriter, r *http.Request, resp *http.Response, user *entity.User, key *entity.APIKey, model string, startTime time.Time, clientIP string, reqBody string) {
 	flusher, isFlusher := w.(http.Flusher)
 	if !isFlusher {
 		http.Error(w, "Streaming unsupported!", http.StatusInternalServerError)
@@ -548,6 +555,8 @@ func (p *GatewayProxy) handleStreamingResponse(w http.ResponseWriter, r *http.Re
 
 	var promptTokens, completionTokens, totalTokens int
 	var completionChars int
+	var completionSB strings.Builder
+	const maxCompletionCapture = 4096
 
 	for scanner.Scan() {
 		line := scanner.Bytes()
@@ -584,6 +593,14 @@ func (p *GatewayProxy) handleStreamingResponse(w http.ResponseWriter, r *http.Re
 				}
 				for _, c := range chunk.Choices {
 					completionChars += len(c.Delta.Content)
+					if completionSB.Len() < maxCompletionCapture {
+						remain := maxCompletionCapture - completionSB.Len()
+						s := c.Delta.Content
+						if len(s) > remain {
+							s = s[:remain]
+						}
+						completionSB.WriteString(s)
+					}
 				}
 			}
 		}
@@ -615,10 +632,12 @@ func (p *GatewayProxy) handleStreamingResponse(w http.ResponseWriter, r *http.Re
 		StatusCode:       resp.StatusCode,
 		DurationMs:       duration,
 		ClientIP:         clientIP,
+		RequestBody:      reqBody,
+		ResponseText:     completionSB.String(),
 	})
 }
 
-func (p *GatewayProxy) handleNonStreamingResponse(w http.ResponseWriter, r *http.Request, resp *http.Response, user *entity.User, key *entity.APIKey, model string, startTime time.Time, clientIP string, reqBodyLen int, cacheKey string) {
+func (p *GatewayProxy) handleNonStreamingResponse(w http.ResponseWriter, r *http.Request, resp *http.Response, user *entity.User, key *entity.APIKey, model string, startTime time.Time, clientIP string, reqBodyLen int, reqBody string, cacheKey string) {
 	respBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		p.writeJSONError(w, http.StatusInternalServerError, "Failed to read upstream response", "gateway_error")
@@ -695,7 +714,37 @@ func (p *GatewayProxy) handleNonStreamingResponse(w http.ResponseWriter, r *http
 		DurationMs:       duration,
 		ClientIP:         clientIP,
 		ErrorMessage:     errMsg,
+		RequestBody:      reqBody,
+		ResponseText:     extractCompletionText(respBytes),
 	})
+}
+
+// extractCompletionText pulls the assistant text from a chat-completions
+// response body for replay display, capped at 4KB.
+func extractCompletionText(respBytes []byte) string {
+	var m struct {
+		Choices []struct {
+			Message struct {
+				Content          string `json:"content"`
+				ReasoningContent string `json:"reasoning_content"`
+			} `json:"message"`
+			Text string `json:"text"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(respBytes, &m); err != nil || len(m.Choices) == 0 {
+		return ""
+	}
+	text := m.Choices[0].Message.Content
+	if text == "" {
+		text = m.Choices[0].Message.ReasoningContent
+	}
+	if text == "" {
+		text = m.Choices[0].Text
+	}
+	if len(text) > 4096 {
+		return text[:4096]
+	}
+	return text
 }
 
 func (p *GatewayProxy) writeJSONError(w http.ResponseWriter, statusCode int, message, errType string) {

@@ -162,6 +162,8 @@ func migrate(db *sql.DB) error {
 	_, _ = db.Exec(`ALTER TABLE api_keys ADD COLUMN tokens_used INTEGER DEFAULT 0;`)
 	_, _ = db.Exec(`ALTER TABLE users ADD COLUMN daily_token_quota INTEGER DEFAULT 0;`)
 	_, _ = db.Exec(`ALTER TABLE api_keys ADD COLUMN daily_token_quota INTEGER DEFAULT 0;`)
+	_, _ = db.Exec(`ALTER TABLE request_logs ADD COLUMN request_body TEXT DEFAULT '';`)
+	_, _ = db.Exec(`ALTER TABLE request_logs ADD COLUMN response_text TEXT DEFAULT '';`)
 	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS security_events (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		kind TEXT NOT NULL,

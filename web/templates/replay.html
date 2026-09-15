@@ -1,0 +1,141 @@
+{{ define "title" }}Request Replay Lab - AI Manager{{ end }}
+
+{{ define "content" }}
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+  <div>
+    <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
+      <i class="bi bi-repeat text-info"></i> Request Replay Lab
+    </h4>
+    <p class="text-dim small mb-0">Replay any stored prompt against up to 4 models side-by-side — compare output, latency, and token cost.</p>
+  </div>
+  <div class="d-flex align-items-center gap-2">
+    <button type="button" class="btn-modern-primary d-inline-flex align-items-center gap-2" id="btnRunReplay" onclick="runReplay()">
+      <i class="bi bi-play-fill"></i> Run Replay
+    </button>
+  </div>
+</div>
+
+<!-- Source Request Card -->
+<div class="card-modern p-4 mb-4">
+  <h6 class="fw-bold text-light mb-3 d-flex align-items-center gap-2">
+    <i class="bi bi-file-earmark-text text-info"></i> Source Request
+  </h6>
+  <div class="d-flex flex-column flex-md-row gap-2 mb-3">
+    <input type="number" class="form-control form-control-modern font-monospace" id="replayLogId" placeholder="Log ID (e.g. 1234)" value="{{ .PreselectLogID }}" min="1" style="max-width: 220px;">
+    <button type="button" class="btn-modern-ghost btn-sm d-inline-flex align-items-center gap-2" onclick="loadReplaySource()">
+      <i class="bi bi-download"></i> Load Prompt
+    </button>
+    <span class="text-dim small align-self-center" id="replaySourceMeta">Pick a log from <a href="/logs" class="text-info">Request Logs</a> (Replay button) or enter its ID.</span>
+  </div>
+  <div class="row g-3">
+    <div class="col-md-6">
+      <span class="small text-muted mb-1 d-block font-monospace">STORED PROMPT (messages)</span>
+      <pre class="code-box p-3 m-0 font-monospace text-light rounded-3" id="replayPromptPreview" style="font-size: 0.75rem; max-height: 260px; overflow: auto;">No prompt loaded.</pre>
+    </div>
+    <div class="col-md-6">
+      <span class="small text-muted mb-1 d-block font-monospace">ORIGINAL RESPONSE <span class="text-dim" id="replayOrigModel"></span></span>
+      <pre class="code-box p-3 m-0 font-monospace text-light rounded-3" id="replayOrigPreview" style="font-size: 0.75rem; max-height: 260px; overflow: auto;">—</pre>
+    </div>
+  </div>
+</div>
+
+<!-- Target Models Card -->
+<div class="card-modern p-4 mb-4">
+  <h6 class="fw-bold text-light mb-3 d-flex align-items-center gap-2">
+    <i class="bi bi-cpu text-primary"></i> Target Models <span class="text-dim small fw-normal">(max 4)</span>
+  </h6>
+  <div class="d-flex flex-wrap gap-2 mb-3" id="replayModelChips">
+    {{ range .Models }}
+      <label class="btn-modern-ghost btn-sm font-monospace d-inline-flex align-items-center gap-1.5">
+        <input type="checkbox" class="form-check-input m-0 replay-model-check" value="{{ .ID }}">
+        <span>{{ .ID }}</span>
+      </label>
+    {{ end }}
+  </div>
+  <div class="row g-2" style="max-width: 520px;">
+    <div class="col-6">
+      <label class="form-label small text-muted mb-1">Max tokens (≤1024)</label>
+      <input type="number" class="form-control form-control-modern form-control-sm font-monospace" id="replayMaxTokens" value="512" min="16" max="1024">
+    </div>
+    <div class="col-6">
+      <label class="form-label small text-muted mb-1">Temperature (blank = original)</label>
+      <input type="number" class="form-control form-control-modern form-control-sm font-monospace" id="replayTemp" placeholder="e.g. 0.7" min="0" max="2" step="0.1">
+    </div>
+  </div>
+</div>
+
+<!-- Results -->
+<div class="card-modern p-0 overflow-hidden mb-4">
+  <div class="p-3 border-bottom border-secondary border-opacity-10 d-flex justify-content-between align-items-center">
+    <h6 class="fw-bold text-light mb-0">Replay Results</h6>
+    <span class="text-dim small" id="replayResultMeta"></span>
+  </div>
+  <div class="table-responsive"><table class="table table-modern mb-0">
+    <thead><tr><th>Model</th><th class="text-end">Latency</th><th class="text-end">Tokens In/Out</th><th>Status</th><th>Output</th></tr></thead>
+    <tbody id="replayTbody"><tr><td colspan="5" class="text-center text-dim py-5"><i class="bi bi-repeat fs-2 d-block mb-2 opacity-50"></i>Load a prompt, pick models, then Run Replay.</td></tr></tbody>
+  </table></div>
+</div>
+
+<script>
+let replayLogId = null;
+function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+async function loadReplaySource() {
+  const id = document.getElementById('replayLogId').value.trim();
+  if (!id) { alert('Enter a log ID first.'); return; }
+  const meta = document.getElementById('replaySourceMeta');
+  meta.textContent = 'Loading…';
+  try {
+    const res = await fetch('/api/replay/source?id=' + encodeURIComponent(id));
+    if (!res.ok) throw new Error(await res.text() || ('HTTP ' + res.status));
+    const d = await res.json();
+    replayLogId = d.id;
+    let msgs = '(no messages found)';
+    try {
+      const body = JSON.parse(d.request_body || '{}');
+      msgs = JSON.stringify(body.messages || body, null, 2);
+    } catch (e) { msgs = d.request_body || '(empty)'; }
+    document.getElementById('replayPromptPreview').textContent = msgs;
+    document.getElementById('replayOrigPreview').textContent = d.response_text || '(no stored response)';
+    document.getElementById('replayOrigModel').textContent = d.model ? ('· ' + d.model) : '';
+    meta.innerHTML = `Loaded log <span class="text-light font-monospace">#${d.id}</span> · model <span class="text-primary font-monospace">${esc(d.model || '-')}</span>`;
+  } catch (e) { meta.innerHTML = '<span class="text-rose">Error: ' + esc(e.message) + '</span>'; }
+}
+async function runReplay() {
+  if (!replayLogId) { alert('Load a source prompt first.'); return; }
+  const models = [...document.querySelectorAll('.replay-model-check:checked')].map(c => c.value);
+  if (!models.length) { alert('Pick at least 1 target model.'); return; }
+  if (models.length > 4) { alert('Max 4 models per replay.'); return; }
+  const btn = document.getElementById('btnRunReplay');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Replaying…';
+  const body = { log_id: replayLogId, models, max_tokens: parseInt(document.getElementById('replayMaxTokens').value, 10) || 512 };
+  const t = document.getElementById('replayTemp').value.trim();
+  if (t !== '') body.temperature = parseFloat(t);
+  try {
+    const res = await fetch('/api/replay/run', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    const rows = (data.results || []).map(r => {
+      const status = r.success ? '<span class="badge-modern badge-emerald">OK</span>' : `<span class="badge-modern badge-rose" title="${esc(r.error_msg)}">FAIL</span>`;
+      const out = r.success ? esc(r.output_text || '(empty)') : esc(r.error_msg || 'failed');
+      const toks = (r.prompt_tokens || r.completion_tokens) ? `${r.prompt_tokens || 0}/${r.completion_tokens || 0}` : '—';
+      return `<tr><td class="font-monospace small text-primary">${esc(r.model)}</td><td class="text-end font-monospace small text-light">${r.latency_ms}ms</td><td class="text-end font-monospace small text-dim">${toks}</td><td>${status}</td><td class="small text-light" style="max-width: 420px; white-space: pre-wrap;">${out.slice(0, 600)}</td></tr>`;
+    }).join('');
+    document.getElementById('replayTbody').innerHTML = rows || '<tr><td colspan="5" class="text-dim small text-center py-4">No results.</td></tr>';
+    document.getElementById('replayResultMeta').textContent = `${(data.results || []).length} models · source #${data.source?.log_id ?? replayLogId}`;
+  } catch (e) {
+    document.getElementById('replayTbody').innerHTML = `<tr><td colspan="5" class="text-rose small text-center py-4">Error: ${esc(e.message)}</td></tr>`;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-play-fill"></i> Run Replay';
+  }
+}
+document.querySelectorAll('#replayModelChips .replay-model-check').forEach(cb => {
+  cb.addEventListener('change', () => cb.closest('label').classList.toggle('active', cb.checked));
+});
+(function(){
+  const pre = document.getElementById('replayLogId');
+  if (pre && pre.value.trim()) loadReplaySource();
+})();
+</script>
+{{ end }}

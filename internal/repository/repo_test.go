@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -314,6 +315,54 @@ func TestRequestLogs(t *testing.T) {
 	}
 	if logs[0].Model != "ag/gemini-3.8-flash" {
 		t.Errorf("expected model 'ag/gemini-3.8-flash', got '%s'", logs[0].Model)
+	}
+}
+
+func TestRequestLogPayloadRoundtrip(t *testing.T) {
+	repo, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	longBody := `{"model":"m","messages":[{"role":"user","content":"` + strings.Repeat("x", 9000) + `"}]}`
+	longResp := strings.Repeat("y", 5000)
+	logEntry := &entity.RequestLog{
+		UserID:       "user-replay",
+		APIKeyID:     "key-replay",
+		Path:         "/v1/chat/completions",
+		Method:       "POST",
+		Model:        "ag/gemini-3.8-flash",
+		StatusCode:   200,
+		ClientIP:     "127.0.0.1",
+		RequestBody:  longBody,
+		ResponseText: longResp,
+	}
+
+	if err := repo.CreateRequestLog(ctx, logEntry); err != nil {
+		t.Fatalf("CreateRequestLog failed: %v", err)
+	}
+
+	logs, total, err := repo.GetRequestLogs(ctx, 10, 0, "", "", 0)
+	if err != nil || total < 1 {
+		t.Fatalf("GetRequestLogs failed: %v total=%d", err, total)
+	}
+
+	got, err := repo.GetRequestLogByID(ctx, logs[0].ID)
+	if err != nil {
+		t.Fatalf("GetRequestLogByID failed: %v", err)
+	}
+	if len(got.RequestBody) != 8192 {
+		t.Errorf("expected request_body capped at 8192, got %d", len(got.RequestBody))
+	}
+	if len(got.ResponseText) != 4096 {
+		t.Errorf("expected response_text capped at 4096, got %d", len(got.ResponseText))
+	}
+	if !strings.HasPrefix(longBody, got.RequestBody[:100]) {
+		t.Errorf("request_body prefix mismatch")
+	}
+
+	if _, err := repo.GetRequestLogByID(ctx, 999999999); err == nil {
+		t.Errorf("expected error for missing log id")
 	}
 }
 
