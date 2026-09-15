@@ -16,7 +16,7 @@
   <!-- Bootstrap Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <!-- Custom Modern Design System -->
-  <link href="/static/css/custom.css?v=11" rel="stylesheet">
+  <link href="/static/css/custom.css?v=12" rel="stylesheet">
   <!-- PWA: installable app -->
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#09090b">
@@ -315,7 +315,7 @@
           </div>
         {{ end }}
 
-        <button type="button" class="btn btn-sm w-100 d-none align-items-center justify-content-center gap-2 mb-2 pwa-install-btn" style="border: 1px dashed rgba(56,189,248,0.4); color: #38bdf8; border-radius: 10px; font-size: 0.78rem;">
+        <button type="button" class="btn btn-sm w-100 d-flex align-items-center justify-content-center gap-2 mb-2 pwa-install-btn" style="border: 1px dashed rgba(56,189,248,0.4); color: #38bdf8; border-radius: 10px; font-size: 0.78rem;">
           <i class="bi bi-download"></i> Install App
         </button>
         <button type="button" id="themeToggle" class="btn-modern-ghost w-100 py-2 mb-2 d-flex align-items-center justify-content-center gap-2" title="Toggle light/dark theme" style="font-size: 0.78rem;">
@@ -355,7 +355,7 @@
           <button type="button" id="themeToggleMobile" class="btn-modern-ghost py-1 px-2 text-muted" title="Toggle light/dark theme">
             <i class="bi bi-moon-stars" id="themeToggleMobileIcon"></i>
           </button>
-          <button type="button" class="btn-modern-ghost py-1 px-2 d-none pwa-install-btn" title="Install App" style="color: #38bdf8;">
+          <button type="button" class="btn-modern-ghost py-1 px-2 pwa-install-btn" title="Install App" style="color: #38bdf8;">
             <i class="bi bi-download"></i>
           </button>
           <form action="/logout" method="POST" class="m-0">
@@ -432,20 +432,24 @@
     (function () {
       var deferred = null;
       var btns = document.querySelectorAll('.pwa-install-btn');
-      function show() {
-        btns.forEach(function (b) { b.classList.remove('d-none'); b.classList.add('d-flex'); });
+      function hide() {
+        btns.forEach(function (b) { b.style.display = 'none'; });
       }
       function isIOS() { return /iphone|ipad|ipod/i.test(navigator.userAgent); }
       function isStandalone() {
         return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
       }
-      if (isStandalone()) return; // already installed — no button
+      // Installed already → no button. Otherwise the button stays visible:
+      // beforeinstallprompt does NOT re-fire after a dismiss (Chrome blocks it
+      // for months) and Firefox has no such event at all, so gating visibility
+      // on the event hides the button permanently. Click falls back to manual
+      // install steps when no deferred prompt exists.
+      if (isStandalone()) { hide(); return; }
       window.addEventListener('beforeinstallprompt', function (e) {
         e.preventDefault();
         deferred = e;
-        show();
       });
-      if (isIOS()) show(); // iOS has no beforeinstallprompt — show with manual steps
+      window.addEventListener('appinstalled', function () { deferred = null; hide(); });
       btns.forEach(function (b) {
         b.addEventListener('click', function () {
           if (deferred) {
@@ -454,7 +458,7 @@
           } else if (isIOS()) {
             alert('Install AI Manager:\n1. Tap Share (kotak + panah)\n2. Pilih "Add to Home Screen"\n3. Tap Add');
           } else {
-            alert('Buka menu browser (⋮) lalu pilih "Install app" / "Add to Home screen".');
+            alert('Install AI Manager:\nChrome/Edge: menu browser (⋮) → "Install app" / "Save and share" → "Install".\nSudah pernah dismiss prompt? Tunggu masa blokir Chrome berakhir atau pakai menu manual ini.');
           }
         });
       });
