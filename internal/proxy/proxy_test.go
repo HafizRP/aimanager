@@ -1,12 +1,16 @@
 package proxy
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"9router-gateway/internal/config"
 	"9router-gateway/internal/entity"
+	"9router-gateway/internal/upstream"
 )
 
 func TestParseAllowedModels(t *testing.T) {
@@ -197,5 +201,54 @@ func TestAPIKey_IsExpired(t *testing.T) {
 	k4 := &entity.APIKey{ExpiresAt: &justNow}
 	if !k4.IsExpired() {
 		t.Error("expected past-ish expiry to be expired")
+	}
+}
+
+func TestGatewayProxy_MockCoreClient_GetModels(t *testing.T) {
+	cfg := &config.Config{UpstreamURL: "http://127.0.0.1:20128"}
+	p := NewGatewayProxy(cfg, nil)
+
+	mockClient := &upstream.MockCoreClient{
+		GetMergedModelsFunc: func(ctx context.Context) (string, []map[string]interface{}, error) {
+			return "list", []map[string]interface{}{
+				{"id": "ag/gemini-3.8-flash", "object": "model", "owned_by": "antigravity"},
+				{"id": "oc/contributor-model", "object": "model", "owned_by": "opencode"},
+				{"id": "claude-sonnet-4-6", "object": "model", "owned_by": "anthropic"},
+			}, nil
+		},
+	}
+	p.SetCoreClient(mockClient)
+
+	// User only allowed "ag/gemini-3.8-flash"
+	user := &entity.User{
+		AllowedModels: `["ag/gemini-3.8-flash"]`,
+		Role:          "user",
+	}
+	key := &entity.APIKey{
+		Key: "sk-gw-test",
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	w := httptest.NewRecorder()
+
+	p.handleGetModels(w, req, user, key)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", w.Code)
+	}
+
+	var resp struct {
+		Object string                   `json:"object"`
+		Data   []map[string]interface{} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if len(resp.Data) != 1 {
+		t.Fatalf("expected 1 filtered model, got %d", len(resp.Data))
+	}
+	if resp.Data[0]["id"] != "ag/gemini-3.8-flash" {
+		t.Errorf("expected model 'ag/gemini-3.8-flash', got '%v'", resp.Data[0]["id"])
 	}
 }

@@ -23,17 +23,84 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-// CoreClient talks to the 9router Core HTTP API.
-type CoreClient struct {
+// CoreClient defines the client interface for the 9router Core HTTP and management API.
+type CoreClient interface {
+	ResetCLIToken()
+	GetProviders(ctx context.Context) ([]ProviderConnection, error)
+	ToggleProvider(ctx context.Context, id string, isActive bool) error
+	SetProviderPriority(ctx context.Context, id string, priority int) error
+	TestProvider(ctx context.Context, id string) (map[string]interface{}, error)
+	DeleteProvider(ctx context.Context, id string) error
+	CreateProvider(ctx context.Context, payload map[string]interface{}) (map[string]interface{}, error)
+	GetCombos(ctx context.Context) ([]Combo, error)
+	CreateCombo(ctx context.Context, name string, models []string) error
+	UpdateCombo(ctx context.Context, id string, name string, models []string) error
+	DeleteCombo(ctx context.Context, id string) error
+	GetSettings(ctx context.Context) (map[string]interface{}, error)
+	UpdateSettings(ctx context.Context, updates map[string]interface{}) error
+	GetModelAliases(ctx context.Context) (map[string]string, error)
+	SetModelAlias(ctx context.Context, alias, model string) error
+	DeleteModelAlias(ctx context.Context, alias string) error
+	GetProxyPools(ctx context.Context) ([]ProxyPool, error)
+	CreateProxyPool(ctx context.Context, payload map[string]interface{}) error
+	DeleteProxyPool(ctx context.Context, id string) error
+	TestProxyPool(ctx context.Context, id string) (map[string]interface{}, error)
+	ServiceStatus(ctx context.Context, service string) (map[string]interface{}, error)
+	ServiceStats(ctx context.Context, service string) (map[string]interface{}, error)
+	ServiceAction(ctx context.Context, service, action string, payload map[string]interface{}) (map[string]interface{}, error)
+	TranslatorTranslate(ctx context.Context, payload map[string]interface{}) (map[string]interface{}, error)
+	UsageStats(ctx context.Context) (map[string]interface{}, error)
+	ConsoleLogs(ctx context.Context) (map[string]interface{}, error)
+	GetProviderNodes(ctx context.Context) ([]ProviderNode, error)
+	CreateProviderNode(ctx context.Context, payload map[string]interface{}) (map[string]interface{}, error)
+	UpdateProviderNode(ctx context.Context, id string, payload map[string]interface{}) (map[string]interface{}, error)
+	DeleteProviderNode(ctx context.Context, id string) error
+	ValidateProviderNode(ctx context.Context, payload map[string]interface{}) (map[string]interface{}, error)
+	MitmStatus(ctx context.Context) (map[string]interface{}, error)
+	MitmStart(ctx context.Context, apiKey string) (map[string]interface{}, error)
+	MitmStop(ctx context.Context) (map[string]interface{}, error)
+	MitmDNS(ctx context.Context, tool, action string) (map[string]interface{}, error)
+	MitmAliasGet(ctx context.Context, tool string) (map[string]interface{}, error)
+	MitmAliasPut(ctx context.Context, tool string, mappings map[string]interface{}) (map[string]interface{}, error)
+	MCPRegistry(ctx context.Context) (map[string]interface{}, error)
+	MCPInspect(ctx context.Context, url string) (map[string]interface{}, error)
+	OAuthAuthorize(ctx context.Context, provider, redirectURI string) (map[string]interface{}, error)
+	OAuthExchange(ctx context.Context, provider string, payload map[string]interface{}) (map[string]interface{}, error)
+	KiroSocialAuthorize(ctx context.Context, idp, redirectURI string) (map[string]interface{}, error)
+	KiroSocialExchange(ctx context.Context, payload map[string]interface{}) (map[string]interface{}, error)
+	MediaVoices(ctx context.Context, engine string) (map[string]interface{}, error)
+	PxpipeLogs(ctx context.Context) (map[string]interface{}, error)
+	PxpipeHealth(ctx context.Context) (map[string]interface{}, error)
+	TranslatorSend(ctx context.Context, payload map[string]interface{}) (map[string]interface{}, error)
+	CLIToolSettings(ctx context.Context, tool string) (map[string]interface{}, error)
+	Pricing(ctx context.Context) (map[string]interface{}, error)
+	CoreVersion(ctx context.Context) (map[string]interface{}, error)
+	CoreKeys(ctx context.Context) (map[string]interface{}, error)
+	GetMergedModels(ctx context.Context) (string, []map[string]interface{}, error)
+}
+
+// HTTPCoreClient talks to the 9router Core HTTP API.
+type HTTPCoreClient struct {
 	cfg        *config.Config
 	httpClient *http.Client
 	mu         sync.RWMutex
 	cliToken   string
 }
 
+// Ensure HTTPCoreClient implements CoreClient.
+var _ CoreClient = (*HTTPCoreClient)(nil)
+
+// DefaultCoreClient is an alias to HTTPCoreClient.
+type DefaultCoreClient = HTTPCoreClient
+
 // NewCoreClient creates a CoreClient targeting the configured upstream.
-func NewCoreClient(cfg *config.Config) *CoreClient {
-	return &CoreClient{
+func NewCoreClient(cfg *config.Config) CoreClient {
+	return NewHTTPCoreClient(cfg)
+}
+
+// NewHTTPCoreClient creates a concrete HTTPCoreClient targeting the configured upstream.
+func NewHTTPCoreClient(cfg *config.Config) *HTTPCoreClient {
+	return &HTTPCoreClient{
 		cfg: cfg,
 		httpClient: &http.Client{
 			Timeout: 15 * time.Second,
@@ -41,7 +108,7 @@ func NewCoreClient(cfg *config.Config) *CoreClient {
 	}
 }
 
-func (c *CoreClient) deriveCLIToken() string {
+func (c *HTTPCoreClient) deriveCLIToken() string {
 	c.mu.RLock()
 	if c.cliToken != "" {
 		token := c.cliToken
@@ -62,7 +129,7 @@ func (c *CoreClient) deriveCLIToken() string {
 }
 
 // ResetCLIToken invalidates the cached CLI token so it can be re-derived on next request.
-func (c *CoreClient) ResetCLIToken() {
+func (c *HTTPCoreClient) ResetCLIToken() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.cliToken = ""
@@ -104,7 +171,7 @@ func DeriveCLIToken(cfg *config.Config) string {
 	return token
 }
 
-func (c *CoreClient) doRequest(ctx context.Context, method, endpoint string, reqBody interface{}) ([]byte, error) {
+func (c *HTTPCoreClient) doRequest(ctx context.Context, method, endpoint string, reqBody interface{}) ([]byte, error) {
 	url := fmt.Sprintf("%s%s", strings.TrimRight(c.cfg.GetUpstreamURL(), "/"), endpoint)
 
 	var bodyReader io.Reader
@@ -170,7 +237,7 @@ type ProviderConnection struct {
 }
 
 // GetProviders lists all configured provider connections.
-func (c *CoreClient) GetProviders(ctx context.Context) ([]ProviderConnection, error) {
+func (c *HTTPCoreClient) GetProviders(ctx context.Context) ([]ProviderConnection, error) {
 	data, err := c.doRequest(ctx, http.MethodGet, "/api/providers", nil)
 	if err != nil {
 		return nil, err
@@ -186,7 +253,7 @@ func (c *CoreClient) GetProviders(ctx context.Context) ([]ProviderConnection, er
 }
 
 // ToggleProvider activates or deactivates a provider connection.
-func (c *CoreClient) ToggleProvider(ctx context.Context, id string, isActive bool) error {
+func (c *HTTPCoreClient) ToggleProvider(ctx context.Context, id string, isActive bool) error {
 	payload := map[string]interface{}{
 		"isActive": isActive,
 	}
@@ -195,7 +262,7 @@ func (c *CoreClient) ToggleProvider(ctx context.Context, id string, isActive boo
 }
 
 // SetProviderPriority updates the routing priority of a provider connection.
-func (c *CoreClient) SetProviderPriority(ctx context.Context, id string, priority int) error {
+func (c *HTTPCoreClient) SetProviderPriority(ctx context.Context, id string, priority int) error {
 	payload := map[string]interface{}{
 		"priority": priority,
 	}
@@ -204,7 +271,7 @@ func (c *CoreClient) SetProviderPriority(ctx context.Context, id string, priorit
 }
 
 // TestProvider asks 9router Core to test connectivity for a provider connection.
-func (c *CoreClient) TestProvider(ctx context.Context, id string) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) TestProvider(ctx context.Context, id string) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodPost, fmt.Sprintf("/api/providers/%s/test", id), nil)
 	if err != nil {
 		return nil, err
@@ -215,13 +282,13 @@ func (c *CoreClient) TestProvider(ctx context.Context, id string) (map[string]in
 }
 
 // DeleteProvider removes a provider connection by ID.
-func (c *CoreClient) DeleteProvider(ctx context.Context, id string) error {
+func (c *HTTPCoreClient) DeleteProvider(ctx context.Context, id string) error {
 	_, err := c.doRequest(ctx, http.MethodDelete, fmt.Sprintf("/api/providers/%s", id), nil)
 	return err
 }
 
 // CreateProvider creates a new provider connection and returns its data.
-func (c *CoreClient) CreateProvider(ctx context.Context, payload map[string]interface{}) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) CreateProvider(ctx context.Context, payload map[string]interface{}) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodPost, "/api/providers", payload)
 	if err != nil {
 		return nil, err
@@ -246,7 +313,7 @@ type Combo struct {
 }
 
 // GetCombos lists all model combos.
-func (c *CoreClient) GetCombos(ctx context.Context) ([]Combo, error) {
+func (c *HTTPCoreClient) GetCombos(ctx context.Context) ([]Combo, error) {
 	data, err := c.doRequest(ctx, http.MethodGet, "/api/combos", nil)
 	if err != nil {
 		return nil, err
@@ -262,7 +329,7 @@ func (c *CoreClient) GetCombos(ctx context.Context) ([]Combo, error) {
 }
 
 // CreateCombo creates a new combo with the given name and model list.
-func (c *CoreClient) CreateCombo(ctx context.Context, name string, models []string) error {
+func (c *HTTPCoreClient) CreateCombo(ctx context.Context, name string, models []string) error {
 	payload := map[string]interface{}{
 		"name":   name,
 		"models": models,
@@ -272,7 +339,7 @@ func (c *CoreClient) CreateCombo(ctx context.Context, name string, models []stri
 }
 
 // UpdateCombo updates the name and model list of an existing combo.
-func (c *CoreClient) UpdateCombo(ctx context.Context, id string, name string, models []string) error {
+func (c *HTTPCoreClient) UpdateCombo(ctx context.Context, id string, name string, models []string) error {
 	payload := map[string]interface{}{
 		"name":   name,
 		"models": models,
@@ -282,7 +349,7 @@ func (c *CoreClient) UpdateCombo(ctx context.Context, id string, name string, mo
 }
 
 // DeleteCombo removes a combo by ID.
-func (c *CoreClient) DeleteCombo(ctx context.Context, id string) error {
+func (c *HTTPCoreClient) DeleteCombo(ctx context.Context, id string) error {
 	_, err := c.doRequest(ctx, http.MethodDelete, fmt.Sprintf("/api/combos/%s", id), nil)
 	return err
 }
@@ -292,7 +359,7 @@ func (c *CoreClient) DeleteCombo(ctx context.Context, id string) error {
 // -------------------------------------------------------------
 
 // GetSettings retrieves the current 9router Core settings.
-func (c *CoreClient) GetSettings(ctx context.Context) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) GetSettings(ctx context.Context) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodGet, "/api/settings", nil)
 	if err != nil {
 		return nil, err
@@ -306,7 +373,7 @@ func (c *CoreClient) GetSettings(ctx context.Context) (map[string]interface{}, e
 
 // UpdateSettings applies partial updates to 9router Core settings.
 // Core accepts PATCH (not POST) on /api/settings.
-func (c *CoreClient) UpdateSettings(ctx context.Context, updates map[string]interface{}) error {
+func (c *HTTPCoreClient) UpdateSettings(ctx context.Context, updates map[string]interface{}) error {
 	_, err := c.doRequest(ctx, http.MethodPatch, "/api/settings", updates)
 	return err
 }
@@ -316,7 +383,7 @@ func (c *CoreClient) UpdateSettings(ctx context.Context, updates map[string]inte
 // -------------------------------------------------------------
 
 // GetModelAliases returns all model aliases as alias-to-model pairs.
-func (c *CoreClient) GetModelAliases(ctx context.Context) (map[string]string, error) {
+func (c *HTTPCoreClient) GetModelAliases(ctx context.Context) (map[string]string, error) {
 	data, err := c.doRequest(ctx, http.MethodGet, "/api/models/alias", nil)
 	if err != nil {
 		return nil, err
@@ -331,7 +398,7 @@ func (c *CoreClient) GetModelAliases(ctx context.Context) (map[string]string, er
 }
 
 // SetModelAlias maps an alias to a model.
-func (c *CoreClient) SetModelAlias(ctx context.Context, alias, model string) error {
+func (c *HTTPCoreClient) SetModelAlias(ctx context.Context, alias, model string) error {
 	payload := map[string]string{
 		"alias": alias,
 		"model": model,
@@ -341,7 +408,7 @@ func (c *CoreClient) SetModelAlias(ctx context.Context, alias, model string) err
 }
 
 // DeleteModelAlias removes an alias mapping.
-func (c *CoreClient) DeleteModelAlias(ctx context.Context, alias string) error {
+func (c *HTTPCoreClient) DeleteModelAlias(ctx context.Context, alias string) error {
 	ep := fmt.Sprintf("/api/models/alias?alias=%s", strings.TrimSpace(alias))
 	_, err := c.doRequest(ctx, http.MethodDelete, ep, nil)
 	return err
@@ -362,7 +429,7 @@ type ProxyPool struct {
 }
 
 // GetProxyPools lists all configured proxy pools.
-func (c *CoreClient) GetProxyPools(ctx context.Context) ([]ProxyPool, error) {
+func (c *HTTPCoreClient) GetProxyPools(ctx context.Context) ([]ProxyPool, error) {
 	data, err := c.doRequest(ctx, http.MethodGet, "/api/proxy-pools", nil)
 	if err != nil {
 		return nil, err
@@ -377,19 +444,19 @@ func (c *CoreClient) GetProxyPools(ctx context.Context) ([]ProxyPool, error) {
 }
 
 // CreateProxyPool creates a new proxy pool.
-func (c *CoreClient) CreateProxyPool(ctx context.Context, payload map[string]interface{}) error {
+func (c *HTTPCoreClient) CreateProxyPool(ctx context.Context, payload map[string]interface{}) error {
 	_, err := c.doRequest(ctx, http.MethodPost, "/api/proxy-pools", payload)
 	return err
 }
 
 // DeleteProxyPool removes a proxy pool by ID.
-func (c *CoreClient) DeleteProxyPool(ctx context.Context, id string) error {
+func (c *HTTPCoreClient) DeleteProxyPool(ctx context.Context, id string) error {
 	_, err := c.doRequest(ctx, http.MethodDelete, fmt.Sprintf("/api/proxy-pools/%s", id), nil)
 	return err
 }
 
 // TestProxyPool asks 9router Core to test connectivity for a proxy pool.
-func (c *CoreClient) TestProxyPool(ctx context.Context, id string) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) TestProxyPool(ctx context.Context, id string) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodPost, fmt.Sprintf("/api/proxy-pools/%s/test", id), nil)
 	if err != nil {
 		return nil, err
@@ -404,7 +471,7 @@ func (c *CoreClient) TestProxyPool(ctx context.Context, id string) (map[string]i
 // -------------------------------------------------------------
 
 // ServiceStatus proxies GET /api/{service}/status from 9router Core.
-func (c *CoreClient) ServiceStatus(ctx context.Context, service string) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) ServiceStatus(ctx context.Context, service string) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodGet, fmt.Sprintf("/api/%s/status", service), nil)
 	if err != nil {
 		return nil, err
@@ -415,7 +482,7 @@ func (c *CoreClient) ServiceStatus(ctx context.Context, service string) (map[str
 }
 
 // ServiceStats proxies GET /api/{service}/stats from 9router Core.
-func (c *CoreClient) ServiceStats(ctx context.Context, service string) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) ServiceStats(ctx context.Context, service string) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodGet, fmt.Sprintf("/api/%s/stats", service), nil)
 	if err != nil {
 		return nil, err
@@ -426,7 +493,7 @@ func (c *CoreClient) ServiceStats(ctx context.Context, service string) (map[stri
 }
 
 // ServiceAction proxies POST /api/{service}/{action} to 9router Core.
-func (c *CoreClient) ServiceAction(ctx context.Context, service, action string, payload map[string]interface{}) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) ServiceAction(ctx context.Context, service, action string, payload map[string]interface{}) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodPost, fmt.Sprintf("/api/%s/%s", service, action), payload)
 	if err != nil {
 		return nil, err
@@ -437,7 +504,7 @@ func (c *CoreClient) ServiceAction(ctx context.Context, service, action string, 
 }
 
 // TranslatorTranslate proxies POST /api/translator/translate to 9router Core.
-func (c *CoreClient) TranslatorTranslate(ctx context.Context, payload map[string]interface{}) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) TranslatorTranslate(ctx context.Context, payload map[string]interface{}) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodPost, "/api/translator/translate", payload)
 	if err != nil {
 		return nil, err
@@ -452,7 +519,7 @@ func (c *CoreClient) TranslatorTranslate(ctx context.Context, payload map[string
 // -------------------------------------------------------------
 
 // UsageStats proxies GET /api/usage/stats from 9router Core.
-func (c *CoreClient) UsageStats(ctx context.Context) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) UsageStats(ctx context.Context) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodGet, "/api/usage/stats", nil)
 	if err != nil {
 		return nil, err
@@ -463,7 +530,7 @@ func (c *CoreClient) UsageStats(ctx context.Context) (map[string]interface{}, er
 }
 
 // ConsoleLogs proxies GET /api/translator/console-logs from 9router Core.
-func (c *CoreClient) ConsoleLogs(ctx context.Context) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) ConsoleLogs(ctx context.Context) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodGet, "/api/translator/console-logs", nil)
 	if err != nil {
 		return nil, err
@@ -490,7 +557,7 @@ type ProviderNode struct {
 }
 
 // GetProviderNodes lists self-hosted provider nodes.
-func (c *CoreClient) GetProviderNodes(ctx context.Context) ([]ProviderNode, error) {
+func (c *HTTPCoreClient) GetProviderNodes(ctx context.Context) ([]ProviderNode, error) {
 	data, err := c.doRequest(ctx, http.MethodGet, "/api/provider-nodes", nil)
 	if err != nil {
 		return nil, err
@@ -505,7 +572,7 @@ func (c *CoreClient) GetProviderNodes(ctx context.Context) ([]ProviderNode, erro
 }
 
 // CreateProviderNode creates a self-hosted provider node.
-func (c *CoreClient) CreateProviderNode(ctx context.Context, payload map[string]interface{}) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) CreateProviderNode(ctx context.Context, payload map[string]interface{}) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodPost, "/api/provider-nodes", payload)
 	if err != nil {
 		return nil, err
@@ -516,7 +583,7 @@ func (c *CoreClient) CreateProviderNode(ctx context.Context, payload map[string]
 }
 
 // UpdateProviderNode replaces a provider node (core requires full fields).
-func (c *CoreClient) UpdateProviderNode(ctx context.Context, id string, payload map[string]interface{}) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) UpdateProviderNode(ctx context.Context, id string, payload map[string]interface{}) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodPut, fmt.Sprintf("/api/provider-nodes/%s", id), payload)
 	if err != nil {
 		return nil, err
@@ -527,13 +594,13 @@ func (c *CoreClient) UpdateProviderNode(ctx context.Context, id string, payload 
 }
 
 // DeleteProviderNode removes a provider node.
-func (c *CoreClient) DeleteProviderNode(ctx context.Context, id string) error {
+func (c *HTTPCoreClient) DeleteProviderNode(ctx context.Context, id string) error {
 	_, err := c.doRequest(ctx, http.MethodDelete, fmt.Sprintf("/api/provider-nodes/%s", id), nil)
 	return err
 }
 
 // ValidateProviderNode dry-runs a node definition (requires name/prefix/baseUrl/apiKey).
-func (c *CoreClient) ValidateProviderNode(ctx context.Context, payload map[string]interface{}) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) ValidateProviderNode(ctx context.Context, payload map[string]interface{}) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodPost, "/api/provider-nodes/validate", payload)
 	if err != nil {
 		return nil, err
@@ -544,7 +611,7 @@ func (c *CoreClient) ValidateProviderNode(ctx context.Context, payload map[strin
 }
 
 // MitmStatus proxies GET /api/cli-tools/antigravity-mitm from 9router Core.
-func (c *CoreClient) MitmStatus(ctx context.Context) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) MitmStatus(ctx context.Context) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodGet, "/api/cli-tools/antigravity-mitm", nil)
 	if err != nil {
 		return nil, err
@@ -555,7 +622,7 @@ func (c *CoreClient) MitmStatus(ctx context.Context) (map[string]interface{}, er
 }
 
 // MitmStart starts the MITM bridge server (core runs as root: no sudo needed).
-func (c *CoreClient) MitmStart(ctx context.Context, apiKey string) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) MitmStart(ctx context.Context, apiKey string) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodPost, "/api/cli-tools/antigravity-mitm", map[string]interface{}{"apiKey": apiKey})
 	if err != nil {
 		return nil, err
@@ -566,7 +633,7 @@ func (c *CoreClient) MitmStart(ctx context.Context, apiKey string) (map[string]i
 }
 
 // MitmStop stops the MITM bridge server.
-func (c *CoreClient) MitmStop(ctx context.Context) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) MitmStop(ctx context.Context) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodDelete, "/api/cli-tools/antigravity-mitm", map[string]interface{}{})
 	if err != nil {
 		return nil, err
@@ -578,7 +645,7 @@ func (c *CoreClient) MitmStop(ctx context.Context) (map[string]interface{}, erro
 
 // MitmDNS toggles per-tool DNS interception (tool: antigravity/kiro/copilot/cursor,
 // action: enable/disable). trust-cert is deliberately NOT proxied (host trust store).
-func (c *CoreClient) MitmDNS(ctx context.Context, tool, action string) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) MitmDNS(ctx context.Context, tool, action string) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodPatch, "/api/cli-tools/antigravity-mitm", map[string]interface{}{"tool": tool, "action": action})
 	if err != nil {
 		return nil, err
@@ -589,7 +656,7 @@ func (c *CoreClient) MitmDNS(ctx context.Context, tool, action string) (map[stri
 }
 
 // MitmAliasGet returns model alias mappings for a tool.
-func (c *CoreClient) MitmAliasGet(ctx context.Context, tool string) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) MitmAliasGet(ctx context.Context, tool string) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodGet, fmt.Sprintf("/api/cli-tools/antigravity-mitm/alias?tool=%s", tool), nil)
 	if err != nil {
 		return nil, err
@@ -600,7 +667,7 @@ func (c *CoreClient) MitmAliasGet(ctx context.Context, tool string) (map[string]
 }
 
 // MitmAliasPut saves model alias mappings for a tool.
-func (c *CoreClient) MitmAliasPut(ctx context.Context, tool string, mappings map[string]interface{}) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) MitmAliasPut(ctx context.Context, tool string, mappings map[string]interface{}) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodPut, "/api/cli-tools/antigravity-mitm/alias", map[string]interface{}{"tool": tool, "mappings": mappings})
 	if err != nil {
 		return nil, err
@@ -611,7 +678,7 @@ func (c *CoreClient) MitmAliasPut(ctx context.Context, tool string, mappings map
 }
 
 // MCPRegistry proxies the cowork MCP server directory from 9router Core.
-func (c *CoreClient) MCPRegistry(ctx context.Context) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) MCPRegistry(ctx context.Context) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodGet, "/api/cli-tools/cowork-mcp-registry", nil)
 	if err != nil {
 		return nil, err
@@ -622,7 +689,7 @@ func (c *CoreClient) MCPRegistry(ctx context.Context) (map[string]interface{}, e
 }
 
 // MCPInspect asks 9router Core to list tools of an MCP server URL (SSRF-guarded in core).
-func (c *CoreClient) MCPInspect(ctx context.Context, url string) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) MCPInspect(ctx context.Context, url string) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodPost, "/api/cli-tools/cowork-mcp-tools", map[string]interface{}{"url": url})
 	if err != nil {
 		return nil, err
@@ -638,7 +705,7 @@ func (c *CoreClient) MCPInspect(ctx context.Context, url string) (map[string]int
 // -------------------------------------------------------------
 
 // OAuthAuthorize starts an OAuth flow: GET /api/oauth/{provider}/authorize.
-func (c *CoreClient) OAuthAuthorize(ctx context.Context, provider, redirectURI string) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) OAuthAuthorize(ctx context.Context, provider, redirectURI string) (map[string]interface{}, error) {
 	ep := fmt.Sprintf("/api/oauth/%s/authorize?redirect_uri=%s", provider, url.QueryEscape(redirectURI))
 	data, err := c.doRequest(ctx, http.MethodGet, ep, nil)
 	if err != nil {
@@ -650,7 +717,7 @@ func (c *CoreClient) OAuthAuthorize(ctx context.Context, provider, redirectURI s
 }
 
 // OAuthExchange completes an OAuth flow: POST /api/oauth/{provider}/exchange.
-func (c *CoreClient) OAuthExchange(ctx context.Context, provider string, payload map[string]interface{}) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) OAuthExchange(ctx context.Context, provider string, payload map[string]interface{}) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodPost, fmt.Sprintf("/api/oauth/%s/exchange", provider), payload)
 	if err != nil {
 		return nil, err
@@ -661,7 +728,7 @@ func (c *CoreClient) OAuthExchange(ctx context.Context, provider string, payload
 }
 
 // KiroSocialAuthorize starts Kiro Google/GitHub OAuth: provider=google|github.
-func (c *CoreClient) KiroSocialAuthorize(ctx context.Context, idp, redirectURI string) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) KiroSocialAuthorize(ctx context.Context, idp, redirectURI string) (map[string]interface{}, error) {
 	ep := fmt.Sprintf("/api/oauth/kiro/social-authorize?provider=%s&redirect_uri=%s", idp, url.QueryEscape(redirectURI))
 	data, err := c.doRequest(ctx, http.MethodGet, ep, nil)
 	if err != nil {
@@ -673,7 +740,7 @@ func (c *CoreClient) KiroSocialAuthorize(ctx context.Context, idp, redirectURI s
 }
 
 // KiroSocialExchange completes Kiro social OAuth.
-func (c *CoreClient) KiroSocialExchange(ctx context.Context, payload map[string]interface{}) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) KiroSocialExchange(ctx context.Context, payload map[string]interface{}) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodPost, "/api/oauth/kiro/social-exchange", payload)
 	if err != nil {
 		return nil, err
@@ -685,7 +752,7 @@ func (c *CoreClient) KiroSocialExchange(ctx context.Context, payload map[string]
 
 // MediaVoices lists TTS voices for an engine (deepgram/inworld/elevenlabs/minimax)
 // or the generic catalog when engine is "".
-func (c *CoreClient) MediaVoices(ctx context.Context, engine string) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) MediaVoices(ctx context.Context, engine string) (map[string]interface{}, error) {
 	ep := "/api/media-providers/tts/voices"
 	if engine != "" {
 		ep = fmt.Sprintf("/api/media-providers/tts/%s/voices", engine)
@@ -706,7 +773,7 @@ func (c *CoreClient) MediaVoices(ctx context.Context, engine string) (map[string
 }
 
 // PxpipeLogs proxies GET /api/pxpipe/logs from 9router Core.
-func (c *CoreClient) PxpipeLogs(ctx context.Context) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) PxpipeLogs(ctx context.Context) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodGet, "/api/pxpipe/logs", nil)
 	if err != nil {
 		return nil, err
@@ -717,7 +784,7 @@ func (c *CoreClient) PxpipeLogs(ctx context.Context) (map[string]interface{}, er
 }
 
 // PxpipeHealth proxies GET /api/pxpipe/health from 9router Core.
-func (c *CoreClient) PxpipeHealth(ctx context.Context) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) PxpipeHealth(ctx context.Context) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodGet, "/api/pxpipe/health", nil)
 	if err != nil {
 		return nil, err
@@ -728,7 +795,7 @@ func (c *CoreClient) PxpipeHealth(ctx context.Context) (map[string]interface{}, 
 }
 
 // TranslatorSend proxies POST /api/translator/send (needs provider+model+body).
-func (c *CoreClient) TranslatorSend(ctx context.Context, payload map[string]interface{}) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) TranslatorSend(ctx context.Context, payload map[string]interface{}) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodPost, "/api/translator/send", payload)
 	if err != nil {
 		return nil, err
@@ -741,7 +808,7 @@ func (c *CoreClient) TranslatorSend(ctx context.Context, payload map[string]inte
 // CLIToolSettings proxies GET /api/cli-tools/{tool}-settings (claude, codex,
 // opencode, openclaw, grok-build, kilo, devin, droid, deepseek-tui, jcode,
 // cline, copilot, cowork, hermes).
-func (c *CoreClient) CLIToolSettings(ctx context.Context, tool string) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) CLIToolSettings(ctx context.Context, tool string) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodGet, fmt.Sprintf("/api/cli-tools/%s-settings", tool), nil)
 	if err != nil {
 		return nil, err
@@ -752,7 +819,7 @@ func (c *CoreClient) CLIToolSettings(ctx context.Context, tool string) (map[stri
 }
 
 // Pricing proxies GET /api/pricing (per-model $/1M tokens: gh + tokenrouter).
-func (c *CoreClient) Pricing(ctx context.Context) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) Pricing(ctx context.Context) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodGet, "/api/pricing", nil)
 	if err != nil {
 		return nil, err
@@ -763,7 +830,7 @@ func (c *CoreClient) Pricing(ctx context.Context) (map[string]interface{}, error
 }
 
 // CoreVersion proxies GET /api/version (currentVersion/latestVersion/hasUpdate).
-func (c *CoreClient) CoreVersion(ctx context.Context) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) CoreVersion(ctx context.Context) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodGet, "/api/version", nil)
 	if err != nil {
 		return nil, err
@@ -774,7 +841,7 @@ func (c *CoreClient) CoreVersion(ctx context.Context) (map[string]interface{}, e
 }
 
 // CoreKeys proxies GET /api/keys (machine API keys registered in core).
-func (c *CoreClient) CoreKeys(ctx context.Context) (map[string]interface{}, error) {
+func (c *HTTPCoreClient) CoreKeys(ctx context.Context) (map[string]interface{}, error) {
 	data, err := c.doRequest(ctx, http.MethodGet, "/api/keys", nil)
 	if err != nil {
 		return nil, err
@@ -792,7 +859,7 @@ var mergedModelPrefixes = []string{"oc/", "opencode-go/"}
 // customModelIDs reads core kv scope 'customModels' (best-effort) and returns
 // the set of expected OpenAI IDs ("alias/id"). Empty set on any error so the
 // caller falls back to mergedModelPrefixes.
-func (c *CoreClient) customModelIDs(ctx context.Context) map[string]bool {
+func (c *HTTPCoreClient) customModelIDs(ctx context.Context) map[string]bool {
 	out := map[string]bool{}
 	dsn := fmt.Sprintf("%s?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)", c.cfg.GetNineRouterDBPath())
 	db, err := sql.Open("sqlite", dsn)
@@ -829,7 +896,7 @@ func (c *CoreClient) customModelIDs(ctx context.Context) map[string]bool {
 // OpenCode Zen free tier). Primary merge source is the core DB customModels
 // scope (generic guard for future prefixes); mergedModelPrefixes is fallback.
 // Catalog failures degrade gracefully to the raw /v1/models list.
-func (c *CoreClient) GetMergedModels(ctx context.Context) (string, []map[string]interface{}, error) {
+func (c *HTTPCoreClient) GetMergedModels(ctx context.Context) (string, []map[string]interface{}, error) {
 	rawV1, err := c.doRequest(ctx, http.MethodGet, "/v1/models", nil)
 	if err != nil {
 		return "", nil, err

@@ -9,11 +9,11 @@ import (
 	"time"
 
 	"9router-gateway/internal/entity"
+	"9router-gateway/internal/usecase"
 )
 
-// Repository defines the data-access contract for all gateway entities.
-type Repository interface {
-	// Users
+// UserRepository handles user entity persistence.
+type UserRepository interface {
 	GetUserByID(ctx context.Context, id string) (*entity.User, error)
 	GetUserByUsername(ctx context.Context, username string) (*entity.User, error)
 	GetAllUsers(ctx context.Context) ([]entity.User, error)
@@ -25,8 +25,11 @@ type Repository interface {
 	ToggleUserStatus(ctx context.Context, id string, isActive bool) error
 	DeleteUser(ctx context.Context, id string) error
 	DeductTokens(ctx context.Context, userID string, tokens int) error
+	GetTodayTokenUsageByUser(ctx context.Context, userID string) (int64, error)
+}
 
-	// API Keys
+// KeyRepository handles API key entity persistence.
+type KeyRepository interface {
 	GetAPIKeyByKey(ctx context.Context, key string) (*entity.APIKey, error)
 	GetAPIKeysByUserID(ctx context.Context, userID string) ([]entity.APIKey, error)
 	GetAllAPIKeys(ctx context.Context) ([]entity.APIKey, error)
@@ -37,23 +40,28 @@ type Repository interface {
 	UpdateKeyTokenUsage(ctx context.Context, id string, tokens int) error
 	GetAPIKeyTokenUsage(ctx context.Context, id string) (int64, error)
 	UpdateKeyBudgets(ctx context.Context, id string, maxTokensLimit, dailyQuota int) error
-	GetTodayTokenUsageByUser(ctx context.Context, userID string) (int64, error)
 	GetTodayTokenUsageByKey(ctx context.Context, keyID string) (int64, error)
 	GetKeyWindowStats(ctx context.Context, since time.Time) ([]KeyWindowStats, error)
 	GetKeyBaselineTokens(ctx context.Context, days int) (map[string]float64, error)
+}
 
-	// Logs
+// AuditLogRepository handles request logs and security event audit trails.
+type AuditLogRepository interface {
 	CreateRequestLog(ctx context.Context, log *entity.RequestLog) error
 	CreateSecurityEvent(ctx context.Context, ev *entity.SecurityEvent) error
 	ListSecurityEvents(ctx context.Context, limit int) ([]entity.SecurityEvent, error)
 	GetRequestLogs(ctx context.Context, limit, offset int, userID, modelFilter string, statusFilter int) ([]entity.RequestLog, int, error)
 	GetRequestLogsCursor(ctx context.Context, limit int, cursor, direction, userID, modelFilter string, statusFilter int, startDate, endDate *time.Time) ([]entity.RequestLog, *entity.CursorPageInfo, error)
+}
 
-	// Stats
+// StatsRepository handles dashboard analytics calculations.
+type StatsRepository interface {
 	GetDashboardStats(ctx context.Context, timeframe string) (*entity.DashboardStats, error)
 	GetUserDashboardStats(ctx context.Context, userID string, timeframe string) (*entity.DashboardStats, error)
+}
 
-	// Billing & Midtrans Transactions
+// TransactionRepository handles token packages and Midtrans transactions.
+type TransactionRepository interface {
 	GetActivePackages(ctx context.Context) ([]entity.TokenPackage, error)
 	GetPackageByID(ctx context.Context, id string) (*entity.TokenPackage, error)
 	CreateTransaction(ctx context.Context, tx *entity.Transaction) error
@@ -62,33 +70,121 @@ type Repository interface {
 	GetTransactionsByUserID(ctx context.Context, userID string, limit, offset int) ([]entity.Transaction, int, error)
 	GetAllTransactions(ctx context.Context, limit, offset int) ([]entity.Transaction, int, error)
 	CreditUserTokens(ctx context.Context, userID string, tokens int64) error
+}
 
-	// Settings
+// SettingsRepository handles key-value system settings.
+type SettingsRepository interface {
 	SaveSetting(ctx context.Context, key, value string) error
 	GetSetting(ctx context.Context, key string) (string, error)
 	GetSettingDefault(ctx context.Context, key, fallback string) string
+}
 
-	// Server-Side Sessions
+// SessionRepository handles web UI user sessions.
+type SessionRepository interface {
 	CreateSession(ctx context.Context, token, userID string, expiresAt time.Time) error
 	GetSessionUser(ctx context.Context, token string) (*entity.User, error)
 	DeleteSession(ctx context.Context, token string) error
 	CleanExpiredSessions(ctx context.Context) error
+}
 
-	// Login Rate Limiting
+// LoginAttemptRepository handles IP brute force protection records.
+type LoginAttemptRepository interface {
 	RecordLoginAttempt(ctx context.Context, ip string) error
 	GetRecentLoginAttempts(ctx context.Context, ip string, windowMinutes int) (int, error)
 	ClearLoginAttempts(ctx context.Context, ip string) error
 	CleanOldLoginAttempts(ctx context.Context) error
 }
 
-// SQLiteRepo implements Repository using a *sql.DB.
+// UnitOfWork defines atomic transaction execution.
+type UnitOfWork interface {
+	Do(ctx context.Context, fn func(r Repository) error) error
+	ExecuteTx(ctx context.Context, fn func(txStore usecase.Store) error) error
+}
+
+// Repository defines the composite data-access contract for all gateway entities.
+type Repository interface {
+	UserRepository
+	KeyRepository
+	AuditLogRepository
+	StatsRepository
+	TransactionRepository
+	SettingsRepository
+	SessionRepository
+	LoginAttemptRepository
+	UnitOfWork
+	Ping(ctx context.Context) error
+}
+
+type sqlExecutor interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	PrepareContext(ctx context.Context, query string) (*sql.Stmt, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+// SQLiteRepo implements Repository using a sqlExecutor and optional *sql.DB for transactions.
 type SQLiteRepo struct {
-	db *sql.DB
+	db    sqlExecutor
+	rawDB *sql.DB
 }
 
 // NewSQLiteRepo wraps an open database connection into an SQLiteRepo.
 func NewSQLiteRepo(db *sql.DB) *SQLiteRepo {
-	return &SQLiteRepo{db: db}
+	return &SQLiteRepo{db: db, rawDB: db}
+}
+
+// Ping checks database connectivity.
+func (r *SQLiteRepo) Ping(ctx context.Context) error {
+	if r.rawDB != nil {
+		return r.rawDB.PingContext(ctx)
+	}
+	return nil
+}
+
+// Do executes operations in a single database transaction.
+func (r *SQLiteRepo) Do(ctx context.Context, fn func(repo Repository) error) error {
+	if r.rawDB == nil {
+		return fn(r)
+	}
+	tx, err := r.rawDB.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() {
+		if p := recover(); p != nil {
+			_ = tx.Rollback()
+			panic(p)
+		}
+	}()
+	txRepo := &SQLiteRepo{db: tx, rawDB: r.rawDB}
+	if err := fn(txRepo); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
+
+// ExecuteTx satisfies usecase.UnitOfWork for domain services.
+func (r *SQLiteRepo) ExecuteTx(ctx context.Context, fn func(txStore usecase.Store) error) error {
+	if r.rawDB == nil {
+		return fn(r)
+	}
+	tx, err := r.rawDB.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() {
+		if p := recover(); p != nil {
+			_ = tx.Rollback()
+			panic(p)
+		}
+	}()
+	txRepo := &SQLiteRepo{db: tx, rawDB: r.rawDB}
+	if err := fn(txRepo); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
 }
 
 func parseTimeFlexible(s string) time.Time {
@@ -254,7 +350,14 @@ func (r *SQLiteRepo) ToggleUserStatus(ctx context.Context, id string, isActive b
 
 // DeleteUser removes a user and cascades to their API keys.
 func (r *SQLiteRepo) DeleteUser(ctx context.Context, id string) error {
-	tx, err := r.db.BeginTx(ctx, nil)
+	if r.rawDB == nil {
+		if _, err := r.db.ExecContext(ctx, `DELETE FROM api_keys WHERE user_id = ?`, id); err != nil {
+			return err
+		}
+		_, err := r.db.ExecContext(ctx, `DELETE FROM users WHERE id = ?`, id)
+		return err
+	}
+	tx, err := r.rawDB.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}

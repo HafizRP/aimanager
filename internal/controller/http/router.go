@@ -104,7 +104,7 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 		_, _ = w.Write([]byte("OK"))
 	})
 	r.Get("/readyz", func(w http.ResponseWriter, r *http.Request) {
-		if err := db.PingContext(r.Context()); err != nil {
+		if err := repo.Ping(r.Context()); err != nil {
 			http.Error(w, "Database down", http.StatusServiceUnavailable)
 			return
 		}

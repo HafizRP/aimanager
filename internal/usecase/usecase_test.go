@@ -261,6 +261,10 @@ func (f *fakeStore) ListSecurityEvents(ctx context.Context, limit int) ([]entity
 	return nil, nil
 }
 
+func (f *fakeStore) ExecuteTx(ctx context.Context, fn func(txStore Store) error) error {
+	return fn(f)
+}
+
 // Ensure fakeStore satisfies Store
 var _ Store = (*fakeStore)(nil)
 
@@ -430,6 +434,39 @@ func TestBillingService_MarkPaid_NoDoubleCredit(t *testing.T) {
 	}
 	if store.users["u1"].TokenQuota != 1100 {
 		t.Errorf("expected still 1100 (no double credit), got %d", store.users["u1"].TokenQuota)
+	}
+}
+
+type failingTxStore struct {
+	*fakeStore
+}
+
+func (f *failingTxStore) ExecuteTx(ctx context.Context, fn func(txStore Store) error) error {
+	// Simulate a failure in the transaction
+	return errors.New("simulated transaction failure")
+}
+
+func TestBillingService_AtomicTransactionRollback(t *testing.T) {
+	baseStore := newFakeStore()
+	baseStore.users["u1"] = &entity.User{ID: "u1", TokenQuota: 1000}
+	tx := &entity.Transaction{
+		ID:     "tx-1",
+		UserID: "u1",
+		Tokens: 500,
+		Status: "pending",
+	}
+	baseStore.transactions["tx-1"] = tx
+
+	failStore := &failingTxStore{fakeStore: baseStore}
+	svc := NewBillingService(failStore)
+
+	err := svc.MarkPaid(context.Background(), tx, "qris", "midtrans-123")
+	if err == nil {
+		t.Fatal("expected transaction error, got nil")
+	}
+	// Verify user tokens remain unchanged
+	if baseStore.users["u1"].TokenQuota != 1000 {
+		t.Errorf("expected token quota unchanged at 1000, got %d", baseStore.users["u1"].TokenQuota)
 	}
 }
 
