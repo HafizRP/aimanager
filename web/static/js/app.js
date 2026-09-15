@@ -276,19 +276,39 @@ function initApp() {
     const btnOpenSearchMobile = document.getElementById("btnOpenSearchMobile");
 
     // Index all navigation items from sidebar
+    const dropdownToggles = Array.from(sidebarNavContent.querySelectorAll(".sidebar-dropdown-toggle"));
+    const collapseContainers = Array.from(sidebarNavContent.querySelectorAll(".collapse"));
+
+    // Track initial collapse states (which submenus were open on page load)
+    const initialCollapseMap = new Map();
+    dropdownToggles.forEach(toggle => {
+      const targetId = toggle.getAttribute("data-bs-target");
+      const collapseEl = targetId ? sidebarNavContent.querySelector(targetId) : null;
+      if (collapseEl) {
+        initialCollapseMap.set(targetId, collapseEl.classList.contains("show"));
+      }
+    });
+
     const menuItems = sidebarLinks.map(link => {
       const titleEl = link.querySelector("span:not(.badge-modern)");
       const badgeEl = link.querySelector(".badge-modern");
       const iconEl = link.querySelector("i");
+      // Find parent sub-menu toggle or group title
+      const collapseParent = link.closest(".collapse");
+      const dropdownToggle = collapseParent ? sidebarNavContent.querySelector(`.sidebar-dropdown-toggle[data-bs-target="#${collapseParent.id}"]`) : null;
+      const subGroupTitle = dropdownToggle ? dropdownToggle.querySelector("span")?.textContent.trim() : null;
       const groupEl = link.closest(".sidebar-nav-group")?.querySelector(".sidebar-group-title");
+      const groupName = subGroupTitle || (groupEl ? groupEl.textContent.trim() : "Menu");
+
       return {
         href: link.getAttribute("href") || "#",
         title: titleEl ? titleEl.textContent.trim() : link.textContent.trim(),
-        group: groupEl ? groupEl.textContent.trim() : "Menu",
+        group: groupName,
         iconClass: iconEl ? iconEl.className : "bi bi-link-45deg",
         badgeText: badgeEl ? badgeEl.textContent.trim() : "",
         keywords: (link.getAttribute("data-keywords") || "").toLowerCase(),
-        el: link
+        el: link,
+        collapseParent: collapseParent
       };
     });
 
@@ -304,6 +324,26 @@ function initApp() {
           const title = group.querySelector(".sidebar-group-title");
           if (title) title.style.display = "";
         });
+
+        // Restore dropdown toggles and initial collapse state
+        dropdownToggles.forEach(toggle => {
+          toggle.style.display = "";
+          const targetId = toggle.getAttribute("data-bs-target");
+          const collapseEl = targetId ? sidebarNavContent.querySelector(targetId) : null;
+          if (collapseEl) {
+            const wasOpen = initialCollapseMap.get(targetId);
+            if (wasOpen) {
+              collapseEl.classList.add("show");
+              toggle.classList.remove("collapsed");
+              toggle.setAttribute("aria-expanded", "true");
+            } else {
+              collapseEl.classList.remove("show");
+              toggle.classList.add("collapsed");
+              toggle.setAttribute("aria-expanded", "false");
+            }
+          }
+        });
+
         if (clearSidebarSearchBtn) clearSidebarSearchBtn.classList.add("d-none");
         if (sidebarSearchKbd) sidebarSearchKbd.classList.remove("d-none");
         if (sidebarEmptyMsg) sidebarEmptyMsg.classList.add("d-none");
@@ -338,6 +378,28 @@ function initApp() {
         } else {
           group.style.display = "";
           if (title) title.style.display = "";
+        }
+      });
+
+      // Manage dropdown collapse visibility: auto-expand if any child matches
+      dropdownToggles.forEach(toggle => {
+        const targetId = toggle.getAttribute("data-bs-target");
+        const collapseEl = targetId ? sidebarNavContent.querySelector(targetId) : null;
+        if (!collapseEl) return;
+
+        const sublinks = Array.from(collapseEl.querySelectorAll(".sidebar-link"));
+        const hasVisible = sublinks.some(link => link.style.display !== "none");
+
+        if (hasVisible) {
+          toggle.style.display = "flex";
+          collapseEl.classList.add("show");
+          toggle.classList.remove("collapsed");
+          toggle.setAttribute("aria-expanded", "true");
+        } else {
+          toggle.style.display = "none";
+          collapseEl.classList.remove("show");
+          toggle.classList.add("collapsed");
+          toggle.setAttribute("aria-expanded", "false");
         }
       });
 
