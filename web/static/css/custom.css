@@ -1053,3 +1053,136 @@ code {
     flex-wrap: wrap;
   }
 }
+
+/* ===== Light theme: fix hardcoded dark surfaces & white text ===== */
+/* Bootstrap's text-light stays near-white in light mode, so remap it to
+   readable dark text everywhere EXCEPT intentionally-dark containers
+   (code blocks, brand tile, primary buttons keep white text). */
+[data-bs-theme="light"] .text-light {
+  color: var(--text-main) !important;
+}
+[data-bs-theme="light"] .code-box-modern .text-light,
+[data-bs-theme="light"] .brand-glow .text-light,
+[data-bs-theme="light"] .btn-modern-primary .text-light,
+[data-bs-theme="light"] .btn-modern-primary.text-light {
+  color: #f8f9fa !important;
+}
+
+/* Chrome: sidebar / footer / mobile topbar ship near-black glass — go light */
+[data-bs-theme="light"] .app-sidebar {
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 1px 0 0 var(--border-subtle);
+}
+[data-bs-theme="light"] .sidebar-footer {
+  background: rgba(244, 245, 247, 0.9);
+}
+[data-bs-theme="light"] .mobile-topbar {
+  background: rgba(255, 255, 255, 0.92);
+}
+[data-bs-theme="light"] .navbar-glass {
+  background: rgba(255, 255, 255, 0.85) !important;
+}
+
+/* Active nav states: white-on-white-glass is invisible — use dark text on accent tint */
+[data-bs-theme="light"] .sidebar-link.active {
+  color: var(--text-main);
+  background: rgba(37, 99, 235, 0.1);
+  border-color: rgba(37, 99, 235, 0.25);
+  box-shadow: inset 0 1px 0 0 rgba(37, 99, 235, 0.12);
+}
+[data-bs-theme="light"] .sidebar-link.active i {
+  color: var(--primary);
+}
+[data-bs-theme="light"] .nav-pills-modern .nav-link.active {
+  color: var(--text-main) !important;
+  background: rgba(37, 99, 235, 0.1) !important;
+  border-color: rgba(37, 99, 235, 0.25);
+}
+[data-bs-theme="light"] .btn-trading-tf.active {
+  background: rgba(37, 99, 235, 0.1) !important;
+  border-color: rgba(37, 99, 235, 0.3) !important;
+  color: var(--text-main) !important;
+}
+[data-bs-theme="light"] .btn-modern-ghost:hover {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.14);
+  color: var(--text-main);
+}
+
+/* Forms: near-black inputs hide dark text — go white with dark text */
+[data-bs-theme="light"] .form-control-modern,
+[data-bs-theme="light"] .form-select-modern {
+  background-color: #ffffff !important;
+  border-color: var(--border-strong) !important;
+}
+[data-bs-theme="light"] .form-control-modern:focus,
+[data-bs-theme="light"] .form-select-modern:focus {
+  background-color: #ffffff !important;
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 2px var(--primary-glow) !important;
+  color: var(--text-main) !important;
+}
+
+/* Tables: dark header + white hairlines — go light */
+[data-bs-theme="light"] .table-modern thead th {
+  background: #eef0f3;
+}
+[data-bs-theme="light"] .table-modern tbody tr:hover {
+  background: rgba(0, 0, 0, 0.025);
+}
+[data-bs-theme="light"] .table-modern tbody td {
+  border-bottom-color: rgba(15, 17, 21, 0.07);
+}
+@media (max-width: 767.98px) {
+  [data-bs-theme="light"] .table-responsive tr {
+    background: #ffffff;
+    border-color: var(--border-strong);
+    box-shadow: 0 1px 3px rgba(15, 17, 21, 0.06);
+  }
+  [data-bs-theme="light"] .table-responsive td {
+    border-bottom-color: rgba(15, 17, 21, 0.08) !important;
+  }
+}
+
+/* Modals ship #121215 — go white in light mode */
+[data-bs-theme="light"] .modal-content-modern {
+  background: #ffffff;
+  box-shadow: 0 24px 48px -12px rgba(15, 17, 21, 0.25);
+}
+
+/* Badges/pills: pastel-on-tint fails on white — darken text */
+[data-bs-theme="light"] .badge-indigo { color: #1d4ed8; background: rgba(37, 99, 235, 0.1); }
+[data-bs-theme="light"] .badge-emerald { color: #047857; background: rgba(5, 150, 105, 0.12); }
+[data-bs-theme="light"] .badge-amber { color: #b45309; background: rgba(217, 119, 6, 0.12); }
+[data-bs-theme="light"] .badge-rose { color: #be123c; background: rgba(225, 29, 72, 0.1); }
+[data-bs-theme="light"] .badge-gray { background: rgba(0, 0, 0, 0.05); border-color: rgba(0, 0, 0, 0.1); }
+[data-bs-theme="light"] .model-pill {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--text-main);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Status + KPI accents stay legible on light */
+[data-bs-theme="light"] .status-pill-live { color: #047857; }
+[data-bs-theme="light"] .kpi-icon-indigo { color: #1d4ed8; }
+[data-bs-theme="light"] .kpi-icon-cyan { color: #0e7490; }
+[data-bs-theme="light"] .kpi-icon-emerald { color: #047857; }
+[data-bs-theme="light"] .kpi-icon-amber { color: #b45309; }
+
+/* Trading timeframe hover + card hover ring: white glow invisible on light */
+[data-bs-theme="light"] .btn-trading-tf:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+[data-bs-theme="light"] .card-modern:hover {
+  border-color: var(--border-strong);
+}
+[data-bs-theme="light"] .nav-pills-modern .nav-link:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+[data-bs-theme="light"] .progress-modern {
+  background: rgba(0, 0, 0, 0.08);
+}
+/* Page backdrop glow is white-on-white in light mode — drop it */
+[data-bs-theme="light"] body {
+  background-image: none;
+}
