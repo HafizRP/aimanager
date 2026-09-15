@@ -26,6 +26,24 @@
 
 <script>
 function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function formatWIB(isoString) {
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return isoString;
+    return d.toLocaleString('id-ID', {
+      timeZone: 'Asia/Jakarta',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }) + ' WIB';
+  } catch (e) {
+    return isoString;
+  }
+}
 function kindBadge(k){
   const m = { error_spike: ['rose','Error spike'], usage_spike: ['amber','Usage spike'], new_ip: ['indigo','IP burst'], budget_cutoff: ['gray','Budget cutoff'], self_heal: ['emerald','Self-heal'] };
   const v = m[k] || ['gray', k];
@@ -43,7 +61,7 @@ async function loadRadar() {
   try {
     const evs = await fetch('/api/radar/events?limit=100').then(r => r.json());
     document.getElementById('radarBody').innerHTML = evs && evs.length ? evs.map(e =>
-      `<tr><td class="text-dim small font-monospace">${esc(e.created_at)}</td><td>${kindBadge(e.kind)}</td><td class="text-light small">${esc(e.detail)}</td><td class="text-dim small">${esc(e.action)}</td></tr>`).join('')
+      `<tr><td class="text-dim small font-monospace">${formatWIB(e.created_at)}</td><td>${kindBadge(e.kind)}</td><td class="text-light small">${esc(e.detail)}</td><td class="text-dim small">${esc(e.action)}</td></tr>`).join('')
       : '<tr><td colspan="4" class="text-dim small">No findings. Quiet is good.</td></tr>';
   } catch (e) { document.getElementById('radarBody').innerHTML = '<tr><td colspan="4" class="text-rose small">Error: ' + esc(e.message) + '</td></tr>'; }
 }

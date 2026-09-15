@@ -50,7 +50,7 @@
                 </span>
               </td>
               <td class="text-dim font-monospace small" style="font-size: 0.78rem;">
-                {{ .CreatedAt }}
+                {{ formatDate .CreatedAt }}
               </td>
               <td class="text-end">
                 <button type="button" class="btn-modern-ghost btn-sm py-1 px-2 me-1" onclick="testProxy('{{ .ID }}')">
