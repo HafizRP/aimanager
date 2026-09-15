@@ -125,6 +125,22 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 		r.Handle("/favicon.ico", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			http.ServeFileFS(w, r, staticFS, "icons/favicon.ico")
 		}))
+		r.Handle("/robots.txt", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			http.ServeFileFS(w, r, staticFS, "robots.txt")
+		}))
+		r.Handle("/sitemap.xml", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+			http.ServeFileFS(w, r, staticFS, "sitemap.xml")
+		}))
+		r.Handle("/llms.txt", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			http.ServeFileFS(w, r, staticFS, "llms.txt")
+		}))
+		r.Handle("/llms.md", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+			http.ServeFileFS(w, r, staticFS, "llms.md")
+		}))
 	}
 
 	// Reverse Proxy / Gateway routes (OpenAI & Anthropic compatible API)

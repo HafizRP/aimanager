@@ -6,8 +6,11 @@
 [![SQLite](https://img.shields.io/badge/SQLite-WAL_Mode-003B57?style=flat&logo=sqlite)](https://www.sqlite.org/)
 [![Docker](https://img.shields.io/badge/Docker-Compose_Ready-2496ED?style=flat&logo=docker)](https://www.docker.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Live Gateway](https://img.shields.io/badge/Live_Dashboard-aimanager.b14.my.id-6366f1?style=flat&logo=cloudflare)](https://aimanager.b14.my.id)
 
 **AI Manager** is a high-performance reverse proxy, unified administration platform, and multi-tenant management gateway deployed in front of **9router Core** (`127.0.0.1:20128`). It wraps complex multi-provider LLM routing into a single, cohesive pane of glass—adding enterprise authentication, granular RBAC, FinOps cost-savings tracking, sub-10ms response caching, automated token billing, and developer tooling.
+
+🌐 **Live Gateway & Web Dashboard**: [https://aimanager.b14.my.id](https://aimanager.b14.my.id)
 
 ---
 
