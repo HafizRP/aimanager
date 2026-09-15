@@ -37,6 +37,7 @@ type (
 		CreateRequestLog(ctx context.Context, log *entity.RequestLog) error
 		GetRequestLogs(ctx context.Context, limit, offset int, userID, modelFilter string, statusFilter int) ([]entity.RequestLog, int, error)
 		GetRequestLogsCursor(ctx context.Context, limit int, cursor, direction, userID, modelFilter string, statusFilter int, startDate, endDate *time.Time) ([]entity.RequestLog, *entity.CursorPageInfo, error)
+		GetRequestLogByID(ctx context.Context, id int64) (*entity.RequestLog, error)
 		CreateSecurityEvent(ctx context.Context, ev *entity.SecurityEvent) error
 		ListSecurityEvents(ctx context.Context, limit int) ([]entity.SecurityEvent, error)
 	}

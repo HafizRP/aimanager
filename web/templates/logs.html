@@ -87,6 +87,7 @@
           <th>Status</th>
           <th>Duration</th>
           <th>Client IP</th>
+          <th class="text-end"><span class="visually-hidden">Action</span></th>
         </tr>
       </thead>
       <tbody id="logsTableBody">
@@ -137,11 +138,16 @@
               </td>
               <td class="text-dim small font-monospace">{{ .DurationMs }}ms</td>
               <td class="text-dim small font-monospace">{{ .ClientIP }}</td>
+              <td class="text-end">
+                <a href="/replay?log_id={{ .ID }}" class="btn-modern-ghost btn-sm text-decoration-none d-inline-flex align-items-center gap-1" title="Replay this prompt against other models">
+                  <i class="bi bi-repeat"></i> <span class="d-none d-lg-inline">Replay</span>
+                </a>
+              </td>
             </tr>
           {{ end }}
         {{ else }}
           <tr id="noLogsRow">
-            <td colspan="9" class="text-center text-dim py-5">
+            <td colspan="10" class="text-center text-dim py-5">
               <i class="bi bi-inbox fs-2 d-block mb-2 opacity-50"></i>
               No logs matched your criteria.
             </td>
@@ -261,6 +267,7 @@
               <td data-label="Status">${statusBadge}</td>
               <td data-label="Duration" class="text-dim small font-monospace">${log.duration_ms}ms</td>
               <td data-label="Client IP" class="text-dim small font-monospace">${escapeHtml(log.client_ip)}</td>
+              <td data-label="Action" class="text-end"><a href="/replay?log_id=${log.id}" class="btn-modern-ghost btn-sm text-decoration-none d-inline-flex align-items-center gap-1" title="Replay this prompt against other models"><i class="bi bi-repeat"></i> <span class="d-none d-lg-inline">Replay</span></a></td>
             </tr>`;
   }
 

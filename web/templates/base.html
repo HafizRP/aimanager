@@ -120,14 +120,14 @@
           </div>
 
           <!-- Sub-menu: Observability & Analytics -->
-          <button type="button" class="sidebar-dropdown-toggle {{ if not (or (eq .ActivePage "logs") (eq .ActivePage "usage") (eq .ActivePage "cache-analytics") (eq .ActivePage "benchmark") (eq .ActivePage "radar")) }}collapsed{{ end }}" data-bs-toggle="collapse" data-bs-target="#submenu-observability" aria-expanded="{{ if or (eq .ActivePage "logs") (eq .ActivePage "usage") (eq .ActivePage "cache-analytics") (eq .ActivePage "benchmark") (eq .ActivePage "radar") }}true{{ else }}false{{ end }}">
+          <button type="button" class="sidebar-dropdown-toggle {{ if not (or (eq .ActivePage "logs") (eq .ActivePage "usage") (eq .ActivePage "cache-analytics") (eq .ActivePage "benchmark") (eq .ActivePage "replay") (eq .ActivePage "radar")) }}collapsed{{ end }}" data-bs-toggle="collapse" data-bs-target="#submenu-observability" aria-expanded="{{ if or (eq .ActivePage "logs") (eq .ActivePage "usage") (eq .ActivePage "cache-analytics") (eq .ActivePage "benchmark") (eq .ActivePage "replay") (eq .ActivePage "radar") }}true{{ else }}false{{ end }}">
             <div class="d-flex align-items-center gap-2">
               <i class="bi bi-graph-up text-cyan"></i>
               <span>Observability & Stats</span>
             </div>
             <i class="bi bi-chevron-down sidebar-chevron"></i>
           </button>
-          <div class="collapse {{ if or (eq .ActivePage "logs") (eq .ActivePage "usage") (eq .ActivePage "cache-analytics") (eq .ActivePage "benchmark") (eq .ActivePage "radar") }}show{{ end }}" id="submenu-observability">
+          <div class="collapse {{ if or (eq .ActivePage "logs") (eq .ActivePage "usage") (eq .ActivePage "cache-analytics") (eq .ActivePage "benchmark") (eq .ActivePage "replay") (eq .ActivePage "radar") }}show{{ end }}" id="submenu-observability">
             <div class="sidebar-submenu-items">
               <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "logs" }}active{{ end }}" href="/logs" data-keywords="request logs audit traffic history status errors export csv json filter">
                 <i class="bi bi-activity text-info"></i>
@@ -144,6 +144,10 @@
               <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "benchmark" }}active{{ end }}" href="/benchmark" data-keywords="speed benchmark ttft latency performance throughput test leaderboard">
                 <i class="bi bi-speedometer text-warning"></i>
                 <span>Speed Benchmark</span>
+              </a>
+              <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "replay" }}active{{ end }}" href="/replay" data-keywords="replay lab prompt diff compare models side by side output latency rerun">
+                <i class="bi bi-repeat text-info"></i>
+                <span>Replay Lab</span>
               </a>
               <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "radar" }}active{{ end }}" href="/radar" data-keywords="anomaly radar security spike alerts errors baseline detection cutoff">
                 <i class="bi bi-radar text-rose"></i>

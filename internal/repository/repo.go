@@ -52,6 +52,7 @@ type AuditLogRepository interface {
 	ListSecurityEvents(ctx context.Context, limit int) ([]entity.SecurityEvent, error)
 	GetRequestLogs(ctx context.Context, limit, offset int, userID, modelFilter string, statusFilter int) ([]entity.RequestLog, int, error)
 	GetRequestLogsCursor(ctx context.Context, limit int, cursor, direction, userID, modelFilter string, statusFilter int, startDate, endDate *time.Time) ([]entity.RequestLog, *entity.CursorPageInfo, error)
+	GetRequestLogByID(ctx context.Context, id int64) (*entity.RequestLog, error)
 }
 
 // StatsRepository handles dashboard analytics calculations.
@@ -663,9 +664,9 @@ func (r *SQLiteRepo) GetKeyBaselineTokens(ctx context.Context, days int) (map[st
 // CreateRequestLog inserts a new request log entry.
 // When log.CreatedAt is zero, the DB default (datetime('now')) is used.
 func (r *SQLiteRepo) CreateRequestLog(ctx context.Context, log *entity.RequestLog) error {
-	query := `INSERT INTO request_logs 
-	          (user_id, api_key_id, path, method, model, is_stream, prompt_tokens, completion_tokens, total_tokens, status_code, duration_ms, client_ip, error_message, created_at) 
-	          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))`
+	query := `INSERT INTO request_logs
+	          (user_id, api_key_id, path, method, model, is_stream, prompt_tokens, completion_tokens, total_tokens, status_code, duration_ms, client_ip, error_message, request_body, response_text, created_at)
+	          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))`
 	isStream := 0
 	if log.IsStream {
 		isStream = 1
@@ -677,9 +678,47 @@ func (r *SQLiteRepo) CreateRequestLog(ctx context.Context, log *entity.RequestLo
 	_, err := r.db.ExecContext(ctx, query,
 		log.UserID, log.APIKeyID, log.Path, log.Method, log.Model, isStream,
 		log.PromptTokens, log.CompletionTokens, log.TotalTokens, log.StatusCode,
-		log.DurationMs, log.ClientIP, log.ErrorMessage, createdAt,
+		log.DurationMs, log.ClientIP, log.ErrorMessage, truncateLogText(log.RequestBody, 8192), truncateLogText(log.ResponseText, 4096), createdAt,
 	)
 	return err
+}
+
+// truncateLogText caps stored log payloads to keep the DB lean.
+func truncateLogText(s string, max int) string {
+	if len(s) > max {
+		return s[:max]
+	}
+	return s
+}
+
+// GetRequestLogByID returns a single request log including stored payloads.
+func (r *SQLiteRepo) GetRequestLogByID(ctx context.Context, id int64) (*entity.RequestLog, error) {
+	var l entity.RequestLog
+	var createdAt string
+	var isStream int
+	var reqBody, respText sql.NullString
+	err := r.db.QueryRowContext(ctx, `SELECT l.id, l.user_id, l.api_key_id, l.path, l.method, l.model, l.is_stream,
+	       l.prompt_tokens, l.completion_tokens, l.total_tokens, l.status_code,
+	       l.duration_ms, l.client_ip, COALESCE(l.error_message, ''), COALESCE(l.request_body, ''), COALESCE(l.response_text, ''), l.created_at,
+	       COALESCE(u.name, 'Unknown') as user_name,
+	       COALESCE(k.name, 'Deleted Key') as key_name
+		FROM request_logs l
+		LEFT JOIN users u ON l.user_id = u.id
+		LEFT JOIN api_keys k ON l.api_key_id = k.id
+		WHERE l.id = ?`, id).Scan(
+		&l.ID, &l.UserID, &l.APIKeyID, &l.Path, &l.Method, &l.Model, &isStream,
+		&l.PromptTokens, &l.CompletionTokens, &l.TotalTokens, &l.StatusCode,
+		&l.DurationMs, &l.ClientIP, &l.ErrorMessage, &reqBody, &respText, &createdAt,
+		&l.UserName, &l.KeyName,
+	)
+	if err != nil {
+		return nil, err
+	}
+	l.IsStream = (isStream == 1)
+	l.CreatedAt = parseTimeFlexible(createdAt)
+	l.RequestBody = reqBody.String
+	l.ResponseText = respText.String
+	return &l, nil
 }
 
 // GetRequestLogs returns paginated request logs with optional filters.

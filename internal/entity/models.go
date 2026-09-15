@@ -126,6 +126,8 @@ type RequestLog struct {
 	DurationMs       int64     `json:"duration_ms"`
 	ClientIP         string    `json:"client_ip"`
 	ErrorMessage     string    `json:"error_message,omitempty"`
+	RequestBody      string    `json:"request_body,omitempty"`
+	ResponseText     string    `json:"response_text,omitempty"`
 	CreatedAt        time.Time `json:"created_at"`
 
 	// Virtual fields for UI
