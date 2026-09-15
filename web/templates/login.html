@@ -3,8 +3,56 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login - AI Manager</title>
+  <title>AI Manager — Unified LLM Gateway & Smart Model Router</title>
   
+  <!-- SEO & Search Engine Crawlers -->
+  <meta name="description" content="AI Manager is an enterprise self-hosted LLM gateway, intelligent model router, and API token quota manager supporting OpenAI, Anthropic Claude, Antigravity, and open-source models.">
+  <meta name="keywords" content="AI Manager, aimanager, LLM Gateway, AI Model Router, API Token Management, 9router, Self-Hosted AI, AI Proxy">
+  <meta name="author" content="HafizRP">
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">
+  <link rel="canonical" href="https://aimanager.b14.my.id/login">
+
+  <!-- Open Graph / Social Media -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="AI Manager">
+  <meta property="og:title" content="AI Manager — Unified LLM Gateway & Smart Model Router">
+  <meta property="og:description" content="Enterprise self-hosted LLM gateway, intelligent model routing, quota management, and proxy middleware for modern AI workloads.">
+  <meta property="og:url" content="https://aimanager.b14.my.id/login">
+  <meta property="og:image" content="https://aimanager.b14.my.id/static/icons/icon-512.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:image:alt" content="AI Manager Gateway Logo">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="AI Manager — Unified LLM Gateway & Smart Model Router">
+  <meta name="twitter:description" content="Enterprise self-hosted LLM gateway, intelligent model routing, quota management, and proxy middleware for modern AI workloads.">
+  <meta name="twitter:image" content="https://aimanager.b14.my.id/static/icons/icon-512.png">
+
+  <!-- JSON-LD Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "AI Manager",
+    "alternateName": ["aimanager", "9router-gateway"],
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "All",
+    "url": "https://aimanager.b14.my.id",
+    "description": "Unified self-hosted LLM gateway, model router, and API token quota manager supporting OpenAI, Anthropic Claude, Antigravity, and open-source models.",
+    "softwareVersion": "1.0",
+    "author": {
+      "@type": "Person",
+      "name": "HafizRP"
+    },
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    }
+  }
+  </script>
+
   <!-- Fonts: Geist & Geist Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,7 +60,7 @@
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-  <link href="/static/css/custom.css?v=13" rel="stylesheet">
+  <link href="/static/css/custom.css?v=14" rel="stylesheet">
 
   <!-- PWA: installable app & icons -->
   <link rel="manifest" href="/manifest.webmanifest">
@@ -27,22 +75,23 @@
   <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
   <link rel="shortcut icon" href="/static/icons/favicon.ico">
 </head>
-<body class="d-flex align-items-center justify-content-center" style="min-height: 100vh; position: relative; overflow: hidden;">
+<body class="d-flex flex-column align-items-center justify-content-start py-5 px-3" style="min-height: 100vh; position: relative; overflow-x: hidden;">
   <!-- Ambient background illumination -->
-  <div style="position: absolute; width: 500px; height: 500px; background: radial-gradient(circle, rgba(255, 255, 255, 0.04) 0%, transparent 70%); top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 0;"></div>
+  <div style="position: absolute; width: 600px; height: 600px; background: radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, transparent 70%); top: 20%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; z-index: 0;"></div>
 
-  <button type="button" id="themeToggleLogin" class="btn-modern-ghost py-1 px-2 text-muted" title="Toggle light/dark theme" style="position: absolute; top: 1rem; right: 1rem; z-index: 2;">
+  <button type="button" id="themeToggleLogin" class="btn-modern-ghost py-1 px-2 text-muted position-fixed" title="Toggle light/dark theme" style="top: 1rem; right: 1rem; z-index: 10;">
     <i class="bi bi-moon-stars" id="themeToggleLoginIcon"></i>
   </button>
 
-  <div class="card-modern p-4 p-md-5" style="max-width: 420px; width: 100%; position: relative; z-index: 1; backdrop-filter: blur(20px);">
-    <div class="text-center mb-4">
-      <div class="brand-glow mx-auto mb-3" style="width: 52px; height: 52px; font-size: 1.6rem; border-radius: 14px;">
+  <!-- Login Card -->
+  <div class="card-modern p-4 p-md-5 my-auto" style="max-width: 440px; width: 100%; position: relative; z-index: 1; backdrop-filter: blur(20px);">
+    <header class="text-center mb-4">
+      <div class="brand-glow mx-auto mb-3" style="width: 54px; height: 54px; font-size: 1.6rem; border-radius: 14px;">
         <i class="bi bi-cpu-fill"></i>
       </div>
-      <h4 class="fw-bold mb-1 text-light tracking-tight">AI Manager</h4>
+      <h1 class="fw-bold mb-1 text-light tracking-tight fs-4">AI Manager</h1>
       <p class="text-dim small mb-0">Unified LLM Gateway & Middleware</p>
-    </div>
+    </header>
 
     {{ if .ErrorMsg }}
       <div class="alert card-modern border-danger border-opacity-50 py-2 px-3 small d-flex align-items-center gap-2 mb-3 text-light">
@@ -79,6 +128,63 @@
       </div>
     </div>
   </div>
+
+  <!-- SEO Feature Highlights for Search Engines & Visitors -->
+  <section class="mt-4 mb-3 text-center" style="max-width: 860px; width: 100%; position: relative; z-index: 1;">
+    <h2 class="fs-6 fw-semibold text-dim text-uppercase tracking-wider mb-3">Enterprise LLM Gateway Infrastructure</h2>
+    <div class="row g-3 text-start">
+      <div class="col-12 col-md-6 col-lg-3">
+        <div class="card-modern p-3 h-100">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <i class="bi bi-signpost-split text-indigo fs-5"></i>
+            <h3 class="fs-6 fw-bold text-light mb-0">Model Router</h3>
+          </div>
+          <p class="text-dim small mb-0">Intelligent failover combos across Antigravity, Claude, OpenAI, and Kiro accounts with zero downtime.</p>
+        </div>
+      </div>
+      <div class="col-12 col-md-6 col-lg-3">
+        <div class="card-modern p-3 h-100">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <i class="bi bi-shield-check text-emerald fs-5"></i>
+            <h3 class="fs-6 fw-bold text-light mb-0">Quota Guard</h3>
+          </div>
+          <p class="text-dim small mb-0">Granular sliding-window rate limits, daily token budgets, and Midtrans QRIS top-ups.</p>
+        </div>
+      </div>
+      <div class="col-12 col-md-6 col-lg-3">
+        <div class="card-modern p-3 h-100">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <i class="bi bi-lightning-charge text-amber fs-5"></i>
+            <h3 class="fs-6 fw-bold text-light mb-0">Token Saver</h3>
+          </div>
+          <p class="text-dim small mb-0">RTK prompt compression (-40% tokens), Caveman mode, and fast streaming chunk optimization.</p>
+        </div>
+      </div>
+      <div class="col-12 col-md-6 col-lg-3">
+        <div class="card-modern p-3 h-100">
+          <div class="d-flex align-items-center gap-2 mb-2">
+            <i class="bi bi-terminal text-cyan fs-5"></i>
+            <h3 class="fs-6 fw-bold text-light mb-0">Developer DX</h3>
+          </div>
+          <p class="text-dim small mb-0">Drop-in OpenAI API compatible with Claude Code, Cursor IDE, Codex, Cline, and Hermes Agent.</p>
+        </div>
+      </div>
+    </div>
+    <div class="d-flex flex-wrap justify-content-center align-items-center gap-3 mt-4 text-dim small">
+      <span>AI Manager &copy; 2026</span>
+      <span>•</span>
+      <a href="https://github.com/HafizRP/aimanager" target="_blank" rel="noopener noreferrer" class="text-dim text-decoration-none d-flex align-items-center gap-1 hover-light">
+        <i class="bi bi-github"></i> HafizRP/aimanager
+      </a>
+      <span>•</span>
+      <a href="/llms.txt" class="text-dim text-decoration-none hover-light">llms.txt</a>
+      <span>•</span>
+      <a href="/robots.txt" class="text-dim text-decoration-none hover-light">robots.txt</a>
+      <span>•</span>
+      <a href="/sitemap.xml" class="text-dim text-decoration-none hover-light">sitemap.xml</a>
+    </div>
+  </section>
+
   <script>
     // UI Theme Toggle (login page): local-only preview — persistence happens after login on the dashboard.
     (function () {
@@ -86,7 +192,6 @@
       var icon = document.getElementById('themeToggleLoginIcon');
       function currentTheme() { return document.documentElement.getAttribute('data-bs-theme') === 'light' ? 'light' : 'dark'; }
       function setIcon(theme) {
-        // Icon previews the theme you will SWITCH TO: in dark show a sun (switch to light), in light show a moon.
         icon.className = theme === 'light' ? 'bi bi-moon-stars' : 'bi bi-sun';
       }
       setIcon(currentTheme());
