@@ -541,6 +541,19 @@
     gradient.addColorStop(0, 'rgba(59, 130, 246, 0.25)');
     gradient.addColorStop(1, 'rgba(59, 130, 246, 0.00)');
 
+    function isLightTheme() {
+      return document.documentElement.getAttribute('data-bs-theme') === 'light';
+    }
+    function getGridColor() {
+      return isLightTheme() ? 'rgba(15, 17, 21, 0.08)' : 'rgba(255, 255, 255, 0.04)';
+    }
+    function getTickColor() {
+      return isLightTheme() ? '#64748b' : '#71717a';
+    }
+    function getPointBorder() {
+      return isLightTheme() ? '#ffffff' : '#09090b';
+    }
+
     const chartInstance = new Chart(ctx, {
       type: 'line',
       data: {
@@ -554,7 +567,7 @@
           fill: true,
           tension: 0.3,
           pointBackgroundColor: '#3b82f6',
-          pointBorderColor: '#09090b',
+          pointBorderColor: getPointBorder(),
           pointBorderWidth: 2,
           pointRadius: 4,
           pointHoverRadius: 6,
@@ -569,13 +582,13 @@
         },
         scales: {
           x: {
-            grid: { color: 'rgba(255, 255, 255, 0.04)' },
-            ticks: { color: '#71717a', font: { family: 'Geist', size: 11 } }
+            grid: { color: getGridColor() },
+            ticks: { color: getTickColor(), font: { family: 'Geist', size: 11 } }
           },
           y: {
-            grid: { color: 'rgba(255, 255, 255, 0.04)' },
+            grid: { color: getGridColor() },
             ticks: { 
-              color: '#71717a', 
+              color: getTickColor(), 
               font: { family: 'Geist', size: 11 },
               callback: function(value) {
                 if (value >= 1000000) return (value / 1000000) + 'M';
@@ -602,6 +615,20 @@
         }
       }
     });
+
+    const themeObserver = new MutationObserver(() => {
+      if (chartInstance && chartInstance.options && chartInstance.options.scales) {
+        chartInstance.options.scales.x.grid.color = getGridColor();
+        chartInstance.options.scales.x.ticks.color = getTickColor();
+        chartInstance.options.scales.y.grid.color = getGridColor();
+        chartInstance.options.scales.y.ticks.color = getTickColor();
+        if (chartInstance.data.datasets[0]) {
+          chartInstance.data.datasets[0].pointBorderColor = getPointBorder();
+        }
+        chartInstance.update();
+      }
+    });
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
 
     // Helper to format numbers like 1.2M, 50k
     function formatNumShort(n) {
