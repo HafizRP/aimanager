@@ -8,17 +8,17 @@
     </h4>
     <p class="text-dim small mb-0">Browse TTS voice catalogs per engine, mirroring 9router media providers.</p>
   </div>
-  <div class="btn-group" role="group" id="engineTabs">
-    <button type="button" class="btn btn-sm btn-outline-secondary active" data-engine="">Catalog</button>
-    <button type="button" class="btn btn-sm btn-outline-secondary" data-engine="deepgram">Deepgram</button>
-    <button type="button" class="btn btn-sm btn-outline-secondary" data-engine="inworld">Inworld</button>
-    <button type="button" class="btn btn-sm btn-outline-secondary" data-engine="elevenlabs">ElevenLabs</button>
-    <button type="button" class="btn btn-sm btn-outline-secondary" data-engine="minimax">MiniMax</button>
-  </div>
 </div>
 
-<div class="card-modern p-3 mb-4">
-  <input type="search" class="form-control form-control-modern" id="voiceSearch" placeholder="Search voices (name, locale, id)…">
+<div class="card-modern p-3 mb-4 d-flex flex-column flex-md-row align-items-md-center gap-3">
+  <ul class="nav nav-pills nav-pills-modern gap-2 flex-shrink-0" id="engineTabs" role="tablist">
+    <li class="nav-item"><button type="button" class="nav-link active font-monospace small py-1.5 px-3" data-engine="">Catalog</button></li>
+    <li class="nav-item"><button type="button" class="nav-link font-monospace small py-1.5 px-3" data-engine="deepgram">Deepgram</button></li>
+    <li class="nav-item"><button type="button" class="nav-link font-monospace small py-1.5 px-3" data-engine="inworld">Inworld</button></li>
+    <li class="nav-item"><button type="button" class="nav-link font-monospace small py-1.5 px-3" data-engine="elevenlabs">ElevenLabs</button></li>
+    <li class="nav-item"><button type="button" class="nav-link font-monospace small py-1.5 px-3" data-engine="minimax">MiniMax</button></li>
+  </ul>
+  <input type="search" class="form-control form-control-modern flex-grow-1" id="voiceSearch" placeholder="Search voices (name, locale, id)…">
 </div>
 
 <div class="card-modern p-0 overflow-hidden">

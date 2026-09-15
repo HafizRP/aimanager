@@ -1,4 +1,4 @@
-{{ define "title" }}Models Catalog - AI Manager{{ end }}
+{{ define "title" }}Upstream Model Catalog - AI Manager{{ end }}
 
 {{ define "content" }}
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
@@ -188,8 +188,8 @@
 <!-- Add Alias Modal -->
 <div class="modal fade" id="aliasModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content card-modern border-0" style="background: var(--bg-surface);">
-      <div class="modal-header border-secondary border-opacity-10">
+    <div class="modal-content modal-content-modern">
+      <div class="modal-header modal-header-modern">
         <h5 class="modal-title fw-bold text-light d-flex align-items-center gap-2">
           <i class="bi bi-shuffle text-primary"></i> Create Model Alias
         </h5>
@@ -213,7 +213,7 @@
             </datalist>
           </div>
         </div>
-        <div class="modal-footer border-secondary border-opacity-10">
+        <div class="modal-footer modal-footer-modern">
           <button type="button" class="btn-modern-ghost" data-bs-dismiss="modal">Cancel</button>
           <button type="submit" class="btn-modern-primary" id="btnSaveAlias">Save Alias</button>
         </div>

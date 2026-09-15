@@ -1,4 +1,4 @@
-{{ define "title" }}Token Saver & Optimization - AI Manager{{ end }}
+{{ define "title" }}Token Saver & Thinking Optimizer - AI Manager{{ end }}
 
 {{ define "content" }}
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
@@ -113,9 +113,12 @@
           </div>
         </div>
         <select class="form-select form-select-modern form-select-sm" id="cavemanLevel">
-          <option value="lite">Lite (Concise, no fluff)</option>
-          <option value="normal">Normal (Bullet points, minimal prose)</option>
-          <option value="hardcore">Hardcore (Strict keywords, code snippets only)</option>
+          <option value="lite">Lite (Drop filler, keep grammar)</option>
+          <option value="full">Full (Drop articles, fragments OK)</option>
+          <option value="ultra">Ultra (Telegraphic, max compression)</option>
+          <option value="wenyan-lite">文 Lite (Classical Chinese, light)</option>
+          <option value="wenyan">文 Full (Maximum 文言文, 80-90% reduction)</option>
+          <option value="wenyan-ultra">文 Ultra (Extreme classical compression)</option>
         </select>
       </div>
 
@@ -130,9 +133,9 @@
           </div>
         </div>
         <select class="form-select form-select-modern form-select-sm" id="ponytailLevel">
-          <option value="lite">Lite</option>
-          <option value="normal">Normal</option>
-          <option value="heavy">Aggressive</option>
+          <option value="lite">Lite (Build asked, name lazier option)</option>
+          <option value="full">Full (Ladder enforced: stdlib/native first)</option>
+          <option value="ultra">Ultra (YAGNI extremist, deletion first)</option>
         </select>
       </div>
     </div>
@@ -307,10 +310,17 @@ if (existingSettings) {
     }
   }
   if (existingSettings.cavemanLevel) {
-    document.getElementById('cavemanLevel').value = existingSettings.cavemanLevel;
+    // Legacy values (lite/normal/hardcore era) map onto core's lite/full/ultra scale.
+    const legacyCaveman = { normal: 'full', hardcore: 'ultra', heavy: 'ultra' };
+    const cv = legacyCaveman[existingSettings.cavemanLevel] || existingSettings.cavemanLevel;
+    const cavemanSel = document.getElementById('cavemanLevel');
+    if ([...cavemanSel.options].some(o => o.value === cv)) cavemanSel.value = cv;
   }
   if (existingSettings.ponytailLevel) {
-    document.getElementById('ponytailLevel').value = existingSettings.ponytailLevel;
+    const legacyPonytail = { normal: 'full', heavy: 'ultra', hardcore: 'ultra' };
+    const pv = legacyPonytail[existingSettings.ponytailLevel] || existingSettings.ponytailLevel;
+    const ponytailSel = document.getElementById('ponytailLevel');
+    if ([...ponytailSel.options].some(o => o.value === pv)) ponytailSel.value = pv;
   }
 }
 

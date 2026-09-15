@@ -8,13 +8,21 @@
 </div>
 
 {{ if .SuccessMsg }}
-  <div class="alert alert-success bg-opacity-10 border-success text-success d-flex align-items-center gap-2 mb-4 p-3 rounded-3" style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3);">
-    <i class="bi bi-check-circle-fill"></i> <div>{{ .SuccessMsg }}</div>
+  <div class="alert card-modern border-success border-opacity-50 p-3 mb-4 d-flex align-items-center justify-content-between text-light alert-dismissible fade show" role="alert">
+    <div class="d-flex align-items-center gap-2">
+      <i class="bi bi-check-circle-fill text-success fs-5"></i>
+      <span class="small fw-medium">{{ .SuccessMsg }}</span>
+    </div>
+    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
   </div>
 {{ end }}
 {{ if .ErrorMsg }}
-  <div class="alert alert-danger bg-opacity-10 border-danger text-danger d-flex align-items-center gap-2 mb-4 p-3 rounded-3" style="background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3);">
-    <i class="bi bi-exclamation-triangle-fill"></i> <div>{{ .ErrorMsg }}</div>
+  <div class="alert card-modern border-danger border-opacity-50 p-3 mb-4 d-flex align-items-center justify-content-between text-light alert-dismissible fade show" role="alert">
+    <div class="d-flex align-items-center gap-2">
+      <i class="bi bi-exclamation-triangle-fill text-danger fs-5"></i>
+      <span class="small fw-medium">{{ .ErrorMsg }}</span>
+    </div>
+    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
   </div>
 {{ end }}
 
