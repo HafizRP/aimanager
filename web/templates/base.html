@@ -16,7 +16,7 @@
   <!-- Bootstrap Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <!-- Custom Modern Design System -->
-  <link href="/static/css/custom.css?v=10" rel="stylesheet">
+  <link href="/static/css/custom.css?v=11" rel="stylesheet">
   <!-- PWA: installable app -->
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#09090b">
@@ -56,63 +56,75 @@
         </button>
       </div>
 
+      <!-- Quick Menu Search / Filter in Sidebar -->
+      <div class="sidebar-search-wrapper">
+        <div class="position-relative">
+          <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-2 text-muted" style="font-size:0.75rem; pointer-events:none;"></i>
+          <input type="text" id="sidebarMenuSearch" class="form-control sidebar-search-input" placeholder="Search menu... (Ctrl+K)" autocomplete="off">
+          <kbd class="sidebar-search-kbd d-none d-sm-inline-block" id="sidebarSearchKbd" title="Open search dialog (Ctrl+K)">Ctrl+K</kbd>
+          <button type="button" id="clearSidebarSearch" class="btn btn-link p-0 position-absolute top-50 end-0 translate-middle-y me-2 text-muted d-none" style="font-size:0.75rem; text-decoration:none;" title="Clear search">
+            <i class="bi bi-x-circle-fill"></i>
+          </button>
+        </div>
+      </div>
+
       <!-- Navigation Content -->
-      <div class="sidebar-content">
+      <div class="sidebar-content" id="sidebarNavContent">
         <!-- Main Navigation Group -->
         <div class="sidebar-nav-group">
           <span class="sidebar-group-title">Workspace</span>
-          <a class="sidebar-link {{ if eq .ActivePage "dashboard" }}active{{ end }}" href="/">
+          <a class="sidebar-link {{ if eq .ActivePage "dashboard" }}active{{ end }}" href="/" data-keywords="overview stats kpi metrics rolling windows trends volume">
             <i class="bi bi-speedometer2"></i>
             <span>Dashboard</span>
           </a>
-          <a class="sidebar-link {{ if eq .ActivePage "chat" }}active{{ end }}" href="/chat">
+          <a class="sidebar-link {{ if eq .ActivePage "chat" }}active{{ end }}" href="/chat" data-keywords="playground chat completion stream prompt test conversation sse">
             <i class="bi bi-terminal-fill text-primary"></i>
             <span>Playground</span>
             <span class="badge-modern badge-indigo ms-auto" style="font-size:0.65rem; padding:0.1rem 0.4rem;">Chat</span>
           </a>
-          <a class="sidebar-link {{ if eq .ActivePage "cli-tools" }}active{{ end }}" href="/cli-tools">
+          <a class="sidebar-link {{ if eq .ActivePage "cli-tools" }}active{{ end }}" href="/cli-tools" data-keywords="cli tools terminal claude cursor codex cline roo hermes copilot opencode">
             <i class="bi bi-tools text-cyan"></i>
             <span>CLI Tools Hub</span>
           </a>
-          <a class="sidebar-link {{ if eq .ActivePage "billing" }}active{{ end }}" href="/billing">
+          <a class="sidebar-link {{ if eq .ActivePage "billing" }}active{{ end }}" href="/billing" data-keywords="billing buy tokens topup payment midtrans qris gopay va credit invoice packages balance">
             <i class="bi bi-wallet2 text-emerald"></i>
             <span>Buy Tokens</span>
             <span class="badge-modern badge-emerald ms-auto" style="font-size:0.65rem; padding:0.1rem 0.4rem;">Top Up</span>
           </a>
-          <a class="sidebar-link {{ if eq .ActivePage "keys" }}active{{ end }}" href="/keys">
+          <a class="sidebar-link {{ if eq .ActivePage "keys" }}active{{ end }}" href="/keys" data-keywords="api keys token budget rate limit create rotate revoke sk-gw secret">
             <i class="bi bi-key text-warning"></i>
             <span>API Keys</span>
           </a>
-          <a class="sidebar-link {{ if eq .ActivePage "logs" }}active{{ end }}" href="/logs">
+          <a class="sidebar-link {{ if eq .ActivePage "logs" }}active{{ end }}" href="/logs" data-keywords="request logs audit traffic history status errors export csv json filter">
             <i class="bi bi-activity text-info"></i>
             <span>Request Logs</span>
           </a>
-          <a class="sidebar-link {{ if eq .ActivePage "models" }}active{{ end }}" href="/models">
+          <a class="sidebar-link {{ if eq .ActivePage "models" }}active{{ end }}" href="/models" data-keywords="models aliases upstream mapping context list gpt claude gemini">
             <i class="bi bi-cpu text-primary"></i>
             <span>Models & Aliases</span>
           </a>
-          <a class="sidebar-link {{ if eq .ActivePage "benchmark" }}active{{ end }}" href="/benchmark">
+          <a class="sidebar-link {{ if eq .ActivePage "benchmark" }}active{{ end }}" href="/benchmark" data-keywords="speed benchmark ttft latency performance throughput test leaderboard">
             <i class="bi bi-speedometer text-warning"></i>
             <span>Speed Benchmark</span>
             <span class="badge-modern badge-amber ms-auto" style="font-size:0.65rem; padding:0.1rem 0.4rem;">TTFT</span>
           </a>
-          <a class="sidebar-link {{ if eq .ActivePage "cache-analytics" }}active{{ end }}" href="/cache-analytics">
+          <a class="sidebar-link {{ if eq .ActivePage "cache-analytics" }}active{{ end }}" href="/cache-analytics" data-keywords="cache analytics exact response hit ratio sha256 savings finops rtk">
             <i class="bi bi-database-check text-cyan"></i>
             <span>Cache Analytics</span>
           </a>
-          <a class="sidebar-link {{ if eq .ActivePage "skills" }}active{{ end }}" href="/skills">
+          <a class="sidebar-link {{ if eq .ActivePage "skills" }}active{{ end }}" href="/skills" data-keywords="agent skills prompt snippets system instructions templates universal">
             <i class="bi bi-puzzle-fill text-emerald"></i>
             <span>Agent Skills</span>
           </a>
-          <a class="sidebar-link {{ if eq .ActivePage "endpoint" }}active{{ end }}" href="/endpoint">
+          <a class="sidebar-link {{ if eq .ActivePage "endpoint" }}active{{ end }}" href="/endpoint" data-keywords="endpoint hub api url base loopback v1 completions addresses">
             <i class="bi bi-plug-fill text-info"></i>
             <span>Endpoint Hub</span>
           </a>
-          <a class="sidebar-link {{ if eq .ActivePage "profile" }}active{{ end }}" href="/profile">
+          <a class="sidebar-link {{ if eq .ActivePage "profile" }}active{{ end }}" href="/profile" data-keywords="my profile user account password credentials timezone quota">
             <i class="bi bi-person-circle text-muted"></i>
             <span>My Profile</span>
           </a>
-          <a class="sidebar-link {{ if eq .ActivePage "usage" }}active{{ end }}" href="/usage">
+          <a class="sidebar-link {{ if eq .ActivePage "usage" }}active{{ end }}" href="/usage" data-keywords="usage analytics breakdown tokens provider model account cost">
             <i class="bi bi-bar-chart-fill text-primary"></i>
             <span>Usage Analytics</span>
           </a>
@@ -122,67 +134,67 @@
         {{ if .IsAdmin }}
           <div class="sidebar-nav-group">
             <span class="sidebar-group-title">9router Core Admin</span>
-            <a class="sidebar-link {{ if eq .ActivePage "providers" }}active{{ end }}" href="/providers">
+            <a class="sidebar-link {{ if eq .ActivePage "providers" }}active{{ end }}" href="/providers" data-keywords="providers connections upstream antigravity kiro openai oauth accounts priority test">
               <i class="bi bi-hdd-network text-primary"></i>
               <span>Providers</span>
             </a>
-            <a class="sidebar-link {{ if eq .ActivePage "combos" }}active{{ end }}" href="/combos">
+            <a class="sidebar-link {{ if eq .ActivePage "combos" }}active{{ end }}" href="/combos" data-keywords="model combos fallback chains failover round robin fusion strategy sticky">
               <i class="bi bi-diagram-3-fill text-indigo"></i>
               <span>Model Combos</span>
             </a>
-            <a class="sidebar-link {{ if eq .ActivePage "token-saver" }}active{{ end }}" href="/token-saver">
+            <a class="sidebar-link {{ if eq .ActivePage "token-saver" }}active{{ end }}" href="/token-saver" data-keywords="token saver rtk compression thinking intensity ponytail caveman headroom pxpipe">
               <i class="bi bi-magic text-emerald"></i>
               <span>Token Saver & RTK</span>
             </a>
-            <a class="sidebar-link {{ if eq .ActivePage "proxy-pools" }}active{{ end }}" href="/proxy-pools">
+            <a class="sidebar-link {{ if eq .ActivePage "proxy-pools" }}active{{ end }}" href="/proxy-pools" data-keywords="proxy pools egress outbound ip rotate socks5 http residential">
               <i class="bi bi-shield-shaded text-cyan"></i>
               <span>Proxy Pools</span>
             </a>
-            <a class="sidebar-link {{ if eq .ActivePage "users" }}active{{ end }}" href="/users">
+            <a class="sidebar-link {{ if eq .ActivePage "users" }}active{{ end }}" href="/users" data-keywords="users quotas management accounts role admin active daily reset password">
               <i class="bi bi-people-fill text-warning"></i>
               <span>Users & Quotas</span>
             </a>
-            <a class="sidebar-link {{ if eq .ActivePage "settings" }}active{{ end }}" href="/settings">
+            <a class="sidebar-link {{ if eq .ActivePage "settings" }}active{{ end }}" href="/settings" data-keywords="gateway settings upstream core midtrans configuration secrets env">
               <i class="bi bi-sliders text-muted"></i>
               <span>Gateway Settings</span>
             </a>
-            <a class="sidebar-link {{ if eq .ActivePage "quota" }}active{{ end }}" href="/quota">
+            <a class="sidebar-link {{ if eq .ActivePage "quota" }}active{{ end }}" href="/quota" data-keywords="quota overview rolling windows accounts reset timers limits pools">
               <i class="bi bi-pie-chart-fill text-emerald"></i>
               <span>Quota Overview</span>
             </a>
-            <a class="sidebar-link {{ if eq .ActivePage "console-log" }}active{{ end }}" href="/console-log">
+            <a class="sidebar-link {{ if eq .ActivePage "console-log" }}active{{ end }}" href="/console-log" data-keywords="console log server core translator live stream debug output">
               <i class="bi bi-terminal-split text-info"></i>
               <span>Console Log</span>
             </a>
-            <a class="sidebar-link {{ if eq .ActivePage "nodes" }}active{{ end }}" href="/nodes">
+            <a class="sidebar-link {{ if eq .ActivePage "nodes" }}active{{ end }}" href="/nodes" data-keywords="provider nodes openai compatible self hosted endpoints prefix routing">
               <i class="bi bi-server text-cyan"></i>
               <span>Provider Nodes</span>
             </a>
-            <a class="sidebar-link {{ if eq .ActivePage "mitm" }}active{{ end }}" href="/mitm">
+            <a class="sidebar-link {{ if eq .ActivePage "mitm" }}active{{ end }}" href="/mitm" data-keywords="mitm bridge antigravity dns interception proxy certificate tools">
               <i class="bi bi-shuffle text-warning"></i>
               <span>MITM Bridge</span>
             </a>
-            <a class="sidebar-link {{ if eq .ActivePage "mcp" }}active{{ end }}" href="/mcp">
+            <a class="sidebar-link {{ if eq .ActivePage "mcp" }}active{{ end }}" href="/mcp" data-keywords="mcp inspector model context protocol cowork tools registry">
               <i class="bi bi-boxes text-emerald"></i>
               <span>MCP Inspector</span>
             </a>
-            <a class="sidebar-link {{ if eq .ActivePage "media" }}active{{ end }}" href="/media">
+            <a class="sidebar-link {{ if eq .ActivePage "media" }}active{{ end }}" href="/media" data-keywords="media voices tts audio speech deepgram elevenlabs minimax voices">
               <i class="bi bi-speaker text-pink"></i>
               <span>Media Voices</span>
             </a>
-            <a class="sidebar-link {{ if eq .ActivePage "pxpipe" }}active{{ end }}" href="/pxpipe">
+            <a class="sidebar-link {{ if eq .ActivePage "pxpipe" }}active{{ end }}" href="/pxpipe" data-keywords="pxpipe prompt transform images compression pipeline proxy">
               <i class="bi bi-funnel text-info"></i>
               <span>PXPipe</span>
             </a>
-            <a class="sidebar-link {{ if eq .ActivePage "translator" }}active{{ end }}" href="/translator">
+            <a class="sidebar-link {{ if eq .ActivePage "translator" }}active{{ end }}" href="/translator" data-keywords="translator protocol format translation convert anthropic openai gemini">
               <i class="bi bi-translate text-emerald"></i>
               <span>Translator</span>
             </a>
-            <a class="sidebar-link {{ if eq .ActivePage "pricing" }}active{{ end }}" href="/pricing">
+            <a class="sidebar-link {{ if eq .ActivePage "pricing" }}active{{ end }}" href="/pricing" data-keywords="pricing token rates cost per million upstream catalog">
               <i class="bi bi-tag text-warning"></i>
               <span>Pricing</span>
             </a>
-            <a class="sidebar-link {{ if eq .ActivePage "radar" }}active{{ end }}" href="/radar">
+            <a class="sidebar-link {{ if eq .ActivePage "radar" }}active{{ end }}" href="/radar" data-keywords="anomaly radar security spike alerts errors baseline detection cutoff">
               <i class="bi bi-radar text-rose"></i>
               <span>Anomaly Radar</span>
             </a>
@@ -191,12 +203,17 @@
           <!-- Account Settings (Standard User) -->
           <div class="sidebar-nav-group">
             <span class="sidebar-group-title">Preferences</span>
-            <a class="sidebar-link {{ if eq .ActivePage "settings" }}active{{ end }}" href="/settings">
+            <a class="sidebar-link {{ if eq .ActivePage "settings" }}active{{ end }}" href="/settings" data-keywords="setup password preferences account configuration guides">
               <i class="bi bi-sliders text-warning"></i>
               <span>Setup & Password</span>
             </a>
           </div>
         {{ end }}
+
+        <div id="sidebarMenuEmpty" class="text-center py-4 px-2 d-none">
+          <i class="bi bi-search text-dim fs-5 d-block mb-1"></i>
+          <span class="text-dim small" style="font-size:0.78rem;">No matching menu</span>
+        </div>
       </div>
 
       <!-- Sidebar Footer -->
@@ -254,6 +271,9 @@
           <span class="fw-bold text-light fs-6">AI Manager</span>
         </div>
         <div class="d-flex align-items-center gap-1">
+          <button type="button" id="btnOpenSearchMobile" class="btn-modern-ghost py-1 px-2 text-muted" title="Search menu (Ctrl+K)">
+            <i class="bi bi-search"></i>
+          </button>
           <button type="button" id="themeToggleMobile" class="btn-modern-ghost py-1 px-2 text-muted" title="Toggle light/dark theme">
             <i class="bi bi-moon-stars" id="themeToggleMobileIcon"></i>
           </button>
@@ -297,10 +317,33 @@
     </div>
   </div>
 
+  <!-- Command Palette / Quick Menu Search Modal (Ctrl+K) -->
+  <div class="modal fade" id="commandPaletteModal" tabindex="-1" aria-labelledby="commandPaletteModalLabel" aria-hidden="true">
+    <div class="modal-dialog command-palette-dialog">
+      <div class="modal-content command-palette-content">
+        <div class="d-flex align-items-center px-3 py-2 border-bottom border-secondary border-opacity-10 gap-2">
+          <i class="bi bi-search text-cyan fs-6"></i>
+          <input type="text" id="commandPaletteInput" class="form-control form-control-modern border-0 shadow-none px-1 py-2 bg-transparent text-light" placeholder="Search menu, page, or admin tool... (e.g. chat, keys, providers)" autocomplete="off">
+          <kbd class="badge bg-secondary bg-opacity-25 text-dim border border-secondary border-opacity-25 py-1 px-2 small cursor-pointer" data-bs-dismiss="modal">ESC</kbd>
+        </div>
+        <div id="commandPaletteResults" class="p-2 overflow-y-auto" style="max-height: 380px;">
+          <!-- Populated by JS -->
+        </div>
+        <div class="d-flex align-items-center justify-content-between px-3 py-2 border-top border-secondary border-opacity-10 text-dim" style="font-size: 0.72rem;">
+          <div class="d-flex align-items-center gap-2">
+            <span><kbd class="badge bg-secondary bg-opacity-25 text-dim py-0.5 px-1 me-1">↑</kbd><kbd class="badge bg-secondary bg-opacity-25 text-dim py-0.5 px-1 me-1">↓</kbd> Navigate</span>
+            <span><kbd class="badge bg-secondary bg-opacity-25 text-dim py-0.5 px-1 me-1">↵</kbd> Open</span>
+          </div>
+          <span class="text-dim" id="commandPaletteCount">0 items</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="/static/js/app.js?v=6"></script>
+  <script src="/static/js/app.js?v=7"></script>
   <script>
     // PWA: service worker + install prompt.
     if ('serviceWorker' in navigator) {
