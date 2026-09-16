@@ -776,6 +776,17 @@ body {
   display: inline-block;
 }
 
+.model-pie-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 0.72rem;
+}
+
 /* Buttons */
 .btn-modern-primary {
   background: #2563eb;
@@ -1343,6 +1354,10 @@ code {
   background: rgba(0, 0, 0, 0.04);
   color: var(--text-main);
   border-color: rgba(0, 0, 0, 0.1);
+}
+[data-bs-theme="light"] .model-pie-legend-item {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
 }
 
 /* Status + KPI accents stay legible on light */
