@@ -58,9 +58,10 @@ type Handler struct {
 
 	// Upstream model list cache (60s TTL): /v1/models rarely changes and
 	// every ModelsPage render used to block on it.
-	modelsMu    sync.RWMutex
-	modelsCache []UpstreamModelItem
-	modelsTime  time.Time
+	modelsMu         sync.RWMutex
+	modelsCache      []UpstreamModelItem
+	modelsTime       time.Time
+	modelsRefreshing bool
 
 	// Use case services
 	auth     *usecase.AuthService
@@ -534,9 +535,33 @@ func (h *Handler) deriveCurrentBaseURL(r *http.Request) string {
 
 func (h *Handler) fetchUpstreamModels(ctx context.Context) ([]UpstreamModelItem, error) {
 	h.modelsMu.RLock()
-	if time.Since(h.modelsTime) < 60*time.Second && h.modelsCache != nil {
+	if h.modelsCache != nil {
 		cached := h.modelsCache
+		isFresh := time.Since(h.modelsTime) < 60*time.Second
+		shouldRefresh := !isFresh && !h.modelsRefreshing
 		h.modelsMu.RUnlock()
+
+		if shouldRefresh {
+			go func() {
+				h.modelsMu.Lock()
+				if h.modelsRefreshing {
+					h.modelsMu.Unlock()
+					return
+				}
+				h.modelsRefreshing = true
+				h.modelsMu.Unlock()
+
+				defer func() {
+					h.modelsMu.Lock()
+					h.modelsRefreshing = false
+					h.modelsMu.Unlock()
+				}()
+
+				bgCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				_, _ = h.refreshUpstreamModels(bgCtx)
+			}()
+		}
 		return cached, nil
 	}
 	h.modelsMu.RUnlock()

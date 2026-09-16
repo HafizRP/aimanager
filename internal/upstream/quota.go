@@ -302,14 +302,14 @@ func (m *QuotaManager) refreshAsync(ctx context.Context) {
 // FetchAllQuotas fetches live quota data from 9router Core, using the cache unless force is true.
 func (m *QuotaManager) FetchAllQuotas(ctx context.Context, force bool) (*UpstreamQuotaReport, error) {
 	m.mu.RLock()
-	if !force && m.cache != nil && time.Since(m.cacheTime) < m.cacheTTL {
-		cached := m.cache
-		m.mu.RUnlock()
-		return cached, nil
-	}
-	// Stale-while-revalidate: serve the last report instantly while a
-	// background refresh updates it, so page renders never block on upstream.
-	if !force && m.cache != nil && time.Since(m.cacheTime) < m.staleTTL {
+	if !force && m.cache != nil {
+		if time.Since(m.cacheTime) < m.cacheTTL {
+			cached := m.cache
+			m.mu.RUnlock()
+			return cached, nil
+		}
+		// Stale-while-revalidate: serve the last report instantly while a
+		// background refresh updates it, so page renders never block on upstream.
 		stale := m.cache
 		m.mu.RUnlock()
 		m.refreshAsync(ctx)
