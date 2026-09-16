@@ -1,9 +1,11 @@
 package upstream
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"9router-gateway/internal/config"
 )
@@ -46,6 +48,24 @@ func TestDeriveCLIToken(t *testing.T) {
 	token2 := DeriveCLIToken(cfg)
 	if token != token2 {
 		t.Errorf("expected deterministic token %q, got %q", token, token2)
+	}
+}
+
+func TestGetMergedModelsCache(t *testing.T) {
+	client := &HTTPCoreClient{
+		cachedObj: "list",
+		cachedModels: []map[string]interface{}{
+			{"id": "ag/gemini-3.7-flash-high"},
+		},
+		cachedModelsAt: time.Now(),
+	}
+
+	obj, data, err := client.GetMergedModels(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if obj != "list" || len(data) != 1 || data[0]["id"] != "ag/gemini-3.7-flash-high" {
+		t.Fatalf("unexpected cached data: %v", data)
 	}
 }
 
