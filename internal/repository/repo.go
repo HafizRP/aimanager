@@ -1022,14 +1022,14 @@ func (r *SQLiteRepo) GetDashboardStats(ctx context.Context, timeframe string) (*
 		}
 	}
 
-	// Top Models
-	topModelsQuery := `
+	// Top Models (timeframe-aware with all-time fallback)
+	topModelsQuery := fmt.Sprintf(`
 		SELECT model, COUNT(*) as req_count, COALESCE(SUM(total_tokens), 0) as total_tok
 		FROM request_logs
-		WHERE model != ''
+		WHERE model != '' AND %s
 		GROUP BY model
-		ORDER BY req_count DESC
-		LIMIT 5`
+		ORDER BY total_tok DESC, req_count DESC
+		LIMIT 6`, whereClause)
 	tmRows, err := r.db.QueryContext(ctx, topModelsQuery)
 	if err == nil {
 		defer tmRows.Close()
@@ -1037,6 +1037,24 @@ func (r *SQLiteRepo) GetDashboardStats(ctx context.Context, timeframe string) (*
 			var tm entity.TopModelStat
 			if err := tmRows.Scan(&tm.Model, &tm.Requests, &tm.TotalTokens); err == nil {
 				stats.TopModels = append(stats.TopModels, tm)
+			}
+		}
+	}
+	if len(stats.TopModels) == 0 {
+		fallbackQuery := `
+			SELECT model, COUNT(*) as req_count, COALESCE(SUM(total_tokens), 0) as total_tok
+			FROM request_logs
+			WHERE model != ''
+			GROUP BY model
+			ORDER BY total_tok DESC, req_count DESC
+			LIMIT 6`
+		if fbRows, err := r.db.QueryContext(ctx, fallbackQuery); err == nil {
+			defer fbRows.Close()
+			for fbRows.Next() {
+				var tm entity.TopModelStat
+				if err := fbRows.Scan(&tm.Model, &tm.Requests, &tm.TotalTokens); err == nil {
+					stats.TopModels = append(stats.TopModels, tm)
+				}
 			}
 		}
 	}
@@ -1095,14 +1113,14 @@ func (r *SQLiteRepo) GetUserDashboardStats(ctx context.Context, userID string, t
 		}
 	}
 
-	// User Top Models
-	topModelsQuery := `
+	// User Top Models (timeframe-aware with all-time fallback)
+	topModelsQuery := fmt.Sprintf(`
 		SELECT model, COUNT(*) as req_count, COALESCE(SUM(total_tokens), 0) as total_tok
 		FROM request_logs
-		WHERE user_id = ? AND model != ''
+		WHERE user_id = ? AND model != '' AND %s
 		GROUP BY model
-		ORDER BY req_count DESC
-		LIMIT 5`
+		ORDER BY total_tok DESC, req_count DESC
+		LIMIT 6`, whereClause)
 	tmRows, err := r.db.QueryContext(ctx, topModelsQuery, userID)
 	if err == nil {
 		defer tmRows.Close()
@@ -1110,6 +1128,24 @@ func (r *SQLiteRepo) GetUserDashboardStats(ctx context.Context, userID string, t
 			var tm entity.TopModelStat
 			if err := tmRows.Scan(&tm.Model, &tm.Requests, &tm.TotalTokens); err == nil {
 				stats.TopModels = append(stats.TopModels, tm)
+			}
+		}
+	}
+	if len(stats.TopModels) == 0 {
+		fallbackQuery := `
+			SELECT model, COUNT(*) as req_count, COALESCE(SUM(total_tokens), 0) as total_tok
+			FROM request_logs
+			WHERE user_id = ? AND model != ''
+			GROUP BY model
+			ORDER BY total_tok DESC, req_count DESC
+			LIMIT 6`
+		if fbRows, err := r.db.QueryContext(ctx, fallbackQuery, userID); err == nil {
+			defer fbRows.Close()
+			for fbRows.Next() {
+				var tm entity.TopModelStat
+				if err := fbRows.Scan(&tm.Model, &tm.Requests, &tm.TotalTokens); err == nil {
+					stats.TopModels = append(stats.TopModels, tm)
+				}
 			}
 		}
 	}

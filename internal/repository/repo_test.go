@@ -540,3 +540,81 @@ func TestSQLiteRepo_UnitOfWork(t *testing.T) {
 		t.Errorf("expected token quota to remain 1500 after rollback, got %d", uAfterRollback.TokenQuota)
 	}
 }
+
+func TestGetDashboardStatsTopModels(t *testing.T) {
+	repo, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Insert dummy user
+	u := &entity.User{
+		ID:            "user-stat-1",
+		Username:      "bob",
+		Name:          "Bob",
+		PasswordHash:  "hash",
+		Role:          "user",
+		AllowedModels: `["*"]`,
+		IsActive:      true,
+	}
+	if err := repo.CreateUser(ctx, u); err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+
+	// Insert logs for different models
+	models := []struct {
+		model  string
+		tokens int64
+		count  int
+	}{
+		{"ag/gemini-3.8-flash-high", 50000, 5},
+		{"ag/claude-sonnet-4-6", 30000, 3},
+		{"kr/glm-5", 10000, 1},
+	}
+
+	for _, m := range models {
+		for i := 0; i < m.count; i++ {
+			log := &entity.RequestLog{
+				UserID:           "user-stat-1",
+				APIKeyID:         "key-1",
+				Model:            m.model,
+				Method:           "POST",
+				Path:             "/v1/chat/completions",
+				StatusCode:       200,
+				PromptTokens:     int(m.tokens / int64(m.count) / 2),
+				CompletionTokens: int(m.tokens / int64(m.count) / 2),
+				TotalTokens:      int(m.tokens / int64(m.count)),
+				DurationMs:       150,
+			}
+			if err := repo.CreateRequestLog(ctx, log); err != nil {
+				t.Fatalf("CreateRequestLog failed: %v", err)
+			}
+		}
+	}
+
+	// Global Dashboard Stats
+	stats, err := repo.GetDashboardStats(ctx, "1d")
+	if err != nil {
+		t.Fatalf("GetDashboardStats failed: %v", err)
+	}
+
+	if len(stats.TopModels) != 3 {
+		t.Fatalf("expected 3 top models, got %d", len(stats.TopModels))
+	}
+	if stats.TopModels[0].Model != "ag/gemini-3.8-flash-high" {
+		t.Errorf("expected ag/gemini-3.8-flash-high first, got %s", stats.TopModels[0].Model)
+	}
+	if stats.TopModels[0].Requests != 5 {
+		t.Errorf("expected 5 requests for top model, got %d", stats.TopModels[0].Requests)
+	}
+
+	// User Dashboard Stats
+	userStats, err := repo.GetUserDashboardStats(ctx, "user-stat-1", "1d")
+	if err != nil {
+		t.Fatalf("GetUserDashboardStats failed: %v", err)
+	}
+	if len(userStats.TopModels) != 3 {
+		t.Fatalf("expected 3 top models for user, got %d", len(userStats.TopModels))
+	}
+}
+
