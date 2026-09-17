@@ -323,3 +323,33 @@ Hermes Orchestrator scales throughput, isolates risky changes, and eliminates ha
 1. **Never Trust Unverified Claims**: Subagents reporting "all tests passed" or "deployed" must provide exact command outputs and commit SHAs. Hermes Orchestrator independently verifies `git status` and endpoint responses.
 2. **Context Independence**: Each subagent starts with an empty context. Always pass absolute paths, error messages, and toolchain paths (`/usr/local/go/bin/go`) explicitly in `context`.
 3. **Bounded Lifetime**: If a subagent stalls on long-running processes, steer with `delegate_task(action='steer', subagent_id=..., message=...)` or terminate with `action='stop'`.
+
+---
+
+## 8. 24/7 Autonomous Daemon & Continuous Operation
+
+Hermes executes continuously 24/7 as an autonomous daemon orchestrating AI Manager without human intervention:
+
+### 1. Continuous Service Infrastructure
+- **Systemd Daemon**: Hermes Gateway runs 24/7 under systemd user unit `hermes-gateway.service` (`systemctl --user status hermes-gateway.service`), ensuring automatic resurrection across server reboots.
+- **Context Auto-Injection via `workdir`**: Every autonomous AI Manager fleet job is configured with `workdir: <repo_root>`. This forces Hermes to discover and load `HERMES.md` into the system prompt on every single execution tick, ensuring operational invariants and runbooks are strictly followed 24/7.
+
+### 2. The 24/7 Autonomous Fleet Schedule
+| Cron Job | Schedule | Cadence | Mission |
+|---|---|---|---|
+| **Health Watchdog** | `every 30m` | 30 minutes | Checks container states, `/healthz` endpoints, DB connectivity, auto-restarts failed services. |
+| **CI Guardian** | `every 60m` | 1 hour | Scans GitHub Actions runs, detects stalled jobs, clears BuildKit cache bottlenecks, re-triggers CI. |
+| **Daily Audit & Auto-Fix** | `0 7 * * *` | Daily 07:00 | Sweeps security, runs unit/race tests, evaluates error logs, opens fix PRs autonomously. |
+| **Core Auto-Updater** | `every 360m` | 6 hours | Checks `GET /api/version` on Core, snapshots settings, pulls image, recreates Core container. |
+
+### 3. Verification & Daemon Health Commands
+```bash
+# Verify 24/7 daemon status
+systemctl --user status hermes-gateway.service --no-pager
+
+# Check all active autonomous fleet jobs and next run timestamps
+hermes cron list
+
+# Verify workdir anchoring for AI Manager jobs (must output repo root)
+hermes cron list | grep -E "AI Manager|Workdir"
+```
