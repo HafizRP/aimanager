@@ -45,7 +45,7 @@ cmd/gateway/main.go                          ← Minimal entrypoint: delegates t
        └─ internal/controller/http/          ← Chi router & middleware (CSRF, session, rate-limit)
             └─ internal/controller/http/v1/  ← HTTP handlers (auth, users, keys, billing, models, etc.)
                  └─ internal/usecase/        ← Pure domain services (AuthService, UserService, KeyService)
-                      └─ interfaces.go       ← Store, KeySyncer, SettingsConfig, UnitOfWork
+                      └─ interfaces.go       ← Store, UserStore, APIKeyStore, UnitOfWork (KeySyncer in auth.go, SettingsConfig in logs.go)
                            └─ internal/repository/ ← SQL implementations of Store (sqlExecutor abstraction)
                                 └─ internal/database/ ← SQLite WAL connection pool & migration runner
                                 └─ internal/entity/  ← Core domain entities
@@ -56,6 +56,10 @@ Key Subsystems:
 - `internal/upstream/`: Core Client (`core.go`, `mock.go`), Quota Manager (`quota.go`) with Stale-While-Revalidate (SWR) caching.
 - `internal/eventbus/`: Non-blocking async event bus (`bus.go`) powering key sync, audit logs, and reactive provider reactivation.
 - `internal/worker/`: Background daemons (`provider_keeper.go` for quota auto-recovery, `radar.go` for anomaly scanning).
+- `internal/billing/`: Payment gateway integration (`midtrans.go`), token package purchases, webhook handlers.
+- `internal/provider/`: Multi-provider client abstraction (`factory.go`, `providers.go`).
+- `internal/notify/`: Telegram and external incident alerting notifications (`notify.go`).
+- `internal/syncer/`: Background synchronization of API keys between Gateway and Core databases (`syncer.go`).
 - `web/`: Compile-time embedded templates (`web/templates/`) and static assets (`web/static/`) via `web/web.go`.
 
 ---
