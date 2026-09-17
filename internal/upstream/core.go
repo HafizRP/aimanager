@@ -85,6 +85,12 @@ type HTTPCoreClient struct {
 	httpClient *http.Client
 	mu         sync.RWMutex
 	cliToken   string
+
+	modelsMu       sync.RWMutex
+	cachedObj      string
+	cachedModels   []map[string]interface{}
+	cachedModelsAt time.Time
+	modelsFetching bool
 }
 
 // Ensure HTTPCoreClient implements CoreClient.
@@ -895,10 +901,59 @@ func (c *HTTPCoreClient) customModelIDs(ctx context.Context) map[string]bool {
 // that core filters out of OpenAI exposure (notably oc/* + opencode-go/*
 // OpenCode Zen free tier). Primary merge source is the core DB customModels
 // scope (generic guard for future prefixes); mergedModelPrefixes is fallback.
-// Catalog failures degrade gracefully to the raw /v1/models list.
+// Results are cached in-memory with stale-while-revalidate to prevent blocking callers.
 func (c *HTTPCoreClient) GetMergedModels(ctx context.Context) (string, []map[string]interface{}, error) {
+	c.modelsMu.RLock()
+	if c.cachedModels != nil {
+		age := time.Since(c.cachedModelsAt)
+		if age < 3*time.Minute {
+			obj, data := c.cachedObj, c.cachedModels
+			c.modelsMu.RUnlock()
+			return obj, data, nil
+		}
+		if age < 15*time.Minute {
+			obj, data := c.cachedObj, c.cachedModels
+			shouldFetch := !c.modelsFetching
+			c.modelsMu.RUnlock()
+			if shouldFetch {
+				go func() {
+					c.modelsMu.Lock()
+					if c.modelsFetching {
+						c.modelsMu.Unlock()
+						return
+					}
+					c.modelsFetching = true
+					c.modelsMu.Unlock()
+
+					defer func() {
+						c.modelsMu.Lock()
+						c.modelsFetching = false
+						c.modelsMu.Unlock()
+					}()
+
+					bgCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+					_, _, _ = c.fetchAndCacheMergedModels(bgCtx)
+				}()
+			}
+			return obj, data, nil
+		}
+	}
+	c.modelsMu.RUnlock()
+
+	return c.fetchAndCacheMergedModels(ctx)
+}
+
+func (c *HTTPCoreClient) fetchAndCacheMergedModels(ctx context.Context) (string, []map[string]interface{}, error) {
 	rawV1, err := c.doRequest(ctx, http.MethodGet, "/v1/models", nil)
 	if err != nil {
+		c.modelsMu.RLock()
+		if c.cachedModels != nil {
+			obj, data := c.cachedObj, c.cachedModels
+			c.modelsMu.RUnlock()
+			return obj, data, nil
+		}
+		c.modelsMu.RUnlock()
 		return "", nil, err
 	}
 	var v1 struct {
@@ -906,6 +961,13 @@ func (c *HTTPCoreClient) GetMergedModels(ctx context.Context) (string, []map[str
 		Data   []map[string]interface{} `json:"data"`
 	}
 	if err := json.Unmarshal(rawV1, &v1); err != nil {
+		c.modelsMu.RLock()
+		if c.cachedModels != nil {
+			obj, data := c.cachedObj, c.cachedModels
+			c.modelsMu.RUnlock()
+			return obj, data, nil
+		}
+		c.modelsMu.RUnlock()
 		return "", nil, err
 	}
 	if v1.Object == "" {
@@ -920,6 +982,7 @@ func (c *HTTPCoreClient) GetMergedModels(ctx context.Context) (string, []map[str
 
 	rawCat, err := c.doRequest(ctx, http.MethodGet, "/api/models", nil)
 	if err != nil {
+		c.cacheMergedResult(v1.Object, v1.Data)
 		return v1.Object, v1.Data, nil
 	}
 	var cat struct {
@@ -933,6 +996,7 @@ func (c *HTTPCoreClient) GetMergedModels(ctx context.Context) (string, []map[str
 		} `json:"models"`
 	}
 	if err := json.Unmarshal(rawCat, &cat); err != nil || len(cat.Models) == 0 {
+		c.cacheMergedResult(v1.Object, v1.Data)
 		return v1.Object, v1.Data, nil
 	}
 
@@ -986,5 +1050,17 @@ func (c *HTTPCoreClient) GetMergedModels(ctx context.Context) (string, []map[str
 		v1.Data = append(v1.Data, entry)
 		existing[id] = true
 	}
+	c.cacheMergedResult(v1.Object, v1.Data)
 	return v1.Object, v1.Data, nil
+}
+
+func (c *HTTPCoreClient) cacheMergedResult(obj string, data []map[string]interface{}) {
+	if len(data) == 0 {
+		return
+	}
+	c.modelsMu.Lock()
+	c.cachedObj = obj
+	c.cachedModels = data
+	c.cachedModelsAt = time.Now()
+	c.modelsMu.Unlock()
 }
