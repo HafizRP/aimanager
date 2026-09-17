@@ -204,37 +204,32 @@ Execute before committing any change:
 /usr/local/go/bin/go test -race ./...
 ```
 
-### Git & PR Workflow
-1. **Branching**:
-   ```bash
-   git checkout -b <type>/<description>
-   ```
-2. **Commit Hygiene**:
-   - Conventional Commits (`feat:`, `fix:`, `perf:`, `refactor:`, `docs:`, `chore:`).
-   - Scoped adds (`git add <files>`), never blind `git add .`.
-3. **Leak Check**:
-   ```bash
-   git diff origin/master
-   ```
-   Confirm zero secrets, no private tokens, no real Core domain.
-4. **Push & PR**:
-   ```bash
-   git push -u origin <branch>
-   gh pr create --title "<title>" --body "<structured summary>"
-   ```
-5. **Auto-Merge (Autonomous Fleet Grant)**:
-   When running as an autonomous maintenance agent, monitor Actions CI:
-   ```bash
-   gh pr checks <pr_number>
-   ```
-   Once green, merge and clean up:
-   ```bash
-   gh pr merge <pr_number> --merge --auto --delete-branch
-   ```
-6. **Return to Master**:
-   ```bash
-   git checkout master && git pull --ff-only origin master
-   ```
+### Continuous Autonomous Development Protocol (Zero Human Intervention)
+
+All code updates in AI Manager follow an uninterrupted autonomous development cycle:
+
+1. **Autonomous Task Branching**:
+   - Create a dedicated feature/fix branch: `git checkout -b <type>/<description>`.
+2. **Immediate Local Pre-Flight Testing**:
+   - Hermes immediately executes `/usr/local/go/bin/go test -v ./...` and `go test -race ./...`.
+   - Never wait or push untested code.
+3. **Leak Audit & PR Creation**:
+   - Verify zero secret or real Core domain leaks: `git diff origin/master`.
+   - Push branch and open PR: `git push -u origin <branch>` and `gh pr create`.
+4. **Immediate Autonomous Testing & Verification**:
+   - Hermes does NOT ask the user to test or wait for human review.
+   - Hermes directly supervises CI and verifies local build/integration integrity.
+5. **Immediate Autonomous Auto-Merge**:
+   - Authorized by owner standing grant: Hermes merges the PR directly without human clicks:
+     ```bash
+     gh pr merge <pr_number> --merge --auto --delete-branch
+     ```
+6. **Post-Merge Deployment Supervision & Live Verification**:
+   - Hermes inspects deploy status on `master`: `gh run list --workflow=deploy.yml --limit 3`.
+   - If BuildKit timeout (exit code 143) occurs: Hermes pre-warms cache on host (`docker compose build gateway`) and re-triggers with `gh run rerun <run_id>`.
+   - Hermes validates live endpoint health: `curl -sf http://127.0.0.1:20129/healthz`.
+   - Hermes returns working tree cleanly to `master` (`git checkout master && git pull --ff-only origin master`).
+   - The entire development-to-production lifecycle completes autonomously without user intervention.
 
 ---
 
@@ -266,62 +261,12 @@ Hermes Orchestrator scales throughput, isolates risky changes, and eliminates ha
 - **Leaf Subagents (Isolated Workers)**: Specialized child processes with dedicated terminal sessions. Each receives a concrete, bounded mission and reports verified artifacts.
 
 ### The 6-Phase Subagent Pipeline
-
-#### Phase 1: Planning & Architecture Subagent
-- **Goal**: Read entities, repository interfaces, and routing tables to output an exact file modification plan.
-- **Task Template**:
-  ```python
-  delegate_task(tasks=[{
-    "goal": "Analyze feature requirements for <feature>. Inspect internal/usecase/interfaces.go and internal/repository/repo.go. List exact files, functions, and database columns needed without writing code.",
-    "context": "Project root: <repo_root>. Architecture: Clean Architecture (evrone/go-clean-template)."
-  }])
-  ```
-
-#### Phase 2: Parallel Development Subagents
-- **Backend Worker**: Implements domain entities, SQL queries (`sqlExecutor`), use cases, and HTTP controllers.
-  - *Constraint*: Must wrap errors with `%w`, use `zerolog`, and propagate `context.Context`.
-- **Frontend Worker**: Implements HTML templates, mobile responsive table card rules (`data-label`), WIB datetime parsing, and registers templates in `handler.go`.
-  - *Constraint*: Must bump `custom.css?v=N` and `app.js?v=N` in `base.html` and `login.html`.
-- **Parallel Dispatch**:
-  ```python
-  delegate_task(tasks=[
-    {"goal": "Implement backend usecase and repo methods for <feature>", "context": "..."},
-    {"goal": "Implement UI templates in web/templates/<feature>.html and register in handler.go", "context": "..."}
-  ])
-  ```
-
-#### Phase 3: QA & Test-Driven Verification Subagent
-- **Goal**: Author unit and integration tests covering positive paths, error conditions, and concurrency races.
-- **Execution Script**:
-  - Compiles with `/usr/local/go/bin/go test -v ./...`
-  - Runs race detector: `/usr/local/go/bin/go test -race ./...`
-  - Verifies zero template compile failures (`embed.FS` parsing loop).
-
-#### Phase 4: Pre-Commit Security & Leak Auditor Subagent
-- **Goal**: Scan the working tree diff before committing to ensure zero secrets or internal IDs leak.
-- **Checks**:
-  - Greps diff for API key patterns (`sk-gw-`, `sk-proj-`, Midtrans server keys).
-  - Greps diff for real upstream Core domains or internal host paths.
-  - Verifies SQLite queries use `?` placeholders (no `fmt.Sprintf` SQL injection).
-
-#### Phase 5: Build & Deploy Subagent
-- **Goal**: Rebuild container image, recreate container, and verify zero downtime.
-- **Deployment Protocol**:
-  ```bash
-  # 1. Warm BuildKit cache
-  docker compose build gateway
-  # 2. Recreate container with new image
-  docker compose up -d --force-recreate gateway
-  # 3. Verify health
-  sleep 2 && curl -sf http://127.0.0.1:20129/healthz
-  ```
-
-#### Phase 6: Post-Deploy SRE & Watchdog Subagent
-- **Goal**: Execute real end-to-end user transactions and telemetry verification.
-- **Actions**:
-  - Probes public and local endpoints (`/healthz`, `/v1/models`).
-  - Checks live database `request_logs` to ensure newly added routes log correctly.
-  - Automatically triggers rollback (`git checkout master && docker compose up -d --build gateway`) if `/healthz` fails.
+1. **Phase 1: Planning & Architecture**: Inspects interfaces/repos, outputs exact file impact plan (`internal/usecase/interfaces.go`).
+2. **Phase 2: Parallel Development**: Backend worker (entities, repo, usecase, handler) and Frontend worker (templates, mobile table cards, WIB dates, cache busters).
+3. **Phase 3: QA & Test-Driven Verification**: Author unit tests, execute `/usr/local/go/bin/go test -v ./...` and `go test -race ./...`.
+4. **Phase 4: Pre-Commit Security Audit**: Greps diff for leaked API keys, real domains, and raw SQL queries.
+5. **Phase 5: Build & Deploy**: Warms BuildKit cache (`docker compose build gateway`), recreates container, verifies healthz.
+6. **Phase 6: Post-Deploy SRE**: Probes endpoints, validates `request_logs`, triggers auto-rollback on failure.
 
 ### Invariant Rules for Delegating Subagents
 1. **Never Trust Unverified Claims**: Subagents reporting "all tests passed" or "deployed" must provide exact command outputs and commit SHAs. Hermes Orchestrator independently verifies `git status` and endpoint responses.
