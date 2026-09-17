@@ -36,7 +36,7 @@ type KeyRepository interface {
 	CreateAPIKey(ctx context.Context, k *entity.APIKey) error
 	ToggleAPIKeyStatus(ctx context.Context, id string, isActive bool) error
 	DeleteAPIKey(ctx context.Context, id string) error
-	UpdateKeyLastUsed(ctx context.Context, id string) error
+	UpdateKeyLastUsed(ctx context.Context, id string, ip string) error
 	UpdateKeyTokenUsage(ctx context.Context, id string, tokens int) error
 	GetAPIKeyTokenUsage(ctx context.Context, id string) (int64, error)
 	UpdateKeyBudgets(ctx context.Context, id string, maxTokensLimit, dailyQuota int) error
@@ -388,7 +388,7 @@ func (r *SQLiteRepo) DeductTokens(ctx context.Context, userID string, tokens int
 
 // GetAPIKeyByKey looks up an API key by its raw key string.
 func (r *SQLiteRepo) GetAPIKeyByKey(ctx context.Context, key string) (*entity.APIKey, error) {
-	query := `SELECT k.id, k.user_id, k.key, k.name, COALESCE(k.allowed_models, ''), COALESCE(k.rate_limit_rpm, 0), COALESCE(k.max_tokens_limit, 0), COALESCE(k.daily_token_quota, 0), k.is_active, k.created_at, k.last_used_at, k.expires_at, COALESCE(k.tokens_used, 0), u.name 
+	query := `SELECT k.id, k.user_id, k.key, k.name, COALESCE(k.allowed_models, ''), COALESCE(k.rate_limit_rpm, 0), COALESCE(k.max_tokens_limit, 0), COALESCE(k.daily_token_quota, 0), k.is_active, k.created_at, k.last_used_at, k.expires_at, COALESCE(k.tokens_used, 0), COALESCE(k.last_used_ip, ''), u.name 
 	          FROM api_keys k 
 	          JOIN users u ON k.user_id = u.id 
 	          WHERE k.key = ?`
@@ -397,7 +397,7 @@ func (r *SQLiteRepo) GetAPIKeyByKey(ctx context.Context, key string) (*entity.AP
 	var lastUsed sql.NullString
 	var expiresAt sql.NullString
 	err := r.db.QueryRowContext(ctx, query, key).Scan(
-		&k.ID, &k.UserID, &k.Key, &k.Name, &k.AllowedModels, &k.RateLimitRPM, &k.MaxTokensLimit, &k.DailyTokenQuota, &k.IsActive, &createdAt, &lastUsed, &expiresAt, &k.TokenUsage, &k.UserName,
+		&k.ID, &k.UserID, &k.Key, &k.Name, &k.AllowedModels, &k.RateLimitRPM, &k.MaxTokensLimit, &k.DailyTokenQuota, &k.IsActive, &createdAt, &lastUsed, &expiresAt, &k.TokenUsage, &k.LastUsedIP, &k.UserName,
 	)
 	if err != nil {
 		return nil, err
@@ -420,7 +420,7 @@ func (r *SQLiteRepo) GetAPIKeyByKey(ctx context.Context, key string) (*entity.AP
 
 // GetAPIKeysByUserID returns all API keys belonging to a user.
 func (r *SQLiteRepo) GetAPIKeysByUserID(ctx context.Context, userID string) ([]entity.APIKey, error) {
-	query := `SELECT id, user_id, key, name, COALESCE(allowed_models, ''), COALESCE(rate_limit_rpm, 0), COALESCE(max_tokens_limit, 0), COALESCE(daily_token_quota, 0), is_active, created_at, last_used_at, expires_at, COALESCE(tokens_used, 0) 
+	query := `SELECT id, user_id, key, name, COALESCE(allowed_models, ''), COALESCE(rate_limit_rpm, 0), COALESCE(max_tokens_limit, 0), COALESCE(daily_token_quota, 0), is_active, created_at, last_used_at, expires_at, COALESCE(tokens_used, 0), COALESCE(last_used_ip, '') 
 	          FROM api_keys WHERE user_id = ? ORDER BY created_at DESC`
 	rows, err := r.db.QueryContext(ctx, query, userID)
 	if err != nil {
@@ -434,7 +434,7 @@ func (r *SQLiteRepo) GetAPIKeysByUserID(ctx context.Context, userID string) ([]e
 		var createdAt string
 		var lastUsed sql.NullString
 		var expiresAt sql.NullString
-		if err := rows.Scan(&k.ID, &k.UserID, &k.Key, &k.Name, &k.AllowedModels, &k.RateLimitRPM, &k.MaxTokensLimit, &k.DailyTokenQuota, &k.IsActive, &createdAt, &lastUsed, &expiresAt, &k.TokenUsage); err != nil {
+		if err := rows.Scan(&k.ID, &k.UserID, &k.Key, &k.Name, &k.AllowedModels, &k.RateLimitRPM, &k.MaxTokensLimit, &k.DailyTokenQuota, &k.IsActive, &createdAt, &lastUsed, &expiresAt, &k.TokenUsage, &k.LastUsedIP); err != nil {
 			return nil, err
 		}
 		k.CreatedAt = parseTimeFlexible(createdAt)
@@ -457,7 +457,7 @@ func (r *SQLiteRepo) GetAPIKeysByUserID(ctx context.Context, userID string) ([]e
 
 // GetAllAPIKeys returns every API key across all users.
 func (r *SQLiteRepo) GetAllAPIKeys(ctx context.Context) ([]entity.APIKey, error) {
-	query := `SELECT k.id, k.user_id, k.key, k.name, COALESCE(k.allowed_models, ''), COALESCE(k.rate_limit_rpm, 0), COALESCE(k.max_tokens_limit, 0), COALESCE(k.daily_token_quota, 0), k.is_active, k.created_at, k.last_used_at, k.expires_at, COALESCE(k.tokens_used, 0), u.name 
+	query := `SELECT k.id, k.user_id, k.key, k.name, COALESCE(k.allowed_models, ''), COALESCE(k.rate_limit_rpm, 0), COALESCE(k.max_tokens_limit, 0), COALESCE(k.daily_token_quota, 0), k.is_active, k.created_at, k.last_used_at, k.expires_at, COALESCE(k.tokens_used, 0), COALESCE(k.last_used_ip, ''), u.name 
 	          FROM api_keys k 
 	          JOIN users u ON k.user_id = u.id 
 	          ORDER BY k.created_at DESC`
@@ -473,7 +473,7 @@ func (r *SQLiteRepo) GetAllAPIKeys(ctx context.Context) ([]entity.APIKey, error)
 		var createdAt string
 		var lastUsed sql.NullString
 		var expiresAt sql.NullString
-		if err := rows.Scan(&k.ID, &k.UserID, &k.Key, &k.Name, &k.AllowedModels, &k.RateLimitRPM, &k.MaxTokensLimit, &k.DailyTokenQuota, &k.IsActive, &createdAt, &lastUsed, &expiresAt, &k.TokenUsage, &k.UserName); err != nil {
+		if err := rows.Scan(&k.ID, &k.UserID, &k.Key, &k.Name, &k.AllowedModels, &k.RateLimitRPM, &k.MaxTokensLimit, &k.DailyTokenQuota, &k.IsActive, &createdAt, &lastUsed, &expiresAt, &k.TokenUsage, &k.LastUsedIP, &k.UserName); err != nil {
 			return nil, err
 		}
 		k.CreatedAt = parseTimeFlexible(createdAt)
@@ -527,10 +527,10 @@ func (r *SQLiteRepo) DeleteAPIKey(ctx context.Context, id string) error {
 	return err
 }
 
-// UpdateKeyLastUsed sets the last-used timestamp of an API key to now.
-func (r *SQLiteRepo) UpdateKeyLastUsed(ctx context.Context, id string) error {
-	query := `UPDATE api_keys SET last_used_at = datetime('now') WHERE id = ?`
-	_, err := r.db.ExecContext(ctx, query, id)
+// UpdateKeyLastUsed sets the last-used timestamp and client IP of an API key.
+func (r *SQLiteRepo) UpdateKeyLastUsed(ctx context.Context, id string, ip string) error {
+	query := `UPDATE api_keys SET last_used_at = datetime('now'), last_used_ip = ? WHERE id = ?`
+	_, err := r.db.ExecContext(ctx, query, ip, id)
 	return err
 }
 

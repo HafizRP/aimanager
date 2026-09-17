@@ -363,7 +363,10 @@
               <td class="text-dim small font-monospace">{{ formatDate .CreatedAt }}</td>
               <td class="text-dim small font-monospace">
                 {{ if .LastUsedAt }}
-                  {{ formatDate .LastUsedAt }}
+                  <div>{{ formatDate .LastUsedAt }}</div>
+                  {{ if .LastUsedIP }}
+                    <div class="text-secondary opacity-75" style="font-size: 0.72rem;"><i class="bi bi-geo-alt"></i> {{ .LastUsedIP }}</div>
+                  {{ end }}
                 {{ else }}
                   <span class="text-secondary opacity-60">Never</span>
                 {{ end }}
