@@ -253,13 +253,73 @@ Execute before committing any change:
 
 ---
 
-## 7. Multi-Agent Delegation Rules
+## 7. End-to-End Subagent Orchestration: Development to Deployment
 
-When Hermes acts as orchestrator delegating to subagents (`delegate_task`):
-- **Role Assignment**:
-  - `orchestrator`: Can plan and spawn child workers (bounded by depth).
-  - `leaf` (default): Single bounded task (e.g. write a test, inspect a file, benchmark an endpoint).
-- **Execution Rules**:
-  - Subagents run in isolated terminal sessions and cannot ask user questions. Provide all context (paths, constraints, error logs) in the task description.
-  - Subagent claims are self-reports; always independently verify external side effects (file edits, builds, endpoints).
-  - Prefer parallel delegation (`tasks=[{...}, {...}]`) for independent audits or cross-browser frontend reviews.
+Hermes Orchestrator scales throughput, isolates risky changes, and eliminates hallucinated completions by delegating distinct project lifecycle phases to specialized `leaf` subagents via `delegate_task`.
+
+### Subagent Role Architecture
+- **Orchestrator (Parent Session)**: Holds global task state, parses user requirements, spawns worker subagents, inspects diffs, runs safety checks, and manages GitHub PRs/merges.
+- **Leaf Subagents (Isolated Workers)**: Specialized child processes with dedicated terminal sessions. Each receives a concrete, bounded mission and reports verified artifacts.
+
+### The 6-Phase Subagent Pipeline
+
+#### Phase 1: Planning & Architecture Subagent
+- **Goal**: Read entities, repository interfaces, and routing tables to output an exact file modification plan.
+- **Task Template**:
+  ```python
+  delegate_task(tasks=[{
+    "goal": "Analyze feature requirements for <feature>. Inspect internal/usecase/interfaces.go and internal/repository/repo.go. List exact files, functions, and database columns needed without writing code.",
+    "context": "Project root: <repo_root>. Architecture: Clean Architecture (evrone/go-clean-template)."
+  }])
+  ```
+
+#### Phase 2: Parallel Development Subagents
+- **Backend Worker**: Implements domain entities, SQL queries (`sqlExecutor`), use cases, and HTTP controllers.
+  - *Constraint*: Must wrap errors with `%w`, use `zerolog`, and propagate `context.Context`.
+- **Frontend Worker**: Implements HTML templates, mobile responsive table card rules (`data-label`), WIB datetime parsing, and registers templates in `handler.go`.
+  - *Constraint*: Must bump `custom.css?v=N` and `app.js?v=N` in `base.html` and `login.html`.
+- **Parallel Dispatch**:
+  ```python
+  delegate_task(tasks=[
+    {"goal": "Implement backend usecase and repo methods for <feature>", "context": "..."},
+    {"goal": "Implement UI templates in web/templates/<feature>.html and register in handler.go", "context": "..."}
+  ])
+  ```
+
+#### Phase 3: QA & Test-Driven Verification Subagent
+- **Goal**: Author unit and integration tests covering positive paths, error conditions, and concurrency races.
+- **Execution Script**:
+  - Compiles with `/usr/local/go/bin/go test -v ./...`
+  - Runs race detector: `/usr/local/go/bin/go test -race ./...`
+  - Verifies zero template compile failures (`embed.FS` parsing loop).
+
+#### Phase 4: Pre-Commit Security & Leak Auditor Subagent
+- **Goal**: Scan the working tree diff before committing to ensure zero secrets or internal IDs leak.
+- **Checks**:
+  - Greps diff for API key patterns (`sk-gw-`, `sk-proj-`, Midtrans server keys).
+  - Greps diff for real upstream Core domains or internal host paths.
+  - Verifies SQLite queries use `?` placeholders (no `fmt.Sprintf` SQL injection).
+
+#### Phase 5: Build & Deploy Subagent
+- **Goal**: Rebuild container image, recreate container, and verify zero downtime.
+- **Deployment Protocol**:
+  ```bash
+  # 1. Warm BuildKit cache
+  docker compose build gateway
+  # 2. Recreate container with new image
+  docker compose up -d --force-recreate gateway
+  # 3. Verify health
+  sleep 2 && curl -sf http://127.0.0.1:20129/healthz
+  ```
+
+#### Phase 6: Post-Deploy SRE & Watchdog Subagent
+- **Goal**: Execute real end-to-end user transactions and telemetry verification.
+- **Actions**:
+  - Probes public and local endpoints (`/healthz`, `/v1/models`).
+  - Checks live database `request_logs` to ensure newly added routes log correctly.
+  - Automatically triggers rollback (`git checkout master && docker compose up -d --build gateway`) if `/healthz` fails.
+
+### Invariant Rules for Delegating Subagents
+1. **Never Trust Unverified Claims**: Subagents reporting "all tests passed" or "deployed" must provide exact command outputs and commit SHAs. Hermes Orchestrator independently verifies `git status` and endpoint responses.
+2. **Context Independence**: Each subagent starts with an empty context. Always pass absolute paths, error messages, and toolchain paths (`/usr/local/go/bin/go`) explicitly in `context`.
+3. **Bounded Lifetime**: If a subagent stalls on long-running processes, steer with `delegate_task(action='steer', subagent_id=..., message=...)` or terminate with `action='stop'`.
