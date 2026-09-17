@@ -30,7 +30,7 @@ type (
 		CreateAPIKey(ctx context.Context, k *entity.APIKey) error
 		ToggleAPIKeyStatus(ctx context.Context, id string, isActive bool) error
 		DeleteAPIKey(ctx context.Context, id string) error
-		UpdateKeyLastUsed(ctx context.Context, id string) error
+		UpdateKeyLastUsed(ctx context.Context, id string, ip string) error
 	}
 
 	RequestLogStore interface {

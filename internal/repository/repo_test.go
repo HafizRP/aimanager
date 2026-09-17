@@ -177,8 +177,15 @@ func TestAPIKeyOperations(t *testing.T) {
 	}
 
 	// 4. Update Last Used
-	if err := repo.UpdateKeyLastUsed(ctx, "key-1"); err != nil {
+	if err := repo.UpdateKeyLastUsed(ctx, "key-1", "192.168.1.50"); err != nil {
 		t.Fatalf("UpdateKeyLastUsed failed: %v", err)
+	}
+	keyWithIP, err := repo.GetAPIKeyByKey(ctx, key.Key)
+	if err != nil {
+		t.Fatalf("GetAPIKeyByKey failed: %v", err)
+	}
+	if keyWithIP.LastUsedIP != "192.168.1.50" {
+		t.Errorf("expected LastUsedIP 192.168.1.50, got %s", keyWithIP.LastUsedIP)
 	}
 
 	// 5. Toggle Status

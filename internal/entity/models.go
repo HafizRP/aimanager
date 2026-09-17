@@ -78,6 +78,7 @@ type APIKey struct {
 	IsActive       bool       `json:"is_active"`
 	CreatedAt      time.Time  `json:"created_at"`
 	LastUsedAt     *time.Time `json:"last_used_at,omitempty"`
+	LastUsedIP     string     `json:"last_used_ip,omitempty"`
 	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
 
 	// Virtual fields for UI

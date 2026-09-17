@@ -426,7 +426,7 @@ func (p *GatewayProxy) handleForwardRequest(w http.ResponseWriter, r *http.Reque
 			w.WriteHeader(cached.StatusCode)
 			_, _ = w.Write(cached.Body)
 
-			_ = p.repo.UpdateKeyLastUsed(r.Context(), key.ID)
+			_ = p.repo.UpdateKeyLastUsed(r.Context(), key.ID, clientIP)
 			_ = p.repo.CreateRequestLog(r.Context(), &entity.RequestLog{
 				UserID:     user.ID,
 				APIKeyID:   key.ID,
@@ -617,7 +617,7 @@ func (p *GatewayProxy) handleStreamingResponse(w http.ResponseWriter, r *http.Re
 
 	// Deduct tokens and log
 	_ = p.repo.DeductTokens(context.Background(), user.ID, totalTokens)
-	_ = p.repo.UpdateKeyLastUsed(context.Background(), key.ID)
+	_ = p.repo.UpdateKeyLastUsed(context.Background(), key.ID, clientIP)
 	_ = p.repo.UpdateKeyTokenUsage(context.Background(), key.ID, totalTokens)
 	_ = p.repo.CreateRequestLog(context.Background(), &entity.RequestLog{
 		UserID:           user.ID,
@@ -677,7 +677,7 @@ func (p *GatewayProxy) handleNonStreamingResponse(w http.ResponseWriter, r *http
 
 		// Deduct tokens
 		_ = p.repo.DeductTokens(context.Background(), user.ID, totalTokens)
-		_ = p.repo.UpdateKeyLastUsed(context.Background(), key.ID)
+		_ = p.repo.UpdateKeyLastUsed(context.Background(), key.ID, clientIP)
 		_ = p.repo.UpdateKeyTokenUsage(context.Background(), key.ID, totalTokens)
 
 		// Save response to Exact Match Cache

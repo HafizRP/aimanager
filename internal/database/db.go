@@ -64,6 +64,7 @@ func migrate(db *sql.DB) error {
 		is_active INTEGER NOT NULL DEFAULT 1,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		last_used_at DATETIME,
+		last_used_ip TEXT,
 		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 	);
 
@@ -158,6 +159,7 @@ func migrate(db *sql.DB) error {
 	_, _ = db.Exec(`ALTER TABLE api_keys ADD COLUMN allowed_models TEXT DEFAULT '';`)
 	_, _ = db.Exec(`ALTER TABLE api_keys ADD COLUMN rate_limit_rpm INTEGER DEFAULT 0;`)
 	_, _ = db.Exec(`ALTER TABLE api_keys ADD COLUMN expires_at DATETIME;`)
+	_, _ = db.Exec(`ALTER TABLE api_keys ADD COLUMN last_used_ip TEXT DEFAULT '';`)
 	_, _ = db.Exec(`ALTER TABLE api_keys ADD COLUMN max_tokens_limit INTEGER DEFAULT 0;`)
 	_, _ = db.Exec(`ALTER TABLE api_keys ADD COLUMN tokens_used INTEGER DEFAULT 0;`)
 	_, _ = db.Exec(`ALTER TABLE users ADD COLUMN daily_token_quota INTEGER DEFAULT 0;`)
