@@ -45,7 +45,7 @@ cmd/gateway/main.go                          ← Minimal entrypoint: delegates t
        └─ internal/controller/http/          ← Chi router & middleware (CSRF, session, rate-limit)
             └─ internal/controller/http/v1/  ← HTTP handlers (auth, users, keys, billing, models, etc.)
                  └─ internal/usecase/        ← Pure domain services (AuthService, UserService, KeyService)
-                      └─ interfaces.go       ← Store, KeySyncer, SettingsConfig, UnitOfWork
+                      └─ interfaces.go       ← Store, UserStore, APIKeyStore, UnitOfWork (KeySyncer in auth.go, SettingsConfig in logs.go)
                            └─ internal/repository/ ← SQL implementations of Store (sqlExecutor abstraction)
                                 └─ internal/database/ ← SQLite WAL connection pool & migration runner
                                 └─ internal/entity/  ← Core domain entities
@@ -56,6 +56,10 @@ Key Subsystems:
 - `internal/upstream/`: Core Client (`core.go`, `mock.go`), Quota Manager (`quota.go`) with Stale-While-Revalidate (SWR) caching.
 - `internal/eventbus/`: Non-blocking async event bus (`bus.go`) powering key sync, audit logs, and reactive provider reactivation.
 - `internal/worker/`: Background daemons (`provider_keeper.go` for quota auto-recovery, `radar.go` for anomaly scanning).
+- `internal/billing/`: Payment gateway integration (`midtrans.go`), token package purchases, webhook handlers.
+- `internal/provider/`: Multi-provider client abstraction (`factory.go`, `providers.go`).
+- `internal/notify/`: Telegram and external incident alerting notifications (`notify.go`).
+- `internal/syncer/`: Background synchronization of API keys between Gateway and Core databases (`syncer.go`).
 - `web/`: Compile-time embedded templates (`web/templates/`) and static assets (`web/static/`) via `web/web.go`.
 
 ---
@@ -72,7 +76,7 @@ Hermes executes five periodic maintenance loops to guarantee self-driving stabil
 2. **Endpoint Probes**:
    ```bash
    curl -sf http://127.0.0.1:20129/healthz || echo "GATEWAY_DOWN"
-   curl -sf http://127.0.0.1:20128/healthz || echo "CORE_DOWN"
+   curl -sf http://127.0.0.1:20128/api/health || echo "CORE_DOWN"
    ```
 3. **Log & Error Anomaly Scan**:
    ```bash
@@ -130,7 +134,7 @@ Hermes executes five periodic maintenance loops to guarantee self-driving stabil
 - **Cause**: Gateway cannot communicate with Upstream Core (`127.0.0.1:20128`).
 - **Triage**:
   1. Check if Core is running: `docker ps | grep 9router`.
-  2. If Core recently restarted, Next.js requires 8s warmup. Wait and re-probe `curl -s http://127.0.0.1:20128/healthz`.
+  2. If Core recently restarted, Next.js requires 8s warmup. Wait and re-probe `curl -s http://127.0.0.1:20128/api/health`.
   3. If Core is crash-looping: `docker logs 9router --tail 50`.
   4. Fix: `docker compose up -d --force-recreate core`.
 
@@ -323,3 +327,33 @@ Hermes Orchestrator scales throughput, isolates risky changes, and eliminates ha
 1. **Never Trust Unverified Claims**: Subagents reporting "all tests passed" or "deployed" must provide exact command outputs and commit SHAs. Hermes Orchestrator independently verifies `git status` and endpoint responses.
 2. **Context Independence**: Each subagent starts with an empty context. Always pass absolute paths, error messages, and toolchain paths (`/usr/local/go/bin/go`) explicitly in `context`.
 3. **Bounded Lifetime**: If a subagent stalls on long-running processes, steer with `delegate_task(action='steer', subagent_id=..., message=...)` or terminate with `action='stop'`.
+
+---
+
+## 8. 24/7 Autonomous Daemon & Continuous Operation
+
+Hermes executes continuously 24/7 as an autonomous daemon orchestrating AI Manager without human intervention:
+
+### 1. Continuous Service Infrastructure
+- **Systemd Daemon**: Hermes Gateway runs 24/7 under systemd user unit `hermes-gateway.service` (`systemctl --user status hermes-gateway.service`), ensuring automatic resurrection across server reboots.
+- **Context Auto-Injection via `workdir`**: Every autonomous AI Manager fleet job is configured with `workdir: <repo_root>`. This forces Hermes to discover and load `HERMES.md` into the system prompt on every single execution tick, ensuring operational invariants and runbooks are strictly followed 24/7.
+
+### 2. The 24/7 Autonomous Fleet Schedule
+| Cron Job | Schedule | Cadence | Mission |
+|---|---|---|---|
+| **Health Watchdog** | `every 30m` | 30 minutes | Checks container states, `/healthz` endpoints, DB connectivity, auto-restarts failed services. |
+| **CI Guardian** | `every 60m` | 1 hour | Scans GitHub Actions runs, detects stalled jobs, clears BuildKit cache bottlenecks, re-triggers CI. |
+| **Daily Audit & Auto-Fix** | `0 7 * * *` | Daily 07:00 | Sweeps security, runs unit/race tests, evaluates error logs, opens fix PRs autonomously. |
+| **Core Auto-Updater** | `every 360m` | 6 hours | Checks `GET /api/version` on Core, snapshots settings, pulls image, recreates Core container. |
+
+### 3. Verification & Daemon Health Commands
+```bash
+# Verify 24/7 daemon status
+systemctl --user status hermes-gateway.service --no-pager
+
+# Check all active autonomous fleet jobs and next run timestamps
+hermes cron list
+
+# Verify workdir anchoring for AI Manager jobs (must output repo root)
+hermes cron list | grep -E "AI Manager|Workdir"
+```

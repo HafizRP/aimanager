@@ -2,6 +2,7 @@ package eventbus
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -10,22 +11,29 @@ import (
 )
 
 type mockSyncer struct {
+	mu          sync.Mutex
 	syncedKeys  []string
 	toggledKeys []string
 	deletedKeys []string
 }
 
 func (m *mockSyncer) SyncKey(key *entity.APIKey, userName string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.syncedKeys = append(m.syncedKeys, key.ID)
 	return nil
 }
 
 func (m *mockSyncer) ToggleKey(keyID string, isActive bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.toggledKeys = append(m.toggledKeys, keyID)
 	return nil
 }
 
 func (m *mockSyncer) DeleteKey(keyID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.deletedKeys = append(m.deletedKeys, keyID)
 	return nil
 }
@@ -79,6 +87,9 @@ func TestAsyncEventBus_KeySyncerSubscriber(t *testing.T) {
 	bus.Publish(context.Background(), NewEvent(EventKeyDeleted, KeyPayload{KeyID: "key-123"}))
 
 	time.Sleep(50 * time.Millisecond)
+
+	syncer.mu.Lock()
+	defer syncer.mu.Unlock()
 
 	if len(syncer.syncedKeys) != 1 || syncer.syncedKeys[0] != "key-123" {
 		t.Errorf("expected synced key-123, got %v", syncer.syncedKeys)
