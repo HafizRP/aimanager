@@ -72,7 +72,7 @@ Hermes executes five periodic maintenance loops to guarantee self-driving stabil
 2. **Endpoint Probes**:
    ```bash
    curl -sf http://127.0.0.1:20129/healthz || echo "GATEWAY_DOWN"
-   curl -sf http://127.0.0.1:20128/healthz || echo "CORE_DOWN"
+   curl -sf http://127.0.0.1:20128/api/health || echo "CORE_DOWN"
    ```
 3. **Log & Error Anomaly Scan**:
    ```bash
@@ -130,7 +130,7 @@ Hermes executes five periodic maintenance loops to guarantee self-driving stabil
 - **Cause**: Gateway cannot communicate with Upstream Core (`127.0.0.1:20128`).
 - **Triage**:
   1. Check if Core is running: `docker ps | grep 9router`.
-  2. If Core recently restarted, Next.js requires 8s warmup. Wait and re-probe `curl -s http://127.0.0.1:20128/healthz`.
+  2. If Core recently restarted, Next.js requires 8s warmup. Wait and re-probe `curl -s http://127.0.0.1:20128/api/health`.
   3. If Core is crash-looping: `docker logs 9router --tail 50`.
   4. Fix: `docker compose up -d --force-recreate core`.
 
