@@ -267,6 +267,7 @@ function initApp() {
     const sidebarSearchInput = document.getElementById("sidebarMenuSearch");
     const clearSidebarSearchBtn = document.getElementById("clearSidebarSearch");
     const sidebarSearchKbd = document.getElementById("sidebarSearchKbd");
+    const sidebarSearchTrigger = document.getElementById("sidebarSearchTrigger");
     const sidebarEmptyMsg = document.getElementById("sidebarMenuEmpty");
 
     const commandPaletteModalEl = document.getElementById("commandPaletteModal");
@@ -274,6 +275,12 @@ function initApp() {
     const commandPaletteResults = document.getElementById("commandPaletteResults");
     const commandPaletteCount = document.getElementById("commandPaletteCount");
     const btnOpenSearchMobile = document.getElementById("btnOpenSearchMobile");
+
+    // macOS shortcut indicator
+    const isMac = typeof navigator !== "undefined" && (navigator.platform.toUpperCase().indexOf('MAC') >= 0 || navigator.userAgent.toUpperCase().indexOf('MAC') >= 0);
+    if (sidebarSearchKbd && isMac) {
+      sidebarSearchKbd.textContent = "⌘K";
+    }
 
     // Index all navigation items from sidebar
     const dropdownToggles = Array.from(sidebarNavContent.querySelectorAll(".sidebar-dropdown-toggle"));
@@ -305,12 +312,88 @@ function initApp() {
         title: titleEl ? titleEl.textContent.trim() : link.textContent.trim(),
         group: groupName,
         iconClass: iconEl ? iconEl.className : "bi bi-link-45deg",
-        badgeText: badgeEl ? badgeEl.textContent.trim() : "",
+        badgeText: badgeEl ? badgeEl.textContent.trim() : "Menu",
         keywords: (link.getAttribute("data-keywords") || "").toLowerCase(),
         el: link,
         collapseParent: collapseParent
       };
     });
+
+    // Detect if user has admin view
+    const isAdmin = Boolean(sidebarNavContent.querySelector('a[href="/users"]') || sidebarNavContent.querySelector('a[href="/models"]') || sidebarNavContent.querySelector('a[href="/settings"]'));
+
+    const allSearchItems = [...menuItems];
+
+    // Quick Actions and Direct Settings Jumps
+    const quickItems = [
+      {
+        title: "Toggle UI Theme (Dark / Light Mode)",
+        group: "Quick Action",
+        href: "",
+        iconClass: "bi bi-moon-stars text-cyan",
+        badgeText: "Action",
+        keywords: "theme toggle dark light mode tema gelap terang ubah warna switch display tampilan mode",
+        action: function() {
+          const btn = document.getElementById("themeToggle") || document.getElementById("themeToggleMobile");
+          if (btn) btn.click();
+        }
+      },
+      {
+        title: "Ganti Password / Security Credentials",
+        group: "Account Settings",
+        href: "/profile",
+        iconClass: "bi bi-shield-lock text-warning",
+        badgeText: "Setting",
+        keywords: "password ganti ubah sandi kata sandi security credentials profile keamanan akun user pengaturan akun"
+      },
+      {
+        title: "Create New API Key (Buat Kunci API)",
+        group: "Access & Billing",
+        href: "/keys",
+        iconClass: "bi bi-key-fill text-warning",
+        badgeText: "Action",
+        keywords: "api key create new buat kunci sk-gw secret token budget generate baru"
+      }
+    ];
+
+    if (isAdmin) {
+      quickItems.push(
+        {
+          title: "Gateway Upstream & SQLite Database Settings",
+          group: "Gateway Settings",
+          href: "/settings",
+          iconClass: "bi bi-gear-fill text-muted",
+          badgeText: "Setting",
+          keywords: "upstream url database path core sqlite settings sync port 20128 gateway konfigurasi pengaturan core database"
+        },
+        {
+          title: "Midtrans Payment Gateway Configuration",
+          group: "Payment Settings",
+          href: "/settings",
+          iconClass: "bi bi-credit-card text-emerald",
+          badgeText: "Setting",
+          keywords: "midtrans server key client key production sandbox qris gopay va payment gateway pembayaran pengaturan midtrans"
+        },
+        {
+          title: "Token Saver: RTK Compression & Thinking Modes",
+          group: "Optimization Settings",
+          href: "/token-saver",
+          iconClass: "bi bi-magic text-emerald",
+          badgeText: "Setting",
+          keywords: "rtk compression thinking intensity antigravity opencode mode ponytail caveman penghemat token pengaturan kompresi"
+        },
+        {
+          title: "Setup CLI Tools (Cursor, Claude, Codex, Hermes)",
+          group: "CLI Hub",
+          href: "/cli-tools",
+          iconClass: "bi bi-tools text-cyan",
+          badgeText: "Tools",
+          keywords: "cli tools setup cursor claude codex cline hermes copilot opencode panduan konfigurasi terminal ide"
+        }
+      );
+    }
+
+    quickItems.forEach(item => allSearchItems.push(item));
 
     // 1. In-sidebar live filter
     function filterSidebar(query) {
@@ -412,11 +495,26 @@ function initApp() {
       }
     }
 
+    if (sidebarSearchTrigger) {
+      sidebarSearchTrigger.addEventListener("click", function(e) {
+        e.preventDefault();
+        openCommandPalette();
+      });
+    }
+
     if (sidebarSearchInput) {
+      sidebarSearchInput.addEventListener("click", function(e) {
+        e.preventDefault();
+        openCommandPalette();
+      });
+      sidebarSearchInput.addEventListener("focus", function(e) {
+        e.preventDefault();
+        this.blur();
+        openCommandPalette();
+      });
       sidebarSearchInput.addEventListener("input", function() {
         filterSidebar(this.value);
       });
-
       sidebarSearchInput.addEventListener("keydown", function(e) {
         if (e.key === "Enter") {
           e.preventDefault();
@@ -428,6 +526,8 @@ function initApp() {
           sidebarSearchInput.value = "";
           filterSidebar("");
           sidebarSearchInput.blur();
+        } else if (e.key !== "Tab") {
+          openCommandPalette();
         }
       });
     }
@@ -451,6 +551,20 @@ function initApp() {
     let selectedIndex = 0;
     let currentResults = [];
 
+    function executeItem(item) {
+      if (!item) return;
+      if (bsModal) bsModal.hide();
+      if (typeof item.action === "function") {
+        try {
+          item.action();
+        } catch (err) {
+          console.error("Command palette action error:", err);
+        }
+      } else if (item.href && item.href !== "#") {
+        window.location.href = item.href;
+      }
+    }
+
     function renderPaletteResults(filtered) {
       currentResults = filtered;
       selectedIndex = 0;
@@ -460,7 +574,8 @@ function initApp() {
         commandPaletteResults.innerHTML = `
           <div class="text-center py-4 px-2">
             <i class="bi bi-search text-dim fs-4 d-block mb-2"></i>
-            <span class="text-dim small">No matching menu found</span>
+            <span class="text-dim small d-block mb-1">Menu atau pengaturan tidak ditemukan</span>
+            <span class="text-muted" style="font-size:0.75rem;">Coba kata kunci: <span class="text-cyan">pengaturan</span>, <span class="text-cyan">keys</span>, <span class="text-cyan">billing</span>, <span class="text-cyan">chat</span>, <span class="text-cyan">tema</span></span>
           </div>`;
         if (commandPaletteCount) commandPaletteCount.textContent = "0 items";
         return;
@@ -468,26 +583,36 @@ function initApp() {
 
       if (commandPaletteCount) commandPaletteCount.textContent = `${filtered.length} item${filtered.length > 1 ? "s" : ""}`;
 
-      commandPaletteResults.innerHTML = filtered.map((item, idx) => `
-        <a href="${item.href}" class="command-palette-item ${idx === 0 ? 'active' : ''}" data-index="${idx}">
+      commandPaletteResults.innerHTML = filtered.map((item, idx) => {
+        const badgeText = item.badgeText || (item.action ? "Action" : (item.href && item.href.startsWith("/settings") ? "Setting" : "Menu"));
+        const badgeClass = badgeText === "Action" ? "badge-emerald" : (badgeText === "Setting" ? "badge-amber" : "badge-indigo");
+        const displayPath = item.href ? item.href : (item.group || "Action");
+
+        return `
+        <a href="${item.href || '#'}" class="command-palette-item ${idx === 0 ? 'active' : ''}" data-index="${idx}">
           <div class="command-palette-icon">
             <i class="${item.iconClass}"></i>
           </div>
           <div class="d-flex flex-column min-w-0 flex-grow-1">
             <div class="d-flex align-items-center gap-2">
               <span class="fw-medium text-light text-truncate" style="font-size:0.86rem;">${escapeHtml(item.title)}</span>
-              ${item.badgeText ? `<span class="badge-modern badge-indigo" style="font-size:0.62rem; padding:0.05rem 0.35rem;">${escapeHtml(item.badgeText)}</span>` : ''}
+              <span class="badge-modern ${badgeClass}" style="font-size:0.62rem; padding:0.05rem 0.35rem;">${escapeHtml(badgeText)}</span>
             </div>
-            <span class="text-dim text-truncate font-monospace" style="font-size:0.68rem;">${item.href} &middot; ${escapeHtml(item.group)}</span>
+            <span class="text-dim text-truncate font-monospace" style="font-size:0.68rem;">${escapeHtml(displayPath)} &middot; ${escapeHtml(item.group)}</span>
           </div>
           <i class="bi bi-arrow-return-left text-dim small ms-auto"></i>
-        </a>
-      `).join("");
+        </a>`;
+      }).join("");
 
       commandPaletteResults.querySelectorAll(".command-palette-item").forEach(el => {
         el.addEventListener("mouseenter", function() {
           const idx = parseInt(this.getAttribute("data-index"), 10);
           updateActiveResult(idx);
+        });
+        el.addEventListener("click", function(e) {
+          e.preventDefault();
+          const idx = parseInt(this.getAttribute("data-index"), 10);
+          executeItem(currentResults[idx]);
         });
       });
     }
@@ -509,28 +634,38 @@ function initApp() {
     function filterCommandPalette(query) {
       const q = query.trim().toLowerCase();
       if (!q) {
-        renderPaletteResults(menuItems);
+        renderPaletteResults(allSearchItems);
         return;
       }
 
+      const terms = q.split(/\s+/).filter(Boolean);
       const scored = [];
-      menuItems.forEach(item => {
+
+      allSearchItems.forEach(item => {
         const titleLower = item.title.toLowerCase();
-        const kwLower = item.keywords;
-        const groupLower = item.group.toLowerCase();
-        const hrefLower = item.href.toLowerCase();
+        const kwLower = (item.keywords || "").toLowerCase();
+        const groupLower = (item.group || "").toLowerCase();
+        const hrefLower = (item.href || "").toLowerCase();
+        const combined = `${titleLower} ${kwLower} ${groupLower} ${hrefLower}`;
+
+        // All terms must match somewhere in the item
+        const matchesAll = terms.every(term => combined.includes(term));
+        if (!matchesAll) return;
 
         let score = 0;
-        if (titleLower === q) score = 100;
-        else if (titleLower.startsWith(q)) score = 80;
-        else if (titleLower.includes(q)) score = 60;
-        else if (kwLower.includes(q)) score = 40;
-        else if (hrefLower.includes(q)) score = 30;
-        else if (groupLower.includes(q)) score = 20;
+        if (titleLower === q) score += 120;
+        else if (titleLower.startsWith(q)) score += 90;
+        else if (titleLower.includes(q)) score += 60;
 
-        if (score > 0) {
-          scored.push({ item, score });
-        }
+        terms.forEach(term => {
+          if (titleLower.startsWith(term)) score += 40;
+          else if (titleLower.includes(term)) score += 25;
+          if (kwLower.includes(term)) score += 20;
+          if (groupLower.includes(term)) score += 15;
+          if (hrefLower.includes(term)) score += 10;
+        });
+
+        scored.push({ item, score });
       });
 
       scored.sort((a, b) => b.score - a.score);
@@ -569,7 +704,7 @@ function initApp() {
         } else if (e.key === "Enter") {
           e.preventDefault();
           if (currentResults[selectedIndex]) {
-            window.location.href = currentResults[selectedIndex].href;
+            executeItem(currentResults[selectedIndex]);
           }
         }
       });
