@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
+
 	"9router-gateway/internal/config"
 	"9router-gateway/internal/database"
 	"9router-gateway/internal/entity"
@@ -417,5 +419,64 @@ func TestThemeGetSet(t *testing.T) {
 	h.SetTheme(rrBad, reqBad)
 	if rrBad.Code != http.StatusBadRequest {
 		t.Errorf("expected 400 on invalid theme, got %d", rrBad.Code)
+	}
+}
+
+func TestAPILoginAudits(t *testing.T) {
+	tempDir := t.TempDir()
+	db, err := database.InitDB(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("failed to init db: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+	h := &Handler{repo: repo}
+	ctx := context.Background()
+
+	// Seed audit
+	uid := "user-audit-test"
+	_ = repo.RecordLoginAudit(ctx, &entity.LoginAudit{
+		UserID:    &uid,
+		Username:  "audituser",
+		IP:        "10.0.0.99",
+		UserAgent: "Mozilla/5.0",
+		Status:    "success",
+		Reason:    "auth ok",
+	})
+
+	// 1. APILoginAudits (all)
+	req := httptest.NewRequest(http.MethodGet, "/api/login-audits?limit=10", nil)
+	rr := httptest.NewRecorder()
+	h.APILoginAudits(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("APILoginAudits returned %d", rr.Code)
+	}
+	var resp map[string]interface{}
+	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	if resp["total"].(float64) < 1 {
+		t.Errorf("expected at least 1 audit in total, got %v", resp["total"])
+	}
+
+	// 2. APIUserLoginAudits
+	reqUser := httptest.NewRequest(http.MethodGet, "/api/users/user-audit-test/login-audits", nil)
+	// Add chi route param context
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "user-audit-test")
+	reqUser = reqUser.WithContext(context.WithValue(reqUser.Context(), chi.RouteCtxKey, rctx))
+
+	rrUser := httptest.NewRecorder()
+	h.APIUserLoginAudits(rrUser, reqUser)
+	if rrUser.Code != http.StatusOK {
+		t.Fatalf("APIUserLoginAudits returned %d", rrUser.Code)
+	}
+	var userAudits []entity.LoginAudit
+	if err := json.NewDecoder(rrUser.Body).Decode(&userAudits); err != nil {
+		t.Fatalf("decode user audits failed: %v", err)
+	}
+	if len(userAudits) != 1 || userAudits[0].Username != "audituser" {
+		t.Errorf("unexpected user audits response: %+v", userAudits)
 	}
 }

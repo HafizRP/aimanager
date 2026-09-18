@@ -20,6 +20,7 @@ type fakeStore struct {
 	settings     map[string]string
 	sessions     map[string]string // token -> userID
 	loginFails   map[string]int
+	loginAudits  []entity.LoginAudit
 }
 
 func newFakeStore() *fakeStore {
@@ -31,6 +32,7 @@ func newFakeStore() *fakeStore {
 		settings:     map[string]string{},
 		sessions:     map[string]string{},
 		loginFails:   map[string]int{},
+		loginAudits:  nil,
 	}
 }
 
@@ -256,6 +258,42 @@ func (f *fakeStore) ClearLoginAttempts(ctx context.Context, ip string) error {
 }
 func (f *fakeStore) CleanOldLoginAttempts(ctx context.Context) error { return nil }
 
+func (f *fakeStore) RecordLoginAudit(ctx context.Context, audit *entity.LoginAudit) error {
+	audit.ID = int64(len(f.loginAudits) + 1)
+	f.loginAudits = append(f.loginAudits, *audit)
+	return nil
+}
+
+func (f *fakeStore) GetLoginAudits(ctx context.Context, limit, offset int) ([]entity.LoginAudit, int, error) {
+	total := len(f.loginAudits)
+	if offset >= total {
+		return []entity.LoginAudit{}, total, nil
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	res := make([]entity.LoginAudit, 0, end-offset)
+	for i := end - 1; i >= offset; i-- {
+		res = append(res, f.loginAudits[i])
+	}
+	return res, total, nil
+}
+
+func (f *fakeStore) GetUserLoginAudits(ctx context.Context, userID string, limit int) ([]entity.LoginAudit, error) {
+	var res []entity.LoginAudit
+	for i := len(f.loginAudits) - 1; i >= 0; i-- {
+		a := f.loginAudits[i]
+		if a.UserID != nil && *a.UserID == userID {
+			res = append(res, a)
+			if len(res) >= limit {
+				break
+			}
+		}
+	}
+	return res, nil
+}
+
 func (f *fakeStore) CreateSecurityEvent(ctx context.Context, ev *entity.SecurityEvent) error {
 	return nil
 }
@@ -284,7 +322,7 @@ func TestAuthService_Authenticate(t *testing.T) {
 	svc := NewAuthService(store, "test-secret", "admin", "admin")
 	ctx := context.Background()
 
-	u, err := svc.Authenticate(ctx, AuthInput{Username: "hafiz", Password: "secret123"}, "10.0.0.1")
+	u, err := svc.Authenticate(ctx, AuthInput{Username: "hafiz", Password: "secret123"}, "10.0.0.1", "Mozilla/5.0")
 	if err != nil {
 		t.Fatalf("expected successful login, got %v", err)
 	}
@@ -293,12 +331,25 @@ func TestAuthService_Authenticate(t *testing.T) {
 	}
 
 	// Wrong password
-	if _, err := svc.Authenticate(ctx, AuthInput{Username: "hafiz", Password: "wrong"}, "10.0.0.1"); err == nil {
+	if _, err := svc.Authenticate(ctx, AuthInput{Username: "hafiz", Password: "wrong"}, "10.0.0.1", "curl/7.88.1"); err == nil {
 		t.Fatal("expected error for wrong password")
 	}
 	// Attempt counter incremented
 	if store.loginFails["10.0.0.1"] == 0 {
 		t.Error("expected failed attempt recorded")
+	}
+
+	// Verify login audit trail
+	audits, total, err := svc.GetLoginAudits(ctx, 10, 0)
+	if err != nil || total != 2 {
+		t.Fatalf("expected 2 login audits, got total=%d err=%v", total, err)
+	}
+	if len(audits) != 2 {
+		t.Fatalf("expected 2 audit records, got %d", len(audits))
+	}
+	userAudits, err := svc.GetUserLoginAudits(ctx, "u1", 10)
+	if err != nil || len(userAudits) != 2 {
+		t.Fatalf("expected 2 user login audits, got %d err=%v", len(userAudits), err)
 	}
 }
 

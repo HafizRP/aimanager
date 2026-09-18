@@ -466,11 +466,12 @@ func (h *Handler) LoginPost(w http.ResponseWriter, r *http.Request) {
 	password := strings.TrimSpace(r.FormValue("password"))
 
 	clientIP := proxy.GetClientIP(r)
+	userAgent := r.UserAgent()
 
 	user, err := h.auth.Authenticate(r.Context(), usecase.AuthInput{
 		Username: username,
 		Password: password,
-	}, clientIP)
+	}, clientIP, userAgent)
 	if err != nil {
 		http.Redirect(w, r, "/login?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return

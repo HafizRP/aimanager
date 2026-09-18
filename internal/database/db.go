@@ -177,6 +177,19 @@ func migrate(db *sql.DB) error {
 	);`)
 	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_security_events_created_at ON security_events(created_at);`)
 	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_security_events_kind ON security_events(kind);`)
+	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS login_audits (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id TEXT,
+		username TEXT NOT NULL,
+		ip TEXT NOT NULL,
+		user_agent TEXT DEFAULT '',
+		status TEXT NOT NULL,
+		reason TEXT DEFAULT '',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);`)
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_login_audits_user_id ON login_audits(user_id);`)
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_login_audits_created_at ON login_audits(created_at);`)
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_login_audits_ip ON login_audits(ip);`)
 	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_api_keys_expires_at ON api_keys(expires_at);`)
 	_, _ = db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username);`)
 

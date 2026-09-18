@@ -65,32 +65,95 @@ func NewAuthService(store Store, sessionSecret, adminUsername, adminPassword str
 
 // Authenticate validates username/password, records failed attempts, clears them
 // on success, and returns the user (session token is created by the caller).
-func (s *AuthService) Authenticate(ctx context.Context, in AuthInput, clientIP string) (*entity.User, error) {
+func (s *AuthService) Authenticate(ctx context.Context, in AuthInput, clientIP string, userAgent ...string) (*entity.User, error) {
+	ua := ""
+	if len(userAgent) > 0 {
+		ua = userAgent[0]
+		if len(ua) > 255 {
+			ua = ua[:255]
+		}
+	}
+
 	recentFails, _ := s.store.GetRecentLoginAttempts(ctx, clientIP, 15)
 	if recentFails >= 5 {
+		_ = s.store.RecordLoginAudit(ctx, &entity.LoginAudit{
+			Username:  in.Username,
+			IP:        clientIP,
+			UserAgent: ua,
+			Status:    "rate_limited",
+			Reason:    "too many failed login attempts",
+		})
 		return nil, fmt.Errorf("too many failed login attempts. Please wait 15 minutes")
 	}
 
 	if strings.TrimSpace(in.Username) == "" || strings.TrimSpace(in.Password) == "" {
+		_ = s.store.RecordLoginAudit(ctx, &entity.LoginAudit{
+			Username:  in.Username,
+			IP:        clientIP,
+			UserAgent: ua,
+			Status:    "failed",
+			Reason:    "username and password are required",
+		})
 		return nil, fmt.Errorf("username and password are required")
 	}
 
 	user, err := s.store.GetUserByUsername(ctx, strings.TrimSpace(in.Username))
 	if err != nil || user == nil {
 		_ = s.store.RecordLoginAttempt(ctx, clientIP)
+		_ = s.store.RecordLoginAudit(ctx, &entity.LoginAudit{
+			Username:  in.Username,
+			IP:        clientIP,
+			UserAgent: ua,
+			Status:    "failed",
+			Reason:    "user not found",
+		})
 		return nil, fmt.Errorf("invalid username or password")
 	}
 	if !user.IsActive {
+		_ = s.store.RecordLoginAudit(ctx, &entity.LoginAudit{
+			UserID:    &user.ID,
+			Username:  user.Username,
+			IP:        clientIP,
+			UserAgent: ua,
+			Status:    "suspended",
+			Reason:    "account is suspended",
+		})
 		return nil, fmt.Errorf("account is suspended. Please contact administrator")
 	}
 	if !CheckPasswordHash(in.Password, user.PasswordHash) {
 		_ = s.store.RecordLoginAttempt(ctx, clientIP)
+		_ = s.store.RecordLoginAudit(ctx, &entity.LoginAudit{
+			UserID:    &user.ID,
+			Username:  user.Username,
+			IP:        clientIP,
+			UserAgent: ua,
+			Status:    "failed",
+			Reason:    "invalid password",
+		})
 		return nil, fmt.Errorf("invalid username or password")
 	}
 
 	_ = s.store.ClearLoginAttempts(ctx, clientIP)
 	_ = s.store.UpdateUserLastLogin(ctx, user.ID)
+	_ = s.store.RecordLoginAudit(ctx, &entity.LoginAudit{
+		UserID:    &user.ID,
+		Username:  user.Username,
+		IP:        clientIP,
+		UserAgent: ua,
+		Status:    "success",
+		Reason:    "authentication successful",
+	})
 	return user, nil
+}
+
+// GetLoginAudits retrieves paginated login audit records.
+func (s *AuthService) GetLoginAudits(ctx context.Context, limit, offset int) ([]entity.LoginAudit, int, error) {
+	return s.store.GetLoginAudits(ctx, limit, offset)
+}
+
+// GetUserLoginAudits retrieves recent login audits for a specific user ID.
+func (s *AuthService) GetUserLoginAudits(ctx context.Context, userID string, limit int) ([]entity.LoginAudit, error) {
+	return s.store.GetUserLoginAudits(ctx, userID, limit)
 }
 
 // StartSession creates a server-side session row and returns its token.

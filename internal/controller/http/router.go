@@ -216,6 +216,8 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 
 			adminOnly.Get("/users", h.UsersPage)
 			adminOnly.Get("/users/{id}", h.UserDetailPage)
+			adminOnly.Get("/api/users/{id}/login-audits", h.APIUserLoginAudits)
+			adminOnly.Get("/api/login-audits", h.APILoginAudits)
 			adminOnly.Post("/users", h.CreateUser)
 			adminOnly.Post("/users/{id}/edit", h.EditUser)
 			adminOnly.Post("/users/{id}/password", h.ResetPassword)
