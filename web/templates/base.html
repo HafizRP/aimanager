@@ -20,7 +20,7 @@
   <!-- Bootstrap Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <!-- Custom Modern Design System -->
-  <link href="/static/css/custom.css?v=15" rel="stylesheet">
+  <link href="/static/css/custom.css?v=16" rel="stylesheet">
   <!-- PWA: installable app -->
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#09090b">
@@ -62,13 +62,10 @@
 
       <!-- Quick Menu Search / Filter in Sidebar -->
       <div class="sidebar-search-wrapper">
-        <div class="position-relative">
+        <div class="position-relative cursor-pointer" id="sidebarSearchTrigger" title="Cari menu & pengaturan (Ctrl+K)">
           <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-2 text-muted" style="font-size:0.75rem; pointer-events:none;"></i>
-          <input type="text" id="sidebarMenuSearch" class="form-control sidebar-search-input" placeholder="Search menu... (Ctrl+K)" autocomplete="off">
+          <input type="text" id="sidebarMenuSearch" class="form-control sidebar-search-input" placeholder="Search menu... (Ctrl+K)" autocomplete="off" readonly style="cursor: pointer;">
           <kbd class="sidebar-search-kbd d-none d-sm-inline-block" id="sidebarSearchKbd" title="Open search dialog (Ctrl+K)">Ctrl+K</kbd>
-          <button type="button" id="clearSidebarSearch" class="btn btn-link p-0 position-absolute top-50 end-0 translate-middle-y me-2 text-muted d-none" style="font-size:0.75rem; text-decoration:none;" title="Clear search">
-            <i class="bi bi-x-circle-fill"></i>
-          </button>
         </div>
       </div>
 
@@ -77,23 +74,23 @@
         <!-- Main Navigation Group: Workspace -->
         <div class="sidebar-nav-group">
           <span class="sidebar-group-title">Workspace</span>
-          <a class="sidebar-link {{ if eq .ActivePage "dashboard" }}active{{ end }}" href="/" data-keywords="overview stats kpi metrics rolling windows trends volume">
+          <a class="sidebar-link {{ if eq .ActivePage "dashboard" }}active{{ end }}" href="/" data-keywords="overview stats kpi metrics rolling windows trends volume beranda ringkasan statistik pemantauan">
             <i class="bi bi-speedometer2"></i>
             <span>Dashboard</span>
           </a>
-          <a class="sidebar-link {{ if eq .ActivePage "chat" }}active{{ end }}" href="/chat" data-keywords="playground chat completion stream prompt test conversation sse">
+          <a class="sidebar-link {{ if eq .ActivePage "chat" }}active{{ end }}" href="/chat" data-keywords="playground chat completion stream prompt test conversation sse percakapan uji coba pesan ai playground">
             <i class="bi bi-terminal-fill text-primary"></i>
             <span>Playground</span>
           </a>
-          <a class="sidebar-link {{ if eq .ActivePage "cli-tools" }}active{{ end }}" href="/cli-tools" data-keywords="cli tools terminal claude cursor codex cline roo hermes copilot opencode">
+          <a class="sidebar-link {{ if eq .ActivePage "cli-tools" }}active{{ end }}" href="/cli-tools" data-keywords="cli tools terminal claude cursor codex cline roo hermes copilot opencode panduan setup konfigurasi ide terminal">
             <i class="bi bi-tools text-cyan"></i>
             <span>CLI Tools Hub</span>
           </a>
-          <a class="sidebar-link {{ if eq .ActivePage "skills" }}active{{ end }}" href="/skills" data-keywords="agent skills prompt snippets system instructions templates universal">
+          <a class="sidebar-link {{ if eq .ActivePage "skills" }}active{{ end }}" href="/skills" data-keywords="agent skills prompt snippets system instructions templates universal keahlian agen panduan prompt">
             <i class="bi bi-puzzle-fill text-emerald"></i>
             <span>Agent Skills</span>
           </a>
-          <a class="sidebar-link {{ if eq .ActivePage "endpoint" }}active{{ end }}" href="/endpoint" data-keywords="endpoint hub api url base loopback v1 completions addresses">
+          <a class="sidebar-link {{ if eq .ActivePage "endpoint" }}active{{ end }}" href="/endpoint" data-keywords="endpoint hub api url base loopback v1 completions addresses alamat gateway port">
             <i class="bi bi-plug-fill text-info"></i>
             <span>Endpoint Hub</span>
           </a>
@@ -108,15 +105,15 @@
           </button>
           <div class="collapse {{ if or (eq .ActivePage "billing") (eq .ActivePage "keys") (eq .ActivePage "profile") }}show{{ end }}" id="submenu-access">
             <div class="sidebar-submenu-items">
-              <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "billing" }}active{{ end }}" href="/billing" data-keywords="billing buy tokens topup payment midtrans qris gopay va credit invoice packages balance">
+              <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "billing" }}active{{ end }}" href="/billing" data-keywords="billing buy tokens topup payment midtrans qris gopay va credit invoice packages balance beli token saldo bayar isi ulang pembayaran paket">
                 <i class="bi bi-cart text-emerald"></i>
                 <span>Buy Tokens</span>
               </a>
-              <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "keys" }}active{{ end }}" href="/keys" data-keywords="api keys token budget rate limit create rotate revoke sk-gw secret">
+              <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "keys" }}active{{ end }}" href="/keys" data-keywords="api keys token budget rate limit create rotate revoke sk-gw secret kunci api buat kunci rahasia batas token pemakaian">
                 <i class="bi bi-key text-warning"></i>
                 <span>API Keys</span>
               </a>
-              <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "profile" }}active{{ end }}" href="/profile" data-keywords="my profile user account password credentials timezone quota">
+              <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "profile" }}active{{ end }}" href="/profile" data-keywords="my profile user account password credentials timezone quota profil saya akun ganti password ubah sandi pengaturan akun user">
                 <i class="bi bi-person-circle text-muted"></i>
                 <span>My Profile</span>
               </a>
@@ -133,27 +130,27 @@
           </button>
           <div class="collapse {{ if or (eq .ActivePage "logs") (eq .ActivePage "usage") (eq .ActivePage "cache-analytics") (eq .ActivePage "benchmark") (eq .ActivePage "replay") (eq .ActivePage "radar") }}show{{ end }}" id="submenu-observability">
             <div class="sidebar-submenu-items">
-              <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "logs" }}active{{ end }}" href="/logs" data-keywords="request logs audit traffic history status errors export csv json filter">
+              <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "logs" }}active{{ end }}" href="/logs" data-keywords="request logs audit traffic history status errors export csv json filter riwayat log audit kesalahan lalu lintas histori permintaan">
                 <i class="bi bi-activity text-info"></i>
                 <span>Request Logs</span>
               </a>
-              <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "usage" }}active{{ end }}" href="/usage" data-keywords="usage analytics breakdown tokens provider model account cost">
+              <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "usage" }}active{{ end }}" href="/usage" data-keywords="usage analytics breakdown tokens provider model account cost pemakaian penggunaan statistik biaya perincian token">
                 <i class="bi bi-bar-chart-fill text-primary"></i>
                 <span>Usage Analytics</span>
               </a>
-              <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "cache-analytics" }}active{{ end }}" href="/cache-analytics" data-keywords="cache analytics exact response hit ratio sha256 savings finops rtk">
+              <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "cache-analytics" }}active{{ end }}" href="/cache-analytics" data-keywords="cache analytics exact response hit ratio sha256 savings finops rtk analisis cache rasio hit penghematan respon">
                 <i class="bi bi-database-check text-cyan"></i>
                 <span>Cache Analytics</span>
               </a>
-              <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "benchmark" }}active{{ end }}" href="/benchmark" data-keywords="speed benchmark ttft latency performance throughput test leaderboard">
+              <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "benchmark" }}active{{ end }}" href="/benchmark" data-keywords="speed benchmark ttft latency performance throughput test leaderboard uji kecepatan performa latensi tes model tolok ukur">
                 <i class="bi bi-speedometer text-warning"></i>
                 <span>Speed Benchmark</span>
               </a>
-              <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "replay" }}active{{ end }}" href="/replay" data-keywords="replay lab prompt diff compare models side by side output latency rerun">
+              <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "replay" }}active{{ end }}" href="/replay" data-keywords="replay lab prompt diff compare models side by side output latency rerun uji ulang bandingkan model perbandingan tes prompt">
                 <i class="bi bi-repeat text-info"></i>
                 <span>Replay Lab</span>
               </a>
-              <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "radar" }}active{{ end }}" href="/radar" data-keywords="anomaly radar security spike alerts errors baseline detection cutoff">
+              <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "radar" }}active{{ end }}" href="/radar" data-keywords="anomaly radar security spike alerts errors baseline detection cutoff radar anomali keamanan lonjakan peringatan batas">
                 <i class="bi bi-radar text-rose"></i>
                 <span>Anomaly Radar</span>
               </a>
@@ -176,19 +173,19 @@
             </button>
             <div class="collapse {{ if or (eq .ActivePage "models") (eq .ActivePage "combos") (eq .ActivePage "pricing") (eq .ActivePage "translator") }}show{{ end }}" id="submenu-models">
               <div class="sidebar-submenu-items">
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "models" }}active{{ end }}" href="/models" data-keywords="models aliases upstream mapping context list gpt claude gemini">
+                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "models" }}active{{ end }}" href="/models" data-keywords="models aliases upstream mapping context list gpt claude gemini daftar model alias pemetaan rute model ai">
                   <i class="bi bi-cpu text-primary"></i>
                   <span>Models & Aliases</span>
                 </a>
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "combos" }}active{{ end }}" href="/combos" data-keywords="model combos fallback chains failover round robin fusion strategy sticky">
+                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "combos" }}active{{ end }}" href="/combos" data-keywords="model combos fallback chains failover round robin fusion strategy sticky kombo model rantai failover cadangan rotasi strategi">
                   <i class="bi bi-diagram-3 text-indigo"></i>
                   <span>Model Combos</span>
                 </a>
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "pricing" }}active{{ end }}" href="/pricing" data-keywords="pricing token rates cost per million upstream catalog">
+                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "pricing" }}active{{ end }}" href="/pricing" data-keywords="pricing token rates cost per million upstream catalog harga tarif biaya katalog token per juta">
                   <i class="bi bi-tag text-warning"></i>
                   <span>Pricing Catalog</span>
                 </a>
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "translator" }}active{{ end }}" href="/translator" data-keywords="translator protocol format translation convert anthropic openai gemini">
+                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "translator" }}active{{ end }}" href="/translator" data-keywords="translator protocol format translation convert anthropic openai gemini penerjemah konversi protokol format payload">
                   <i class="bi bi-translate text-emerald"></i>
                   <span>Translator</span>
                 </a>
@@ -205,19 +202,19 @@
             </button>
             <div class="collapse {{ if or (eq .ActivePage "providers") (eq .ActivePage "nodes") (eq .ActivePage "quota") (eq .ActivePage "proxy-pools") }}show{{ end }}" id="submenu-providers">
               <div class="sidebar-submenu-items">
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "providers" }}active{{ end }}" href="/providers" data-keywords="providers connections upstream antigravity kiro openai oauth accounts priority test">
+                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "providers" }}active{{ end }}" href="/providers" data-keywords="providers connections upstream antigravity kiro openai oauth accounts priority test penyedia akun koneksi sambungan prioritas tes">
                   <i class="bi bi-cloud-check text-primary"></i>
                   <span>Providers</span>
                 </a>
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "nodes" }}active{{ end }}" href="/nodes" data-keywords="provider nodes openai compatible self hosted endpoints prefix routing">
+                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "nodes" }}active{{ end }}" href="/nodes" data-keywords="provider nodes openai compatible self hosted endpoints prefix routing node penyedia endpoint mandiri rute awalan">
                   <i class="bi bi-server text-cyan"></i>
                   <span>Provider Nodes</span>
                 </a>
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "quota" }}active{{ end }}" href="/quota" data-keywords="quota overview rolling windows accounts reset timers limits pools">
+                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "quota" }}active{{ end }}" href="/quota" data-keywords="quota overview rolling windows accounts reset timers limits pools ringkasan kuota sisa kuota batas waktu reset akun pemulihan">
                   <i class="bi bi-pie-chart-fill text-emerald"></i>
                   <span>Quota Overview</span>
                 </a>
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "proxy-pools" }}active{{ end }}" href="/proxy-pools" data-keywords="proxy pools egress outbound ip rotate socks5 http residential">
+                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "proxy-pools" }}active{{ end }}" href="/proxy-pools" data-keywords="proxy pools egress outbound ip rotate socks5 http residential kolam proxy rotasi ip keluar proxy jaringan">
                   <i class="bi bi-shield-shaded text-cyan"></i>
                   <span>Proxy Pools</span>
                 </a>
@@ -234,23 +231,23 @@
             </button>
             <div class="collapse {{ if or (eq .ActivePage "token-saver") (eq .ActivePage "pxpipe") (eq .ActivePage "media") (eq .ActivePage "mitm") (eq .ActivePage "mcp") }}show{{ end }}" id="submenu-plugins">
               <div class="sidebar-submenu-items">
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "token-saver" }}active{{ end }}" href="/token-saver" data-keywords="token saver rtk compression thinking intensity ponytail caveman headroom pxpipe">
+                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "token-saver" }}active{{ end }}" href="/token-saver" data-keywords="token saver rtk compression thinking intensity ponytail caveman headroom pxpipe penghemat token pengaturan kompresi mode berpikir ponytail caveman">
                   <i class="bi bi-magic text-emerald"></i>
                   <span>Token Saver & RTK</span>
                 </a>
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "pxpipe" }}active{{ end }}" href="/pxpipe" data-keywords="pxpipe prompt transform images compression pipeline proxy">
+                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "pxpipe" }}active{{ end }}" href="/pxpipe" data-keywords="pxpipe prompt transform images compression pipeline proxy pipa transformasi kompresi gambar prompt">
                   <i class="bi bi-funnel text-info"></i>
                   <span>PXPipe</span>
                 </a>
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "media" }}active{{ end }}" href="/media" data-keywords="media voices tts audio speech deepgram elevenlabs minimax voices">
+                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "media" }}active{{ end }}" href="/media" data-keywords="media voices tts audio speech deepgram elevenlabs minimax voices suara media teks ke suara sintesis ucapan">
                   <i class="bi bi-speaker text-pink"></i>
                   <span>Media Voices</span>
                 </a>
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "mitm" }}active{{ end }}" href="/mitm" data-keywords="mitm bridge antigravity dns interception proxy certificate tools">
+                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "mitm" }}active{{ end }}" href="/mitm" data-keywords="mitm bridge antigravity dns interception proxy certificate tools jembatan mitm intersepsi dns sertifikat lokal">
                   <i class="bi bi-shuffle text-warning"></i>
                   <span>MITM Bridge</span>
                 </a>
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "mcp" }}active{{ end }}" href="/mcp" data-keywords="mcp inspector model context protocol cowork tools registry">
+                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "mcp" }}active{{ end }}" href="/mcp" data-keywords="mcp inspector model context protocol cowork tools registry inspektur mcp protokol konteks model registri alat">
                   <i class="bi bi-boxes text-emerald"></i>
                   <span>MCP Inspector</span>
                 </a>
@@ -267,15 +264,15 @@
             </button>
             <div class="collapse {{ if or (eq .ActivePage "users") (eq .ActivePage "settings") (eq .ActivePage "console-log") }}show{{ end }}" id="submenu-system">
               <div class="sidebar-submenu-items">
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "users" }}active{{ end }}" href="/users" data-keywords="users quotas management accounts role admin active daily reset password">
+                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "users" }}active{{ end }}" href="/users" data-keywords="users quotas management accounts role admin active daily reset password pengguna manajemen akun peran kuota harian batas reset sandi">
                   <i class="bi bi-people-fill text-warning"></i>
                   <span>Users & Quotas</span>
                 </a>
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "settings" }}active{{ end }}" href="/settings" data-keywords="gateway settings upstream core midtrans configuration secrets env">
+                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "settings" }}active{{ end }}" href="/settings" data-keywords="gateway settings upstream core midtrans configuration secrets env pengaturan gateway konfigurasi core database pembayaran midtrans sistem pengaturan">
                   <i class="bi bi-gear-fill text-muted"></i>
                   <span>Gateway Settings</span>
                 </a>
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "console-log" }}active{{ end }}" href="/console-log" data-keywords="console log server core translator live stream debug output">
+                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "console-log" }}active{{ end }}" href="/console-log" data-keywords="console log server core translator live stream debug output log konsol keluaran server live debug aliran pesan">
                   <i class="bi bi-terminal-split text-info"></i>
                   <span>Console Log</span>
                 </a>
@@ -286,7 +283,7 @@
           <!-- Account Settings (Standard User) -->
           <div class="sidebar-nav-group">
             <span class="sidebar-group-title">Preferences</span>
-            <a class="sidebar-link {{ if eq .ActivePage "settings" }}active{{ end }}" href="/settings" data-keywords="setup password preferences account configuration guides">
+            <a class="sidebar-link {{ if eq .ActivePage "settings" }}active{{ end }}" href="/settings" data-keywords="setup password preferences account configuration guides pengaturan sandi preferensi panduan akun konfigurasi pengaturan">
               <i class="bi bi-sliders text-warning"></i>
               <span>Setup & Password</span>
             </a>
@@ -406,7 +403,7 @@
       <div class="modal-content command-palette-content">
         <div class="d-flex align-items-center px-3 py-2 border-bottom border-secondary border-opacity-10 gap-2">
           <i class="bi bi-search text-cyan fs-6"></i>
-          <input type="text" id="commandPaletteInput" class="form-control form-control-modern border-0 shadow-none px-1 py-2 bg-transparent text-light" placeholder="Search menu, page, or admin tool... (e.g. chat, keys, providers)" autocomplete="off">
+          <input type="text" id="commandPaletteInput" class="form-control form-control-modern border-0 shadow-none px-1 py-2 bg-transparent text-light" placeholder="Cari menu, pengaturan, atau fitur... (Ctrl+K)" autocomplete="off">
           <kbd class="badge bg-secondary bg-opacity-25 text-dim border border-secondary border-opacity-25 py-1 px-2 small cursor-pointer" data-bs-dismiss="modal">ESC</kbd>
         </div>
         <div id="commandPaletteResults" class="p-2 overflow-y-auto" style="max-height: 380px;">
@@ -415,7 +412,7 @@
         <div class="d-flex align-items-center justify-content-between px-3 py-2 border-top border-secondary border-opacity-10 text-dim" style="font-size: 0.72rem;">
           <div class="d-flex align-items-center gap-2">
             <span><kbd class="badge bg-secondary bg-opacity-25 text-dim py-0.5 px-1 me-1">↑</kbd><kbd class="badge bg-secondary bg-opacity-25 text-dim py-0.5 px-1 me-1">↓</kbd> Navigate</span>
-            <span><kbd class="badge bg-secondary bg-opacity-25 text-dim py-0.5 px-1 me-1">↵</kbd> Open</span>
+            <span><kbd class="badge bg-secondary bg-opacity-25 text-dim py-0.5 px-1 me-1">↵</kbd> Open / Jalankan</span>
           </div>
           <span class="text-dim" id="commandPaletteCount">0 items</span>
         </div>
@@ -426,7 +423,7 @@
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="/static/js/app.js?v=7"></script>
+  <script src="/static/js/app.js?v=8"></script>
   <script>
     // PWA: service worker + install prompt.
     if ('serviceWorker' in navigator) {
