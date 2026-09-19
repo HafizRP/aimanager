@@ -1,8 +1,8 @@
 /* AI Manager service worker: offline shell for static assets, network-first for pages/API. */
-const CACHE = 'aimanager-static-v2';
+const CACHE = 'aimanager-static-v3';
 const CORE = [
-  '/static/css/custom.css',
-  '/static/js/app.js',
+  '/static/css/custom.css?v=18',
+  '/static/js/app.js?v=9',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
   '/static/icons/icon-maskable-512.png',
@@ -30,7 +30,22 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
-  // Static assets: cache-first, refresh in background.
+
+  // Static CSS & JS or versioned assets: network-first so redesign updates apply immediately
+  if (url.pathname.startsWith('/static/css/') || url.pathname.startsWith('/static/js/') || url.searchParams.has('v')) {
+    event.respondWith(
+      fetch(request).then((res) => {
+        if (res && res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then((cache) => cache.put(request, copy));
+        }
+        return res;
+      }).catch(() => caches.match(request)),
+    );
+    return;
+  }
+
+  // Other static assets (icons, images): cache-first, refresh in background.
   if (url.pathname.startsWith('/static/')) {
     event.respondWith(
       caches.match(request).then((hit) => {
@@ -46,6 +61,7 @@ self.addEventListener('fetch', (event) => {
     );
     return;
   }
+
   // Pages & API: network-first, fall back to cache.
   if (request.mode === 'navigate') {
     event.respondWith(
