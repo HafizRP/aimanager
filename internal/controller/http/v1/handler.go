@@ -255,12 +255,14 @@ func NewHandler(cfg *config.Config, repo repository.Repository, sync *syncer.Syn
 		h.templates[page] = tmpl
 	}
 
-	// Login template (standalone)
-	loginTmpl, err := template.New("login.html").Funcs(funcMap).ParseFS(web.FS, "templates/login.html")
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse login template: %w", err)
+	// Standalone templates (login, register, landing)
+	for _, standalone := range []string{"login.html", "register.html", "landing.html"} {
+		tmpl, err := template.New(standalone).Funcs(funcMap).ParseFS(web.FS, "templates/"+standalone)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse %s: %w", standalone, err)
+		}
+		h.templates[standalone] = tmpl
 	}
-	h.templates["login.html"] = loginTmpl
 
 	return h, nil
 }
@@ -446,6 +448,81 @@ func (h *Handler) RequireAdmin(next http.Handler) http.Handler {
 }
 
 // Auth Handlers
+
+// RootPage handles GET /: renders Dashboard for authenticated users, LandingPage for guests.
+func (h *Handler) RootPage(w http.ResponseWriter, r *http.Request) {
+	if user := h.getSessionUser(r); user != nil {
+		ctx := context.WithValue(r.Context(), userContextKey, user)
+		h.DashboardPage(w, r.WithContext(ctx))
+		return
+	}
+	h.LandingPage(w, r)
+}
+
+// LandingPage renders the public marketing landing page.
+func (h *Handler) LandingPage(w http.ResponseWriter, r *http.Request) {
+	user := h.getSessionUser(r)
+	h.render(w, r, "landing.html", "", map[string]interface{}{
+		"IsLoggedIn": user != nil,
+		"User":       user,
+	})
+}
+
+// RegisterPage renders the user registration form.
+func (h *Handler) RegisterPage(w http.ResponseWriter, r *http.Request) {
+	if user := h.getSessionUser(r); user != nil {
+		http.Redirect(w, r, "/", http.StatusSeeOther)
+		return
+	}
+	errMsg := r.URL.Query().Get("error")
+	h.render(w, r, "register.html", "", map[string]interface{}{
+		"ErrorMsg": errMsg,
+	})
+}
+
+// RegisterPost handles new user registration, token quota assignment, and auto-login.
+func (h *Handler) RegisterPost(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	name := strings.TrimSpace(r.FormValue("name"))
+	username := strings.TrimSpace(r.FormValue("username"))
+	password := strings.TrimSpace(r.FormValue("password"))
+	confirm := strings.TrimSpace(r.FormValue("confirm_password"))
+
+	if name == "" {
+		http.Redirect(w, r, "/register?error="+url.QueryEscape("Nama lengkap tidak boleh kosong"), http.StatusSeeOther)
+		return
+	}
+	if username == "" {
+		http.Redirect(w, r, "/register?error="+url.QueryEscape("Username tidak boleh kosong"), http.StatusSeeOther)
+		return
+	}
+	if len(password) < 6 {
+		http.Redirect(w, r, "/register?error="+url.QueryEscape("Password minimal 6 karakter"), http.StatusSeeOther)
+		return
+	}
+	if password != confirm {
+		http.Redirect(w, r, "/register?error="+url.QueryEscape("Konfirmasi password tidak cocok"), http.StatusSeeOther)
+		return
+	}
+
+	user, _, _, err := h.users.CreateUser(r.Context(), usecase.CreateUserInput{
+		Name:          name,
+		Username:      username,
+		Password:      password,
+		Role:          "user",
+		TokenQuota:    1000000, // 1,000,000 free starter tokens
+		AllowedModels: `["main","free-only"]`,
+		CreateKey:     true, // auto-generate initial sk-gw- key
+	})
+	if err != nil {
+		http.Redirect(w, r, "/register?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+
+	// Auto-login: start session and set cookie
+	h.setSessionCookie(w, r, user)
+	http.Redirect(w, r, "/", http.StatusSeeOther)
+}
 
 // LoginPage renders the login form.
 func (h *Handler) LoginPage(w http.ResponseWriter, r *http.Request) {

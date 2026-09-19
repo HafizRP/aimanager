@@ -6,7 +6,7 @@ services:
   core:
     image: decolua/9router:latest
     container_name: 9router
-    restart: unless-stopped
+    restart: always
     ports:
       - "127.0.0.1:20128:20128"
     environment:
@@ -18,6 +18,12 @@ services:
       - ENABLE_TRANSLATOR=${ENABLE_TRANSLATOR:-false}
     volumes:
       - ./data/core:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:20128/api/version"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   # 9router Gateway (Go reverse-proxy middleware in front of 9router Core)
   # NOTE: runs on host network to reach core at 127.0.0.1:20128; core db is
@@ -25,7 +31,7 @@ services:
   gateway:
     build: .
     container_name: 9router_gateway
-    restart: unless-stopped
+    restart: always
     network_mode: host
     environment:
       - PORT=20129
@@ -42,4 +48,11 @@ services:
     volumes:
       - ./data:/app/data
     depends_on:
-      - core
+      core:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:20129/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s

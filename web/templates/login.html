@@ -93,6 +93,12 @@
       <p class="text-dim small mb-0">Unified LLM Gateway & Middleware</p>
     </header>
 
+    {{ if .SuccessMsg }}
+      <div class="alert card-modern border-success border-opacity-50 py-2 px-3 small d-flex align-items-center gap-2 mb-3 text-light">
+        <i class="bi bi-check-circle-fill text-success"></i> {{ .SuccessMsg }}
+      </div>
+    {{ end }}
+
     {{ if .ErrorMsg }}
       <div class="alert card-modern border-danger border-opacity-50 py-2 px-3 small d-flex align-items-center gap-2 mb-3 text-light">
         <i class="bi bi-exclamation-circle-fill text-danger"></i> {{ .ErrorMsg }}
@@ -119,6 +125,11 @@
       <button type="submit" class="btn-modern-primary w-100 py-2 d-flex align-items-center justify-content-center gap-2">
         <i class="bi bi-box-arrow-in-right"></i> Sign In to Dashboard
       </button>
+
+      <div class="text-center mt-3">
+        <span class="text-dim small">Belum punya akun?</span>
+        <a href="/register" class="small fw-bold text-primary text-decoration-none ms-1">Bikin Akun Baru</a>
+      </div>
     </form>
 
     <div class="text-center mt-4 pt-3 border-top border-secondary border-opacity-10">

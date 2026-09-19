@@ -480,3 +480,122 @@ func TestAPILoginAudits(t *testing.T) {
 		t.Errorf("unexpected user audits response: %+v", userAudits)
 	}
 }
+
+func TestLandingAndRegister(t *testing.T) {
+	tempDir := t.TempDir()
+	db, err := database.InitDB(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("failed to init db: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+	cfg := &config.Config{
+		SessionSecret: "secret-12345678901234567890123456789012",
+		AdminUsername: "admin",
+		AdminPassword: "adminpassword",
+	}
+	h, err := NewHandler(cfg, repo, nil, nil)
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+
+	// 1. LandingPage
+	reqLanding := httptest.NewRequest(http.MethodGet, "/landing", nil)
+	rrLanding := httptest.NewRecorder()
+	h.LandingPage(rrLanding, reqLanding)
+	if rrLanding.Code != http.StatusOK {
+		t.Fatalf("LandingPage returned %d, want 200", rrLanding.Code)
+	}
+	if !strings.Contains(rrLanding.Body.String(), "AI Manager") {
+		t.Errorf("LandingPage body does not contain 'AI Manager'")
+	}
+
+	// 2. RegisterPage
+	reqReg := httptest.NewRequest(http.MethodGet, "/register", nil)
+	rrReg := httptest.NewRecorder()
+	h.RegisterPage(rrReg, reqReg)
+	if rrReg.Code != http.StatusOK {
+		t.Fatalf("RegisterPage returned %d, want 200", rrReg.Code)
+	}
+	if !strings.Contains(rrReg.Body.String(), "Bikin Akun Baru") {
+		t.Errorf("RegisterPage body does not contain 'Bikin Akun Baru'")
+	}
+
+	// 3. RegisterPost - Validation failures
+	// Empty name
+	formBadName := url.Values{
+		"name":             {""},
+		"username":         {"testuser"},
+		"password":         {"pass123"},
+		"confirm_password": {"pass123"},
+	}
+	reqBadName := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(formBadName.Encode()))
+	reqBadName.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rrBadName := httptest.NewRecorder()
+	h.RegisterPost(rrBadName, reqBadName)
+	if rrBadName.Code != http.StatusSeeOther || !strings.Contains(rrBadName.Header().Get("Location"), "error") {
+		t.Errorf("expected redirect with error for empty name, got code=%d loc=%s", rrBadName.Code, rrBadName.Header().Get("Location"))
+	}
+
+	// Password mismatch
+	formMismatch := url.Values{
+		"name":             {"Test User"},
+		"username":         {"testuser"},
+		"password":         {"pass123"},
+		"confirm_password": {"mismatch456"},
+	}
+	reqMismatch := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(formMismatch.Encode()))
+	reqMismatch.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rrMismatch := httptest.NewRecorder()
+	h.RegisterPost(rrMismatch, reqMismatch)
+	if rrMismatch.Code != http.StatusSeeOther || !strings.Contains(rrMismatch.Header().Get("Location"), "error") {
+		t.Errorf("expected redirect with error for password mismatch, got code=%d loc=%s", rrMismatch.Code, rrMismatch.Header().Get("Location"))
+	}
+
+	// 4. RegisterPost - Success
+	formOK := url.Values{
+		"name":             {"Test Developer"},
+		"username":         {"testdev"},
+		"password":         {"securepass123"},
+		"confirm_password": {"securepass123"},
+	}
+	reqOK := httptest.NewRequest(http.MethodPost, "/register", strings.NewReader(formOK.Encode()))
+	reqOK.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rrOK := httptest.NewRecorder()
+	h.RegisterPost(rrOK, reqOK)
+	if rrOK.Code != http.StatusSeeOther || rrOK.Header().Get("Location") != "/" {
+		t.Fatalf("expected redirect to / on successful registration, got code=%d loc=%s", rrOK.Code, rrOK.Header().Get("Location"))
+	}
+
+	// Verify session cookie was set
+	cookies := rrOK.Result().Cookies()
+	var foundSession bool
+	for _, c := range cookies {
+		if c.Name == sessionCookieName && c.Value != "" {
+			foundSession = true
+			break
+		}
+	}
+	if !foundSession {
+		t.Errorf("expected session cookie %s to be set after registration", sessionCookieName)
+	}
+
+	// Verify user persisted in repository
+	createdUser, err := repo.GetUserByUsername(context.Background(), "testdev")
+	if err != nil || createdUser == nil {
+		t.Fatalf("expected user 'testdev' to exist in repo, err=%v", err)
+	}
+	if createdUser.Role != "user" || createdUser.TokenQuota != 1000000 {
+		t.Errorf("unexpected user attributes: role=%s quota=%d", createdUser.Role, createdUser.TokenQuota)
+	}
+
+	// Verify API key was created
+	keys, err := repo.GetAPIKeysByUserID(context.Background(), createdUser.ID)
+	if err != nil || len(keys) == 0 {
+		t.Fatalf("expected initial API key to be created for user, err=%v", err)
+	}
+	if !strings.HasPrefix(keys[0].Key, "sk-gw-") {
+		t.Errorf("expected API key prefix sk-gw-, got %s", keys[0].Key)
+	}
+}
