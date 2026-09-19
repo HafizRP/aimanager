@@ -96,6 +96,13 @@ type LoginAttemptRepository interface {
 	CleanOldLoginAttempts(ctx context.Context) error
 }
 
+// LoginAuditRepository manages user login audit records.
+type LoginAuditRepository interface {
+	RecordLoginAudit(ctx context.Context, audit *entity.LoginAudit) error
+	GetLoginAudits(ctx context.Context, limit, offset int) ([]entity.LoginAudit, int, error)
+	GetUserLoginAudits(ctx context.Context, userID string, limit int) ([]entity.LoginAudit, error)
+}
+
 // UnitOfWork defines atomic transaction execution.
 type UnitOfWork interface {
 	Do(ctx context.Context, fn func(r Repository) error) error
@@ -112,6 +119,7 @@ type Repository interface {
 	SettingsRepository
 	SessionRepository
 	LoginAttemptRepository
+	LoginAuditRepository
 	UnitOfWork
 	Ping(ctx context.Context) error
 }
@@ -1454,4 +1462,104 @@ func (r *SQLiteRepo) ClearLoginAttempts(ctx context.Context, ip string) error {
 func (r *SQLiteRepo) CleanOldLoginAttempts(ctx context.Context) error {
 	_, err := r.db.ExecContext(ctx, "DELETE FROM login_attempts WHERE attempt_time < datetime('now', '-24 hours')")
 	return err
+}
+
+// RecordLoginAudit stores a login attempt record in login_audits.
+func (r *SQLiteRepo) RecordLoginAudit(ctx context.Context, audit *entity.LoginAudit) error {
+	query := `INSERT INTO login_audits (user_id, username, ip, user_agent, status, reason, created_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`
+	var userIDVal interface{}
+	if audit.UserID != nil && *audit.UserID != "" {
+		userIDVal = *audit.UserID
+	}
+	res, err := r.db.ExecContext(ctx, query, userIDVal, audit.Username, audit.IP, audit.UserAgent, audit.Status, audit.Reason)
+	if err != nil {
+		return err
+	}
+	id, err := res.LastInsertId()
+	if err == nil {
+		audit.ID = id
+	}
+	return nil
+}
+
+// GetLoginAudits retrieves paginated login audit records.
+func (r *SQLiteRepo) GetLoginAudits(ctx context.Context, limit, offset int) ([]entity.LoginAudit, int, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	var total int
+	countQuery := `SELECT COUNT(*) FROM login_audits`
+	if err := r.db.QueryRowContext(ctx, countQuery).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	query := `
+		SELECT la.id, la.user_id, la.username, la.ip, COALESCE(la.user_agent, ''), la.status, COALESCE(la.reason, ''), la.created_at, COALESCE(u.name, '')
+		FROM login_audits la
+		LEFT JOIN users u ON la.user_id = u.id
+		ORDER BY la.id DESC
+		LIMIT ? OFFSET ?
+	`
+	rows, err := r.db.QueryContext(ctx, query, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var audits []entity.LoginAudit
+	for rows.Next() {
+		var a entity.LoginAudit
+		var userID sql.NullString
+		var createdAtStr string
+		if err := rows.Scan(&a.ID, &userID, &a.Username, &a.IP, &a.UserAgent, &a.Status, &a.Reason, &createdAtStr, &a.UserName); err != nil {
+			return nil, 0, err
+		}
+		if userID.Valid {
+			uid := userID.String
+			a.UserID = &uid
+		}
+		a.CreatedAt = parseTimeFlexible(createdAtStr)
+		audits = append(audits, a)
+	}
+	return audits, total, rows.Err()
+}
+
+// GetUserLoginAudits retrieves recent login audits for a specific user ID.
+func (r *SQLiteRepo) GetUserLoginAudits(ctx context.Context, userID string, limit int) ([]entity.LoginAudit, error) {
+	if limit <= 0 {
+		limit = 15
+	}
+	query := `
+		SELECT la.id, la.user_id, la.username, la.ip, COALESCE(la.user_agent, ''), la.status, COALESCE(la.reason, ''), la.created_at, COALESCE(u.name, '')
+		FROM login_audits la
+		LEFT JOIN users u ON la.user_id = u.id
+		WHERE la.user_id = ?
+		ORDER BY la.id DESC
+		LIMIT ?
+	`
+	rows, err := r.db.QueryContext(ctx, query, userID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var audits []entity.LoginAudit
+	for rows.Next() {
+		var a entity.LoginAudit
+		var uidVal sql.NullString
+		var createdAtStr string
+		if err := rows.Scan(&a.ID, &uidVal, &a.Username, &a.IP, &a.UserAgent, &a.Status, &a.Reason, &createdAtStr, &a.UserName); err != nil {
+			return nil, err
+		}
+		if uidVal.Valid {
+			uid := uidVal.String
+			a.UserID = &uid
+		}
+		a.CreatedAt = parseTimeFlexible(createdAtStr)
+		audits = append(audits, a)
+	}
+	return audits, rows.Err()
 }

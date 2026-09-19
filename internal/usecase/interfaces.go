@@ -78,6 +78,12 @@ type (
 		CleanOldLoginAttempts(ctx context.Context) error
 	}
 
+	LoginAuditStore interface {
+		RecordLoginAudit(ctx context.Context, audit *entity.LoginAudit) error
+		GetLoginAudits(ctx context.Context, limit, offset int) ([]entity.LoginAudit, int, error)
+		GetUserLoginAudits(ctx context.Context, userID string, limit int) ([]entity.LoginAudit, error)
+	}
+
 	// UnitOfWork runs multiple repository operations within a single atomic transaction.
 	UnitOfWork interface {
 		ExecuteTx(ctx context.Context, fn func(txStore Store) error) error
@@ -93,6 +99,7 @@ type (
 		SettingsStore
 		SessionStore
 		LoginAttemptStore
+		LoginAuditStore
 		UnitOfWork
 	}
 )

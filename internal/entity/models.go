@@ -272,3 +272,18 @@ type SecurityEvent struct {
 	Action    string    `json:"action"`
 	CreatedAt time.Time `json:"created_at"`
 }
+
+// LoginAudit records a login attempt (success, failure, suspended, rate-limited) for audit trails.
+type LoginAudit struct {
+	ID        int64     `json:"id"`
+	UserID    *string   `json:"user_id,omitempty"`
+	Username  string    `json:"username"`
+	IP        string    `json:"ip"`
+	UserAgent string    `json:"user_agent,omitempty"`
+	Status    string    `json:"status"` // "success", "failed", "suspended", "rate_limited"
+	Reason    string    `json:"reason,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+
+	// Virtual fields for UI
+	UserName string `json:"user_name,omitempty"`
+}

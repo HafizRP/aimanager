@@ -461,9 +461,69 @@
           {{ end }}
         {{ else }}
           <tr>
-            <td colspan="7" class="text-center text-dim py-4">
+            <td colspan="6" class="text-center text-dim py-4">
               <i class="bi bi-journal-text fs-2 d-block mb-2 opacity-50"></i>
               No requests recorded yet for this user.
+            </td>
+          </tr>
+        {{ end }}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Login Audit Trail Section -->
+<div class="card-modern mb-4">
+  <div class="p-3 border-bottom border-secondary border-opacity-10 d-flex justify-content-between align-items-center">
+    <div>
+      <h5 class="fw-bold text-light mb-0 d-flex align-items-center gap-2">
+        <i class="bi bi-shield-lock text-cyan"></i> Login Audit Trail
+      </h5>
+      <span class="text-dim small">Recent authentication events and security attempts for this user.</span>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-modern mb-0">
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>Status</th>
+          <th>Client IP</th>
+          <th>Browser / Device</th>
+          <th>Detail / Reason</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{ if .LoginAudits }}
+          {{ range .LoginAudits }}
+            <tr>
+              <td class="text-dim small font-monospace">{{ formatDate .CreatedAt }}</td>
+              <td>
+                {{ if eq .Status "success" }}
+                  <span class="badge-modern badge-emerald"><i class="bi bi-check-circle me-1"></i>Success</span>
+                {{ else if eq .Status "suspended" }}
+                  <span class="badge-modern badge-rose"><i class="bi bi-slash-circle me-1"></i>Suspended</span>
+                {{ else if eq .Status "rate_limited" }}
+                  <span class="badge-modern badge-amber"><i class="bi bi-hourglass-split me-1"></i>Rate Limited</span>
+                {{ else }}
+                  <span class="badge-modern badge-rose"><i class="bi bi-x-circle me-1"></i>Failed</span>
+                {{ end }}
+              </td>
+              <td class="text-dim small font-monospace">{{ .IP }}</td>
+              <td class="text-dim small font-monospace text-truncate" style="max-width: 280px;" title="{{ .UserAgent }}">
+                {{ if .UserAgent }}{{ .UserAgent }}{{ else }}<span class="text-secondary opacity-60">-</span>{{ end }}
+              </td>
+              <td class="text-light small">
+                {{ if .Reason }}{{ .Reason }}{{ else }}<span class="text-secondary opacity-60">-</span>{{ end }}
+              </td>
+            </tr>
+          {{ end }}
+        {{ else }}
+          <tr>
+            <td colspan="5" class="text-center text-dim py-4">
+              <i class="bi bi-shield-check fs-2 d-block mb-2 opacity-50"></i>
+              No login attempts recorded yet.
             </td>
           </tr>
         {{ end }}

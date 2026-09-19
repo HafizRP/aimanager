@@ -67,6 +67,11 @@ func (h *Handler) UserDetailPage(w http.ResponseWriter, r *http.Request) {
 		totalLogs = 0
 	}
 
+	loginAudits, err := h.repo.GetUserLoginAudits(ctx, userID, 15)
+	if err != nil {
+		loginAudits = []entity.LoginAudit{}
+	}
+
 	stats, err := h.dash.GetStats(ctx, user, "30d")
 	if err != nil {
 		stats = &entity.DashboardStats{}
@@ -92,6 +97,7 @@ func (h *Handler) UserDetailPage(w http.ResponseWriter, r *http.Request) {
 		"APIKeys":           keys,
 		"Logs":              logs,
 		"TotalLogs":         totalLogs,
+		"LoginAudits":       loginAudits,
 		"Stats":             stats,
 		"AvailableModels":   availableModels,
 		"AllowedModelsList": allowedModelsList,
@@ -259,4 +265,47 @@ func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/users?msg=User+and+keys+deleted+successfully", http.StatusSeeOther)
+}
+
+// APILoginAudits returns paginated login audits (admin only).
+func (h *Handler) APILoginAudits(w http.ResponseWriter, r *http.Request) {
+	limitStr := r.URL.Query().Get("limit")
+	limit, _ := strconv.Atoi(limitStr)
+	if limit <= 0 {
+		limit = 50
+	}
+	offsetStr := r.URL.Query().Get("offset")
+	offset, _ := strconv.Atoi(offsetStr)
+	if offset < 0 {
+		offset = 0
+	}
+
+	audits, total, err := h.repo.GetLoginAudits(r.Context(), limit, offset)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, map[string]interface{}{
+		"audits": audits,
+		"total":  total,
+		"limit":  limit,
+		"offset": offset,
+	})
+}
+
+// APIUserLoginAudits returns recent login audits for a specific user (admin only).
+func (h *Handler) APIUserLoginAudits(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "id")
+	limitStr := r.URL.Query().Get("limit")
+	limit, _ := strconv.Atoi(limitStr)
+	if limit <= 0 {
+		limit = 15
+	}
+
+	audits, err := h.repo.GetUserLoginAudits(r.Context(), userID, limit)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, audits)
 }

@@ -618,3 +618,69 @@ func TestGetDashboardStatsTopModels(t *testing.T) {
 	}
 }
 
+func TestSQLiteRepo_LoginAudit(t *testing.T) {
+	repo, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Seed user
+	u := &entity.User{
+		ID:       "audit-user-1",
+		Username: "audituser",
+		Name:     "Audit User",
+		IsActive: true,
+	}
+	if err := repo.CreateUser(ctx, u); err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+
+	uid := "audit-user-1"
+	audit1 := &entity.LoginAudit{
+		UserID:    &uid,
+		Username:  "audituser",
+		IP:        "192.168.1.50",
+		UserAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+		Status:    "success",
+		Reason:    "authentication successful",
+	}
+	if err := repo.RecordLoginAudit(ctx, audit1); err != nil {
+		t.Fatalf("RecordLoginAudit 1 failed: %v", err)
+	}
+	if audit1.ID == 0 {
+		t.Errorf("expected audit ID to be populated")
+	}
+
+	audit2 := &entity.LoginAudit{
+		Username:  "unknown_user",
+		IP:        "192.168.1.99",
+		UserAgent: "curl/7.88.1",
+		Status:    "failed",
+		Reason:    "user not found",
+	}
+	if err := repo.RecordLoginAudit(ctx, audit2); err != nil {
+		t.Fatalf("RecordLoginAudit 2 failed: %v", err)
+	}
+
+	// Fetch all audits
+	audits, total, err := repo.GetLoginAudits(ctx, 10, 0)
+	if err != nil {
+		t.Fatalf("GetLoginAudits failed: %v", err)
+	}
+	if total != 2 || len(audits) != 2 {
+		t.Fatalf("expected 2 audits (total=%d, len=%d)", total, len(audits))
+	}
+
+	// Fetch user-specific audits
+	userAudits, err := repo.GetUserLoginAudits(ctx, "audit-user-1", 10)
+	if err != nil {
+		t.Fatalf("GetUserLoginAudits failed: %v", err)
+	}
+	if len(userAudits) != 1 {
+		t.Fatalf("expected 1 audit for user, got %d", len(userAudits))
+	}
+	if userAudits[0].Username != "audituser" || userAudits[0].Status != "success" {
+		t.Errorf("unexpected audit fields: %+v", userAudits[0])
+	}
+}
+

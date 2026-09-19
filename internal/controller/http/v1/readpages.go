@@ -65,6 +65,7 @@ func (h *Handler) ProfilePage(w http.ResponseWriter, r *http.Request) {
 
 	keyCount := 0
 	var userModel string
+	var loginAudits []entity.LoginAudit
 	if currentUser != nil {
 		if keys, err := h.repo.GetAPIKeysByUserID(ctx, currentUser.ID); err == nil {
 			keyCount = len(keys)
@@ -73,6 +74,9 @@ func (h *Handler) ProfilePage(w http.ResponseWriter, r *http.Request) {
 		if len(allowed) > 0 && allowed[0] != "*" {
 			userModel = allowed[0]
 		}
+		if audits, err := h.repo.GetUserLoginAudits(ctx, currentUser.ID, 10); err == nil {
+			loginAudits = audits
+		}
 	}
 
 	h.render(w, r, "profile.html", "base.html", map[string]interface{}{
@@ -80,6 +84,7 @@ func (h *Handler) ProfilePage(w http.ResponseWriter, r *http.Request) {
 		"ProfileUser": currentUser,
 		"KeyCount":    keyCount,
 		"UserModel":   userModel,
+		"LoginAudits": loginAudits,
 	})
 }
 
