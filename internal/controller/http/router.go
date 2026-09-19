@@ -147,9 +147,13 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 	r.HandleFunc("/v1", gwProxy.ServeHTTP)
 	r.HandleFunc("/v1/*", gwProxy.ServeHTTP)
 
-	// Public Auth & Webhook Routes
+	// Public Auth, Registration, Landing & Webhook Routes
+	r.Get("/", h.RootPage)
+	r.Get("/landing", h.LandingPage)
 	r.Get("/login", h.LoginPage)
 	r.Post("/login", h.LoginPost)
+	r.Get("/register", h.RegisterPage)
+	r.Post("/register", h.RegisterPost)
 	r.Post("/logout", h.LogoutPost)
 	r.Post("/api/webhook/midtrans", h.MidtransWebhook)
 
@@ -159,7 +163,7 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 		authRouter.Use(h.ValidateCSRF)
 
 		// Shared: Dashboard, Keys (self-scoped for user), Logs (self-scoped for user), Models (whitelist-scoped for user)
-		authRouter.Get("/", h.DashboardPage)
+		authRouter.Get("/dashboard", h.DashboardPage)
 		authRouter.Get("/api/stats", h.APIStats)
 		authRouter.Get("/api/upstream/quotas", h.APIUpstreamQuotas)
 

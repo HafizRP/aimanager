@@ -69,6 +69,9 @@ func (s *Syncer) getDB() (*sql.DB, error) {
 
 // SyncKey inserts or updates an API key in 9router Core's database
 func (s *Syncer) SyncKey(key *entity.APIKey, userName string) error {
+	if s == nil {
+		return nil
+	}
 	db, err := s.getDB()
 	if err != nil {
 		log.Warn().Err(err).Msg("9router sync skipped (cannot open db)")
@@ -105,6 +108,9 @@ func (s *Syncer) SyncKey(key *entity.APIKey, userName string) error {
 
 // ToggleKey updates the isActive flag in 9router Core's database
 func (s *Syncer) ToggleKey(keyID string, isActive bool) error {
+	if s == nil {
+		return nil
+	}
 	db, err := s.getDB()
 	if err != nil {
 		return err
@@ -123,6 +129,9 @@ func (s *Syncer) ToggleKey(keyID string, isActive bool) error {
 
 // DeleteKey removes an API key from 9router Core's database
 func (s *Syncer) DeleteKey(keyID string) error {
+	if s == nil {
+		return nil
+	}
 	db, err := s.getDB()
 	if err != nil {
 		return err
@@ -136,6 +145,9 @@ func (s *Syncer) DeleteKey(keyID string) error {
 
 // BackfillAll syncs all gateway keys into 9router Core's database
 func (s *Syncer) BackfillAll(keys []entity.APIKey) error {
+	if s == nil {
+		return nil
+	}
 	db, err := s.getDB()
 	if err != nil {
 		return err

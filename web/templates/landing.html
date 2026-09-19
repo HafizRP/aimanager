@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="id" data-bs-theme="{{ if .UITheme }}{{ .UITheme }}{{ else }}dark{{ end }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Manager — Unified LLM Gateway & Smart Model Router</title>
+  
+  <meta name="description" content="AI Manager adalah self-hosted enterprise LLM gateway dan smart model router di depan OpenAI, Claude Anthropic, Google Antigravity, Kiro, dan open-source AI. Hemat token hingga 40%, auto-failover, dan zero latency accumulation.">
+  <meta name="keywords" content="AI Manager, LLM Gateway, Model Router, AI Proxy, Token Saver, Antigravity, Kiro, Self-Hosted AI">
+  <meta name="author" content="HafizRP">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://aimanager.b14.my.id/">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="AI Manager — Unified LLM Gateway & Smart Model Router">
+  <meta property="og:description" content="Enterprise self-hosted LLM gateway, intelligent model routing, quota management, and token saver middleware.">
+  <meta property="og:url" content="https://aimanager.b14.my.id/">
+  <meta property="og:image" content="https://aimanager.b14.my.id/static/icons/icon-512.png">
+
+  <!-- Fonts: Plus Jakarta Sans, Geist, Geist Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+  <link href="/static/css/custom.css?v=18" rel="stylesheet">
+
+  <!-- PWA: installable app & icons -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#09090b">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="AI Manager">
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/static/icons/favicon-16.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
+  <link rel="shortcut icon" href="/static/icons/favicon.ico">
+</head>
+<body class="bg-body text-body font-sans" style="overflow-x: hidden; min-height: 100vh;">
+  <!-- Sticky Neo-Brutalist Navbar -->
+  <header class="sticky-top bg-body navbar-glass" style="border-bottom: 2.5px solid var(--neo-border); z-index: 1030;">
+    <div class="container-xl d-flex align-items-center justify-content-between h-100 py-3">
+      <a href="/" class="d-flex align-items-center gap-2 text-decoration-none text-body">
+        <div class="brand-glow" style="width: 38px; height: 38px; font-size: 1.2rem;">
+          <i class="bi bi-cpu-fill text-primary"></i>
+        </div>
+        <span class="fw-bold fs-5 tracking-tight">AI Manager</span>
+        <span class="badge-modern badge-indigo d-none d-sm-inline-flex" style="transform: rotate(-2deg); font-size: 0.68rem;">GATEWAY</span>
+      </a>
+
+      <nav class="d-none d-md-flex align-items-center gap-4 small fw-semibold text-muted">
+        <a href="#features" class="text-decoration-none text-muted hover-text-main">Fitur</a>
+        <a href="#routing" class="text-decoration-none text-muted hover-text-main">Smart Routing</a>
+        <a href="#ha" class="text-decoration-none text-muted hover-text-main">High Availability</a>
+        <a href="#pricing" class="text-decoration-none text-muted hover-text-main">Harga</a>
+      </nav>
+
+      <div class="d-flex align-items-center gap-2">
+        <button type="button" id="themeToggleLanding" class="btn btn-sm btn-modern-ghost p-2" title="Toggle theme">
+          <i class="bi bi-moon-stars" id="themeToggleLandingIcon"></i>
+        </button>
+
+        {{ if .IsLoggedIn }}
+          <a href="/dashboard" class="btn btn-sm btn-modern-primary d-inline-flex align-items-center gap-1">
+            <i class="bi bi-speedometer2"></i> Dashboard
+          </a>
+        {{ else }}
+          <a href="/login" class="btn btn-sm btn-modern-ghost d-none d-sm-inline-flex">Masuk</a>
+          <a href="/register" class="btn btn-sm btn-modern-primary d-inline-flex align-items-center gap-1">
+            <i class="bi bi-rocket-takeoff-fill"></i> Mulai Gratis
+          </a>
+        {{ end }}
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero Section -->
+    <section class="py-5 py-lg-6 position-relative overflow-hidden">
+      <!-- Background Ambient Glow -->
+      <div style="position: absolute; width: 700px; height: 700px; background: radial-gradient(circle, rgba(59, 130, 246, 0.1) 0%, transparent 70%); top: 0%; left: 50%; transform: translate(-50%, -20%); pointer-events: none; z-index: 0;"></div>
+
+      <div class="container-xl position-relative" style="z-index: 1;">
+        <div class="row align-items-center g-5 py-4">
+          <div class="col-12 col-lg-7 text-center text-lg-start">
+            <div class="d-inline-flex align-items-center gap-2 mb-3">
+              <span class="badge-modern badge-emerald" style="transform: rotate(-2deg); font-size: 0.76rem;">
+                ⚡ HIGH AVAILABILITY &amp; SMART ROUTER
+              </span>
+              <span class="badge-modern badge-gray d-none d-sm-inline-flex">v1.0 Ready</span>
+            </div>
+
+            <h1 class="display-4 fw-extrabold tracking-tight mb-3 text-body" style="line-height: 1.15; font-weight: 800;">
+              Satu Gateway untuk Semua AI Model.<br>
+              <span class="text-primary">Hemat Token &amp; Anti Down.</span>
+            </h1>
+
+            <p class="lead text-dim mb-4" style="max-width: 580px; font-size: 1.12rem; line-height: 1.6;">
+              Reverse proxy cerdas di depan OpenAI, Claude Anthropic, Google Antigravity, Kiro, dan open-source models. Dilengkapi auto-failover combo, quota guard, token compression -40%, dan monitoring real-time.
+            </p>
+
+            <div class="d-flex flex-wrap items-center justify-content-center justify-content-lg-start gap-3 mb-4">
+              {{ if .IsLoggedIn }}
+                <a href="/dashboard" class="btn-modern-primary py-3 px-4 fs-6">
+                  <i class="bi bi-speedometer2 me-2"></i> Buka Dashboard Saya
+                </a>
+              {{ else }}
+                <a href="/register" class="btn-modern-primary py-3 px-4 fs-6">
+                  <i class="bi bi-rocket-takeoff-fill me-2"></i> Mulai Gratis (1M Token)
+                </a>
+                <a href="/login" class="btn-modern-ghost py-3 px-4 fs-6">
+                  <i class="bi bi-box-arrow-in-right me-2"></i> Masuk Akun
+                </a>
+              {{ end }}
+            </div>
+
+            <!-- Trust Pills -->
+            <div class="d-flex flex-wrap items-center justify-content-center justify-content-lg-start gap-2 pt-2">
+              <span class="badge-modern badge-gray"><i class="bi bi-shield-check text-success"></i> 100% Self-Hosted</span>
+              <span class="badge-modern badge-gray"><i class="bi bi-lightning-charge text-warning"></i> Auto-Failover</span>
+              <span class="badge-modern badge-gray"><i class="bi bi-cash-coin text-info"></i> Token Saver -40%</span>
+              <span class="badge-modern badge-gray"><i class="bi bi-cpu text-primary"></i> OpenAI &amp; Claude Compatible</span>
+            </div>
+          </div>
+
+          <!-- Hero Graphic Card (CatatKeu Interactive Mockup) -->
+          <div class="col-12 col-lg-5">
+            <div class="card-modern p-4 shadow-lg position-relative">
+              <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary border-opacity-20">
+                <div class="d-flex align-items-center gap-2">
+                  <span class="status-pill-live" style="font-size: 0.72rem;">
+                    <span class="pulse-dot"></span> LIVE ROUTER
+                  </span>
+                  <span class="text-dim small font-monospace">:20129</span>
+                </div>
+                <span class="badge-modern badge-indigo">FAILOVER COMBO</span>
+              </div>
+
+              <!-- Pipeline Box -->
+              <div class="subcard-modern p-3 mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <span class="small fw-bold text-dim text-uppercase font-monospace" style="font-size: 0.7rem;">Inbound Request</span>
+                  <span class="badge-modern badge-gray font-monospace" style="font-size: 0.68rem;">POST /v1/chat/completions</span>
+                </div>
+                <div class="p-2 rounded bg-black bg-opacity-20 border border-secondary border-opacity-10 font-monospace small text-light text-truncate">
+                  <code>{"model": "main", "stream": true, "messages": [...]}</code>
+                </div>
+              </div>
+
+              <!-- Routing Steps -->
+              <div class="d-flex flex-column gap-2 mb-3">
+                <div class="d-flex align-items-center justify-content-between p-2 rounded subcard-modern small">
+                  <span class="d-flex align-items-center gap-2">
+                    <i class="bi bi-check-circle-fill text-success"></i>
+                    <span>Response Cache (SHA-256)</span>
+                  </span>
+                  <span class="badge-modern badge-emerald">MISS (Fresh)</span>
+                </div>
+
+                <div class="d-flex align-items-center justify-content-between p-2 rounded subcard-modern small">
+                  <span class="d-flex align-items-center gap-2">
+                    <i class="bi bi-check-circle-fill text-success"></i>
+                    <span>RTK Token Saver</span>
+                  </span>
+                  <span class="text-success font-monospace fw-bold">-38% Tokens</span>
+                </div>
+
+                <div class="d-flex align-items-center justify-content-between p-2 rounded subcard-modern small">
+                  <span class="d-flex align-items-center gap-2">
+                    <i class="bi bi-arrow-right-circle-fill text-primary"></i>
+                    <span>Combo Target #1 (Antigravity)</span>
+                  </span>
+                  <span class="badge-modern badge-indigo">ag/gemini-3.7-flash</span>
+                </div>
+
+                <div class="d-flex align-items-center justify-content-between p-2 rounded subcard-modern small">
+                  <span class="d-flex align-items-center gap-2">
+                    <i class="bi bi-shield-shaded text-warning"></i>
+                    <span>Combo Target #2 (Fallback)</span>
+                  </span>
+                  <span class="badge-modern badge-amber">ag/claude-sonnet-4-6</span>
+                </div>
+              </div>
+
+              <div class="d-flex justify-content-between align-items-center pt-2 border-top border-secondary border-opacity-10 small">
+                <span class="text-dim">Latency TTFT: <strong class="text-emerald">1.12s</strong></span>
+                <span class="text-dim">Circuit Breaker: <strong class="text-success">CLOSED (OK)</strong></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features Section (CatatKeu 3-Column Neo-Brutalist Grid) -->
+    <section id="features" class="py-5 bg-body-tertiary" style="border-top: 2.5px solid var(--neo-border); border-bottom: 2.5px solid var(--neo-border);">
+      <div class="container-xl py-4">
+        <div class="text-center mb-5">
+          <span class="badge-modern badge-indigo mb-2">FITUR UTAMA</span>
+          <h2 class="display-6 fw-extrabold tracking-tight mb-2" style="font-weight: 800;">Kenapa Pakai AI Manager?</h2>
+          <p class="text-dim mx-auto" style="max-width: 520px;">
+            Dirancang khusus untuk developer, engineer, dan tim AI yang butuh kontrol penuh atas kuota, biaya, dan reliabilitas upstream model.
+          </p>
+        </div>
+
+        <div class="row g-4">
+          <!-- Feature 1 -->
+          <div class="col-12 col-md-6 col-lg-4">
+            <div class="card-modern card-interactive p-4 h-100 d-flex flex-column justify-content-between">
+              <div>
+                <div class="kpi-icon kpi-icon-indigo mb-3">
+                  <i class="bi bi-shuffle"></i>
+                </div>
+                <h3 class="fw-bold fs-5 mb-2">Smart Failover &amp; Combos</h3>
+                <p class="text-dim small mb-0 leading-relaxed">
+                  Jika provider upstream mengalami rate-limit 429 atau 5xx, gateway otomatis mengalihkan request ke model fallback berikutnya dalam combo tanpa error di client.
+                </p>
+              </div>
+              <div class="mt-3 pt-2 border-top border-secondary border-opacity-10">
+                <span class="badge-modern badge-indigo">Zero Dropped Request</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Feature 2 -->
+          <div class="col-12 col-md-6 col-lg-4">
+            <div class="card-modern card-interactive p-4 h-100 d-flex flex-column justify-content-between">
+              <div>
+                <div class="kpi-icon kpi-icon-emerald mb-3">
+                  <i class="bi bi-file-earmark-zip"></i>
+                </div>
+                <h3 class="fw-bold fs-5 mb-2">Token Saver &amp; RTK</h3>
+                <p class="text-dim small mb-0 leading-relaxed">
+                  Kompresi token real-time, optimasi reasoning effort (minimal/low/medium), dan adapter Caveman memangkas pemakaian token hingga 40% per request.
+                </p>
+              </div>
+              <div class="mt-3 pt-2 border-top border-secondary border-opacity-10">
+                <span class="badge-modern badge-emerald">Save up to 40%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Feature 3 -->
+          <div class="col-12 col-md-6 col-lg-4">
+            <div class="card-modern card-interactive p-4 h-100 d-flex flex-column justify-content-between">
+              <div>
+                <div class="kpi-icon kpi-icon-amber mb-3">
+                  <i class="bi bi-speedometer"></i>
+                </div>
+                <h3 class="fw-bold fs-5 mb-2">Live Quota &amp; Rolling Window</h3>
+                <p class="text-dim small mb-0 leading-relaxed">
+                  Pantau sisa kuota dan jadwal reset window per akun upstream (Google Antigravity, Kiro). Dilengkapi worker auto-reactivation akun otomatis saat kuota pulih.
+                </p>
+              </div>
+              <div class="mt-3 pt-2 border-top border-secondary border-opacity-10">
+                <span class="badge-modern badge-amber">Auto Reactivation</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Feature 4 -->
+          <div class="col-12 col-md-6 col-lg-4">
+            <div class="card-modern card-interactive p-4 h-100 d-flex flex-column justify-content-between">
+              <div>
+                <div class="kpi-icon kpi-icon-cyan mb-3">
+                  <i class="bi bi-lightning-charge"></i>
+                </div>
+                <h3 class="fw-bold fs-5 mb-2">Exact Response Cache</h3>
+                <p class="text-dim small mb-0 leading-relaxed">
+                  In-memory TTL cache (15 menit) dengan hashing SHA-256 melayani prompt deterministik berulang dalam <10ms dan 0 token spend upstream.
+                </p>
+              </div>
+              <div class="mt-3 pt-2 border-top border-secondary border-opacity-10">
+                <span class="badge-modern badge-cyan">&lt; 10ms Latency</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Feature 5 -->
+          <div class="col-12 col-md-6 col-lg-4">
+            <div class="card-modern card-interactive p-4 h-100 d-flex flex-column justify-content-between">
+              <div>
+                <div class="kpi-icon kpi-icon-indigo mb-3">
+                  <i class="bi bi-terminal"></i>
+                </div>
+                <h3 class="fw-bold fs-5 mb-2">CLI &amp; IDE Setup Hub</h3>
+                <p class="text-dim small mb-0 leading-relaxed">
+                  Panduan konfigurasi pre-filled 1-klik untuk Claude Code, Cursor IDE, Codex, Copilot, Cline, dan Hermes Agent langsung dengan API key aktif lo.
+                </p>
+              </div>
+              <div class="mt-3 pt-2 border-top border-secondary border-opacity-10">
+                <span class="badge-modern badge-indigo">Pre-Filled Snippets</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Feature 6 -->
+          <div class="col-12 col-md-6 col-lg-4">
+            <div class="card-modern card-interactive p-4 h-100 d-flex flex-column justify-content-between">
+              <div>
+                <div class="kpi-icon kpi-icon-emerald mb-3">
+                  <i class="bi bi-graph-up-arrow"></i>
+                </div>
+                <h3 class="fw-bold fs-5 mb-2">FinOps &amp; Cost Savings</h3>
+                <p class="text-dim small mb-0 leading-relaxed">
+                  Tracking penghematan biaya token vs tarif retail OpenAI ($5/1M token), visualisasi tren pemakaian dengan candle timeframe trading (1H, 4H, 1D, 1W, 1M).
+                </p>
+              </div>
+              <div class="mt-3 pt-2 border-top border-secondary border-opacity-10">
+                <span class="badge-modern badge-emerald">ROI Tracking</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- High Availability Architecture Section -->
+    <section id="ha" class="py-5 py-lg-6">
+      <div class="container-xl py-4">
+        <div class="row align-items-center g-5">
+          <div class="col-12 col-lg-6">
+            <span class="badge-modern badge-emerald mb-2">HIGH AVAILABILITY</span>
+            <h2 class="display-6 fw-extrabold tracking-tight mb-3" style="font-weight: 800;">
+              Arsitektur Tangguh &amp; Zero Single Point of Failure
+            </h2>
+            <p class="text-dim mb-4 leading-relaxed">
+              AI Manager dirancang dari level container hingga routing layer untuk menjamin request LLM lo selalu terlayani meskipun provider upstream mengalami gangguan atau kuota habis.
+            </p>
+
+            <div class="d-flex flex-column gap-3">
+              <div class="subcard-modern p-3 d-flex align-items-start gap-3">
+                <div class="kpi-icon kpi-icon-emerald shrink-0" style="width: 36px; height: 36px; font-size: 1rem;">
+                  <i class="bi bi-shield-check"></i>
+                </div>
+                <div>
+                  <h4 class="fw-bold fs-6 mb-1">Docker Compose Healthcheck &amp; Restart</h4>
+                  <p class="text-dim small mb-0">Container Gateway dan Core engine diproteksi dengan policy <code>restart: always</code> dan automated health probe setiap 10-15s.</p>
+                </div>
+              </div>
+
+              <div class="subcard-modern p-3 d-flex align-items-start gap-3">
+                <div class="kpi-icon kpi-icon-indigo shrink-0" style="width: 36px; height: 36px; font-size: 1rem;">
+                  <i class="bi bi-cpu"></i>
+                </div>
+                <div>
+                  <h4 class="fw-bold fs-6 mb-1">Upstream Circuit Breaker Registry</h4>
+                  <p class="text-dim small mb-0">Memotong latensi saat model upstream 5xx/timeout berturut-turut, langsung mengalihkan ke model alternatif tanpa blocking.</p>
+                </div>
+              </div>
+
+              <div class="subcard-modern p-3 d-flex align-items-start gap-3">
+                <div class="kpi-icon kpi-icon-amber shrink-0" style="width: 36px; height: 36px; font-size: 1rem;">
+                  <i class="bi bi-robot"></i>
+                </div>
+                <div>
+                  <h4 class="fw-bold fs-6 mb-1">Autonomous Cron Watchdog 24/7</h4>
+                  <p class="text-dim small mb-0">Hermes Background Agent memantau health container, penggunaan disk, dan port loopback secara periodik dengan auto-recovery mandiri.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="col-12 col-lg-6">
+            <div class="card-modern p-4">
+              <h3 class="fw-bold fs-5 mb-3 d-flex align-items-center gap-2">
+                <i class="bi bi-diagram-3-fill text-primary"></i> Topology Deployment
+              </h3>
+
+              <div class="d-flex flex-column gap-3">
+                <div class="subcard-modern p-3">
+                  <div class="d-flex justify-content-between align-items-center mb-1">
+                    <strong class="small text-light">Client Applications</strong>
+                    <span class="badge-modern badge-gray">Cursor / Claude / Hermes</span>
+                  </div>
+                  <div class="text-dim small">Mengirim request via endpoint standar <code>https://aimanager.b14.my.id/v1</code></div>
+                </div>
+
+                <div class="text-center text-primary fs-5 my-n1"><i class="bi bi-arrow-down"></i></div>
+
+                <div class="subcard-modern p-3 border-primary border-opacity-50">
+                  <div class="d-flex justify-content-between align-items-center mb-1">
+                    <strong class="small text-primary">AI Manager Gateway (:20129)</strong>
+                    <span class="badge-modern badge-emerald">ACTIVE / HEALTHY</span>
+                  </div>
+                  <div class="text-dim small">Auth, Quota Guard, RTK Compression, Response Cache, Circuit Breaker</div>
+                </div>
+
+                <div class="text-center text-primary fs-5 my-n1"><i class="bi bi-arrow-down"></i></div>
+
+                <div class="subcard-modern p-3">
+                  <div class="d-flex justify-content-between align-items-center mb-1">
+                    <strong class="small text-light">9router Core Engine (127.0.0.1:20128)</strong>
+                    <span class="badge-modern badge-gray">Loopback Isolated</span>
+                  </div>
+                  <div class="text-dim small">Provider Connection Pooling, OAuth MITM Bridge, Multi-Account Fallback</div>
+                </div>
+
+                <div class="text-center text-primary fs-5 my-n1"><i class="bi bi-arrow-down"></i></div>
+
+                <div class="subcard-modern p-3">
+                  <div class="d-flex justify-content-between align-items-center mb-1">
+                    <strong class="small text-light">Upstream AI Clouds</strong>
+                    <span class="badge-modern badge-indigo">Multi-Provider</span>
+                  </div>
+                  <div class="text-dim small">Google Antigravity, Anthropic Claude, Kiro GLM, OpenCode, Self-Hosted Nodes</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Pricing / Tiers Section -->
+    <section id="pricing" class="py-5 bg-body-tertiary" style="border-top: 2.5px solid var(--neo-border); border-bottom: 2.5px solid var(--neo-border);">
+      <div class="container-xl py-4">
+        <div class="text-center mb-5">
+          <span class="badge-modern badge-emerald mb-2">TIER &amp; KUOTA</span>
+          <h2 class="display-6 fw-extrabold tracking-tight mb-2" style="font-weight: 800;">Mulai Gratis Tanpa Kartu Kredit</h2>
+          <p class="text-dim mx-auto" style="max-width: 500px;">
+            Setiap pendaftar baru langsung mendapatkan kuota starter untuk mulai coding dan eksplorasi model AI.
+          </p>
+        </div>
+
+        <div class="row justify-content-center g-4">
+          <!-- Starter Free -->
+          <div class="col-12 col-md-6 col-lg-5">
+            <div class="card-modern card-interactive p-4 h-100 d-flex flex-column justify-content-between position-relative">
+              <div>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <h3 class="fw-bold fs-4 mb-0">Free Starter</h3>
+                  <span class="badge-modern badge-emerald">GRATIS</span>
+                </div>
+                <div class="display-6 fw-extrabold mb-1" style="font-weight: 800;">Rp 0</div>
+                <p class="text-dim small mb-4">Cocok untuk personal developer &amp; testing agent.</p>
+
+                <ul class="list-unstyled d-flex flex-column gap-2 mb-4 small">
+                  <li class="d-flex align-items-center gap-2">
+                    <i class="bi bi-check2-circle text-success fs-6"></i>
+                    <span><strong>1,000,000 Token</strong> kuota awal langsung aktif</span>
+                  </li>
+                  <li class="d-flex align-items-center gap-2">
+                    <i class="bi bi-check2-circle text-success fs-6"></i>
+                    <span>Akses model combo <code>main</code> &amp; <code>free-only</code></span>
+                  </li>
+                  <li class="d-flex align-items-center gap-2">
+                    <i class="bi bi-check2-circle text-success fs-6"></i>
+                    <span>1 Active API Key (<code>sk-gw-...</code>)</span>
+                  </li>
+                  <li class="d-flex align-items-center gap-2">
+                    <i class="bi bi-check2-circle text-success fs-6"></i>
+                    <span>Integrasi Cursor, Claude Code, &amp; Hermes</span>
+                  </li>
+                  <li class="d-flex align-items-center gap-2">
+                    <i class="bi bi-check2-circle text-success fs-6"></i>
+                    <span>Rate Limit 10 RPM (Sliding Window)</span>
+                  </li>
+                </ul>
+              </div>
+
+              <a href="/register" class="btn-modern-primary w-100 py-2.5 text-center">
+                Daftar &amp; Klaim 1M Token
+              </a>
+            </div>
+          </div>
+
+          <!-- Pro Tier -->
+          <div class="col-12 col-md-6 col-lg-5">
+            <div class="card-modern card-interactive p-4 h-100 d-flex flex-column justify-content-between border-primary">
+              <div>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                  <h3 class="fw-bold fs-4 mb-0">Developer Pro</h3>
+                  <span class="badge-modern badge-indigo">UNLIMITED</span>
+                </div>
+                <div class="display-6 fw-extrabold mb-1" style="font-weight: 800;">Top-Up QRIS</div>
+                <p class="text-dim small mb-4">Untuk workload intensif, scraping, &amp; production coding.</p>
+
+                <ul class="list-unstyled d-flex flex-column gap-2 mb-4 small">
+                  <li class="d-flex align-items-center gap-2">
+                    <i class="bi bi-check2-circle text-success fs-6"></i>
+                    <span>Unlimited token quota via Midtrans Snap</span>
+                  </li>
+                  <li class="d-flex align-items-center gap-2">
+                    <i class="bi bi-check2-circle text-success fs-6"></i>
+                    <span>Multi API Keys dengan scoping allowed models</span>
+                  </li>
+                  <li class="d-flex align-items-center gap-2">
+                    <i class="bi bi-check2-circle text-success fs-6"></i>
+                    <span>Priority Upstream Latency &amp; Egress Proxy Pool</span>
+                  </li>
+                  <li class="d-flex align-items-center gap-2">
+                    <i class="bi bi-check2-circle text-success fs-6"></i>
+                    <span>Live Web Playground multi-session dengan export MD</span>
+                  </li>
+                  <li class="d-flex align-items-center gap-2">
+                    <i class="bi bi-check2-circle text-success fs-6"></i>
+                    <span>Audit logs detail &amp; anomaly radar monitoring</span>
+                  </li>
+                </ul>
+              </div>
+
+              <a href="/register" class="btn-modern-ghost w-100 py-2.5 text-center">
+                Upgrade via Dashboard
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Call to Action Banner -->
+    <section class="py-5 py-lg-6 text-center position-relative">
+      <div class="container-xl py-4 position-relative" style="z-index: 1;">
+        <div class="card-modern p-5 mx-auto text-center" style="max-width: 800px;">
+          <h2 class="display-6 fw-extrabold tracking-tight mb-3" style="font-weight: 800;">
+            Siap Mengoptimasi Infrastruktur AI Lo?
+          </h2>
+          <p class="text-dim lead mb-4 mx-auto" style="max-width: 540px; font-size: 1.05rem;">
+            Daftar sekarang, dapatkan 1,000,000 token gratis, dan hubungkan langsung ke tools coding favorit lo dalam hitungan menit.
+          </p>
+          <div class="d-flex flex-wrap justify-content-center gap-3">
+            <a href="/register" class="btn-modern-primary py-3 px-5 fs-6">
+              <i class="bi bi-person-plus-fill me-2"></i> Buat Akun Gratis Sekarang
+            </a>
+            <a href="/login" class="btn-modern-ghost py-3 px-4 fs-6">
+              <i class="bi bi-box-arrow-in-right me-2"></i> Masuk Dashboard
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="py-4 border-top" style="border-top: 2.5px solid var(--neo-border) !important;">
+    <div class="container-xl d-flex flex-column flex-md-row align-items-center justify-content-between gap-3 text-dim small">
+      <div class="d-flex align-items-center gap-2">
+        <div class="brand-glow" style="width: 28px; height: 28px; font-size: 0.9rem;">
+          <i class="bi bi-cpu-fill text-primary"></i>
+        </div>
+        <span class="fw-bold text-body">AI Manager</span>
+        <span>— Unified LLM Gateway &amp; Smart Model Router</span>
+      </div>
+
+      <div class="d-flex align-items-center gap-3">
+        <a href="/login" class="text-dim text-decoration-none hover-text-main">Masuk</a>
+        <a href="/register" class="text-dim text-decoration-none hover-text-main">Daftar</a>
+        <a href="https://github.com/HafizRP/aimanager" target="_blank" class="text-dim text-decoration-none hover-text-main">
+          <i class="bi bi-github me-1"></i> GitHub
+        </a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Theme toggle
+    const themeBtn = document.getElementById('themeToggleLanding');
+    const themeIcon = document.getElementById('themeToggleLandingIcon');
+    function applyTheme(theme) {
+      document.documentElement.setAttribute('data-bs-theme', theme);
+      if (themeIcon) {
+        themeIcon.className = theme === 'light' ? 'bi bi-sun-fill' : 'bi bi-moon-stars';
+      }
+    }
+    const currentTheme = document.documentElement.getAttribute('data-bs-theme') || 'dark';
+    applyTheme(currentTheme);
+    if (themeBtn) {
+      themeBtn.addEventListener('click', () => {
+        const next = document.documentElement.getAttribute('data-bs-theme') === 'light' ? 'dark' : 'light';
+        applyTheme(next);
+        fetch('/api/theme', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'theme=' + encodeURIComponent(next)
+        }).catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>
