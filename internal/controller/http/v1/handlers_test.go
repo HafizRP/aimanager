@@ -599,3 +599,91 @@ func TestLandingAndRegister(t *testing.T) {
 		t.Errorf("expected API key prefix sk-gw-, got %s", keys[0].Key)
 	}
 }
+
+func TestAPIKeyRestrictionsAndIPWhitelist(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test_keys.db")
+	db, err := database.InitDB(dbPath)
+	if err != nil {
+		t.Fatalf("InitDB failed: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+	cfg := &config.Config{
+		SessionSecret: "test-secret-12345678901234567890",
+	}
+
+	h, err := NewHandler(cfg, repo, nil, nil)
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+
+	ctx := context.Background()
+	user := &entity.User{
+		ID:           "u-ip-test",
+		Username:     "keytester",
+		Name:         "Key Tester",
+		PasswordHash: "hash123",
+		Role:         "admin",
+		IsActive:     true,
+	}
+	if err := repo.CreateUser(ctx, user); err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+
+	// 1. CreateKey with AllowedIPs
+	form := url.Values{
+		"user_id":       {user.ID},
+		"name":          {"Restricted Key"},
+		"allowed_ips":   {"192.168.1.10, 10.0.0.0/8"},
+		"allowed_models": {"main"},
+		"rate_limit_rpm": {"60"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/keys", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req = req.WithContext(context.WithValue(ctx, userContextKey, user))
+	rr := httptest.NewRecorder()
+
+	h.CreateKey(rr, req)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("CreateKey returned status %d, want 303", rr.Code)
+	}
+
+	keys, err := repo.GetAPIKeysByUserID(ctx, user.ID)
+	if err != nil || len(keys) == 0 {
+		t.Fatalf("expected created key in repo, err=%v", err)
+	}
+	key := keys[0]
+	if key.AllowedIPs != "192.168.1.10, 10.0.0.0/8" {
+		t.Errorf("expected AllowedIPs '192.168.1.10, 10.0.0.0/8', got %q", key.AllowedIPs)
+	}
+
+	// 2. Update restrictions via APIKeyBudget
+	bodyJSON := `{"max_tokens_limit": 500000, "daily_token_quota": 50000, "allowed_ips": "172.16.0.0/12, 127.0.0.1"}`
+	reqBudget := httptest.NewRequest(http.MethodPost, "/api/keys/"+key.ID+"/budget", strings.NewReader(bodyJSON))
+	reqBudget.Header.Set("Content-Type", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", key.ID)
+	reqBudget = reqBudget.WithContext(context.WithValue(reqBudget.Context(), chi.RouteCtxKey, rctx))
+	rrBudget := httptest.NewRecorder()
+
+	h.APIKeyBudget(rrBudget, reqBudget)
+	if rrBudget.Code != http.StatusOK {
+		t.Fatalf("APIKeyBudget returned status %d, want 200", rrBudget.Code)
+	}
+
+	// Fetch updated key
+	updatedKey, err := repo.GetAPIKeyByKey(ctx, key.Key)
+	if err != nil {
+		t.Fatalf("GetAPIKeyByKey failed: %v", err)
+	}
+	if updatedKey.MaxTokensLimit != 500000 {
+		t.Errorf("expected MaxTokensLimit 500000, got %d", updatedKey.MaxTokensLimit)
+	}
+	if updatedKey.DailyTokenQuota != 50000 {
+		t.Errorf("expected DailyTokenQuota 50000, got %d", updatedKey.DailyTokenQuota)
+	}
+	if updatedKey.AllowedIPs != "172.16.0.0/12, 127.0.0.1" {
+		t.Errorf("expected AllowedIPs '172.16.0.0/12, 127.0.0.1', got %q", updatedKey.AllowedIPs)
+	}
+}

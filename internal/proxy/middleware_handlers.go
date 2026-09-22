@@ -47,6 +47,11 @@ func (m *AuthMiddleware) Handle(ctx *PipelineContext, next NextFunc) error {
 		return nil
 	}
 
+	if !key.IsIPAllowed(ctx.ClientIP) {
+		ctx.WriteJSONError(http.StatusForbidden, fmt.Sprintf("Client IP %s is not permitted for this API key.", ctx.ClientIP), "unauthorized_client_ip")
+		return nil
+	}
+
 	ctx.APIKey = key
 	ctx.User = user
 	return next(ctx)

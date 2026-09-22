@@ -516,6 +516,7 @@ type CreateKeyInput struct {
 	Name            string
 	CustomKey       string
 	AllowedModels   string
+	AllowedIPs     string
 	RateLimitRPM    int
 	MaxTokensLimit  int
 	DailyTokenQuota int
@@ -560,6 +561,7 @@ func (s *KeyService) CreateKey(ctx context.Context, in CreateKeyInput) (*entity.
 	}
 
 	allowedModels := normalizeAllowedModels(in.AllowedModels)
+	allowedIPs := strings.TrimSpace(in.AllowedIPs)
 
 	key := &entity.APIKey{
 		ID:              uuid.New().String(),
@@ -567,6 +569,7 @@ func (s *KeyService) CreateKey(ctx context.Context, in CreateKeyInput) (*entity.
 		Key:             finalKey,
 		Name:            name,
 		AllowedModels:   allowedModels,
+		AllowedIPs:     allowedIPs,
 		RateLimitRPM:    rateLimitRPM,
 		MaxTokensLimit:  maxTokensLimit,
 		DailyTokenQuota: dailyQuota,

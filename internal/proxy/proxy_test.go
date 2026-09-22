@@ -252,3 +252,73 @@ func TestGatewayProxy_MockCoreClient_GetModels(t *testing.T) {
 		t.Errorf("expected model 'ag/gemini-3.8-flash', got '%v'", resp.Data[0]["id"])
 	}
 }
+
+func TestAPIKey_IsIPAllowed(t *testing.T) {
+	// Nil key -> allowed
+	var nilKey *entity.APIKey
+	if !nilKey.IsIPAllowed("127.0.0.1") {
+		t.Error("nil key should allow all IPs")
+	}
+
+	// Empty AllowedIPs -> allows all
+	kEmpty := &entity.APIKey{AllowedIPs: ""}
+	if !kEmpty.IsIPAllowed("192.168.1.50") {
+		t.Error("empty AllowedIPs should allow any IP")
+	}
+
+	// Single exact IPv4
+	kSingle := &entity.APIKey{AllowedIPs: "192.168.1.10"}
+	if !kSingle.IsIPAllowed("192.168.1.10") {
+		t.Error("expected exact IP match to be allowed")
+	}
+	if !kSingle.IsIPAllowed("192.168.1.10:8080") {
+		t.Error("expected exact IP with port to be allowed")
+	}
+	if kSingle.IsIPAllowed("192.168.1.11") {
+		t.Error("expected non-matching IP to be blocked")
+	}
+
+	// Multiple IPs with comma and whitespace
+	kMulti := &entity.APIKey{AllowedIPs: "127.0.0.1, 192.168.1.100, 10.0.0.5"}
+	if !kMulti.IsIPAllowed("127.0.0.1") || !kMulti.IsIPAllowed("192.168.1.100") || !kMulti.IsIPAllowed("10.0.0.5") {
+		t.Error("expected all listed IPs to be allowed")
+	}
+	if kMulti.IsIPAllowed("10.0.0.6") {
+		t.Error("expected unlisted IP to be blocked")
+	}
+
+	// CIDR block (IPv4)
+	kCIDR := &entity.APIKey{AllowedIPs: "10.0.0.0/24, 192.168.0.0/16"}
+	if !kCIDR.IsIPAllowed("10.0.0.1") || !kCIDR.IsIPAllowed("10.0.0.254") {
+		t.Error("expected IP inside 10.0.0.0/24 to be allowed")
+	}
+	if !kCIDR.IsIPAllowed("192.168.10.20") {
+		t.Error("expected IP inside 192.168.0.0/16 to be allowed")
+	}
+	if kCIDR.IsIPAllowed("10.0.1.1") {
+		t.Error("expected IP outside CIDR to be blocked")
+	}
+
+	// IPv6 exact & CIDR
+	kIPv6 := &entity.APIKey{AllowedIPs: "2001:db8::1, 2001:db8:abcd::/48"}
+	if !kIPv6.IsIPAllowed("2001:db8::1") {
+		t.Error("expected exact IPv6 match")
+	}
+	if !kIPv6.IsIPAllowed("[2001:db8::1]:443") {
+		t.Error("expected exact IPv6 with port and brackets")
+	}
+	if !kIPv6.IsIPAllowed("2001:db8:abcd:1234::1") {
+		t.Error("expected IPv6 inside CIDR to be allowed")
+	}
+	if kIPv6.IsIPAllowed("2001:db8:ffff::1") {
+		t.Error("expected IPv6 outside CIDR to be blocked")
+	}
+
+	// Invalid inputs
+	if kCIDR.IsIPAllowed("") {
+		t.Error("empty client IP should be blocked when restrictions exist")
+	}
+	if kCIDR.IsIPAllowed("invalid-ip-string") {
+		t.Error("invalid client IP should be blocked")
+	}
+}

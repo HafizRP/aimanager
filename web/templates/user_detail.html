@@ -319,6 +319,9 @@
             <tr>
               <td>
                 <span class="fw-bold text-light">{{ .Name }}</span>
+                {{ if and .AllowedIPs (ne .AllowedIPs "") }}
+                  <span class="badge-modern badge-cyan font-monospace ms-1" style="font-size: 0.65rem;" title="Allowed IPs: {{ .AllowedIPs }}"><i class="bi bi-shield-check"></i> IP Bound</span>
+                {{ end }}
               </td>
               <td>
                 <div class="d-flex align-items-center gap-2">
@@ -668,6 +671,11 @@
             <label class="form-label small text-muted">Custom Key (Optional)</label>
             <input type="text" name="custom_key" class="form-control form-control-modern font-monospace" placeholder="Leave empty for auto sk-gw-...">
             <div class="text-dim small mt-1">If blank, a secure <code>sk-gw-...</code> key will be generated and synced to 9router Core.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small text-muted">Allowed IPs / CIDRs (Optional)</label>
+            <input type="text" name="allowed_ips" class="form-control form-control-modern font-monospace" placeholder="e.g. 192.168.1.5, 10.0.0.0/24 (Leave blank for any IP)">
+            <div class="text-dim small mt-1">Restrict key usage to specific client IP addresses or CIDR subnets. Comma-separated.</div>
           </div>
           <div class="mb-3">
             <label class="form-label small text-muted">Expires At (Optional)</label>

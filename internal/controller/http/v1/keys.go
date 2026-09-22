@@ -139,6 +139,7 @@ func (h *Handler) CreateKey(w http.ResponseWriter, r *http.Request) {
 		Name:            strings.TrimSpace(r.FormValue("name")),
 		CustomKey:       strings.TrimSpace(r.FormValue("custom_key")),
 		AllowedModels:   strings.TrimSpace(r.FormValue("allowed_models")),
+		AllowedIPs:     strings.TrimSpace(r.FormValue("allowed_ips")),
 		RateLimitRPM:    rateLimitRPM,
 		MaxTokensLimit:  maxTokensLimit,
 		DailyTokenQuota: dailyQuota,

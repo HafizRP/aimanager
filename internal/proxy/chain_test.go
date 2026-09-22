@@ -7,7 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"9router-gateway/internal/database"
 	"9router-gateway/internal/entity"
+	"9router-gateway/internal/repository"
 )
 
 type dummyStepMiddleware struct {
@@ -135,5 +137,87 @@ func TestRateLimitMiddleware_Chain(t *testing.T) {
 	}
 	if w2.Code != http.StatusTooManyRequests {
 		t.Errorf("expected 429 Too Many Requests, got %d", w2.Code)
+	}
+}
+
+func TestAuthMiddleware_IPWhitelist(t *testing.T) {
+	// Setup repo with user and key having AllowedIPs
+	db, err := database.InitDB(":memory:")
+	if err != nil {
+		t.Fatalf("InitDB failed: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+	ctx := context.Background()
+
+	user := &entity.User{
+		ID:           "u-ip-test",
+		Username:     "iptest",
+		Name:         "IP Test",
+		PasswordHash: "hash123",
+		Role:         "user",
+		IsActive:     true,
+	}
+	if err := repo.CreateUser(ctx, user); err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+
+	key := &entity.APIKey{
+		ID:         "k-ip-test",
+		UserID:     user.ID,
+		Key:        "sk-gw-iptest12345",
+		Name:       "IP Test Key",
+		AllowedIPs: "192.168.1.50, 10.0.0.0/24",
+		IsActive:   true,
+	}
+	if err := repo.CreateAPIKey(ctx, key); err != nil {
+		t.Fatalf("CreateAPIKey failed: %v", err)
+	}
+
+	mw := NewAuthMiddleware(repo)
+
+	// Allowed IP (192.168.1.50)
+	w1 := httptest.NewRecorder()
+	req1 := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	ctx1 := &PipelineContext{
+		Context:   ctx,
+		Writer:    w1,
+		Request:   req1,
+		RawAPIKey: key.Key,
+		ClientIP:  "192.168.1.50",
+	}
+	allowedProceeded := false
+	_ = mw.Handle(ctx1, func(c *PipelineContext) error {
+		allowedProceeded = true
+		return nil
+	})
+	if !allowedProceeded {
+		t.Fatal("expected request from allowed IP to proceed")
+	}
+
+	// Blocked IP (203.0.113.10)
+	w2 := httptest.NewRecorder()
+	req2 := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
+	ctx2 := &PipelineContext{
+		Context:   ctx,
+		Writer:    w2,
+		Request:   req2,
+		RawAPIKey: key.Key,
+		ClientIP:  "203.0.113.10",
+	}
+	blockedProceeded := false
+	_ = mw.Handle(ctx2, func(c *PipelineContext) error {
+		blockedProceeded = true
+		return nil
+	})
+	if blockedProceeded {
+		t.Fatal("expected request from unauthorized IP to be blocked")
+	}
+	if w2.Code != http.StatusForbidden {
+		t.Errorf("expected 403 Forbidden, got %d", w2.Code)
+	}
+	if ctx2.ErrorType != "unauthorized_client_ip" {
+		t.Errorf("expected errorType 'unauthorized_client_ip', got %q", ctx2.ErrorType)
 	}
 }

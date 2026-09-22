@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -51,11 +52,12 @@ func (h *Handler) APIRadarEvents(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, events)
 }
 
-// APIKeyBudget updates a key's lifetime + daily budgets.
+// APIKeyBudget updates a key's lifetime + daily budgets and allowed IP restrictions.
 func (h *Handler) APIKeyBudget(w http.ResponseWriter, r *http.Request) {
 	var payload struct {
-		MaxTokensLimit  int `json:"max_tokens_limit"`
-		DailyTokenQuota int `json:"daily_token_quota"`
+		MaxTokensLimit  int    `json:"max_tokens_limit"`
+		DailyTokenQuota int    `json:"daily_token_quota"`
+		AllowedIPs      string `json:"allowed_ips"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
@@ -67,7 +69,8 @@ func (h *Handler) APIKeyBudget(w http.ResponseWriter, r *http.Request) {
 	if payload.DailyTokenQuota < 0 {
 		payload.DailyTokenQuota = 0
 	}
-	if err := h.repo.UpdateKeyBudgets(r.Context(), chi.URLParam(r, "id"), payload.MaxTokensLimit, payload.DailyTokenQuota); err != nil {
+	payload.AllowedIPs = strings.TrimSpace(payload.AllowedIPs)
+	if err := h.repo.UpdateKeyRestrictions(r.Context(), chi.URLParam(r, "id"), payload.MaxTokensLimit, payload.DailyTokenQuota, payload.AllowedIPs); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

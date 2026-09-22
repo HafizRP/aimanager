@@ -61,6 +61,7 @@ func migrate(db *sql.DB) error {
 		user_id TEXT NOT NULL,
 		key TEXT UNIQUE NOT NULL,
 		name TEXT NOT NULL,
+		allowed_ips TEXT,
 		is_active INTEGER NOT NULL DEFAULT 1,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		last_used_at DATETIME,
@@ -157,6 +158,7 @@ func migrate(db *sql.DB) error {
 	_, _ = db.Exec(`ALTER TABLE users ADD COLUMN rate_limit_rpm INTEGER DEFAULT 0;`)
 	_, _ = db.Exec(`ALTER TABLE users ADD COLUMN rate_limit_tpm INTEGER DEFAULT 0;`)
 	_, _ = db.Exec(`ALTER TABLE api_keys ADD COLUMN allowed_models TEXT DEFAULT '';`)
+	_, _ = db.Exec(`ALTER TABLE api_keys ADD COLUMN allowed_ips TEXT DEFAULT '';`)
 	_, _ = db.Exec(`ALTER TABLE api_keys ADD COLUMN rate_limit_rpm INTEGER DEFAULT 0;`)
 	_, _ = db.Exec(`ALTER TABLE api_keys ADD COLUMN expires_at DATETIME;`)
 	_, _ = db.Exec(`ALTER TABLE api_keys ADD COLUMN last_used_ip TEXT DEFAULT '';`)

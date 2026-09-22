@@ -139,6 +139,21 @@ func (f *fakeStore) DeleteAPIKey(ctx context.Context, id string) error {
 func (f *fakeStore) UpdateKeyLastUsed(ctx context.Context, id string, ip string) error { return nil }
 func (f *fakeStore) UpdateKeyTokenUsage(ctx context.Context, id string, tokens int) error { return nil }
 func (f *fakeStore) GetAPIKeyTokenUsage(ctx context.Context, id string) (int64, error) { return 0, nil }
+func (f *fakeStore) UpdateKeyBudgets(ctx context.Context, id string, maxTokensLimit, dailyQuota int) error {
+	if k, ok := f.keys[id]; ok {
+		k.MaxTokensLimit = maxTokensLimit
+		k.DailyTokenQuota = dailyQuota
+	}
+	return nil
+}
+func (f *fakeStore) UpdateKeyRestrictions(ctx context.Context, id string, maxTokensLimit, dailyQuota int, allowedIPs string) error {
+	if k, ok := f.keys[id]; ok {
+		k.MaxTokensLimit = maxTokensLimit
+		k.DailyTokenQuota = dailyQuota
+		k.AllowedIPs = allowedIPs
+	}
+	return nil
+}
 
 // RequestLogStore
 func (f *fakeStore) CreateRequestLog(ctx context.Context, l *entity.RequestLog) error { return nil }
@@ -427,7 +442,7 @@ func TestKeyService_CreateKey(t *testing.T) {
 
 	exp := time.Now().Add(24 * time.Hour)
 	k, err := svc.CreateKey(context.Background(), CreateKeyInput{
-		UserID: "u1", Name: "Test Key", RateLimitRPM: 10, ExpiresAt: &exp,
+		UserID: "u1", Name: "Test Key", RateLimitRPM: 10, AllowedIPs: "192.168.1.100, 10.0.0.0/8", ExpiresAt: &exp,
 	})
 	if err != nil {
 		t.Fatalf("CreateKey failed: %v", err)
@@ -435,7 +450,7 @@ func TestKeyService_CreateKey(t *testing.T) {
 	if !strings.HasPrefix(k.Key, "sk-gw-") {
 		t.Errorf("expected sk-gw- prefix, got %s", k.Key)
 	}
-	if k.RateLimitRPM != 10 || k.ExpiresAt == nil {
+	if k.RateLimitRPM != 10 || k.ExpiresAt == nil || k.AllowedIPs != "192.168.1.100, 10.0.0.0/8" {
 		t.Errorf("unexpected key: %+v", k)
 	}
 
