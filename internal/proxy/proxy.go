@@ -121,6 +121,20 @@ func (p *GatewayProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 1ab. Client IP Whitelist Enforcement
+	if !key.IsIPAllowed(clientIP) {
+		msg := fmt.Sprintf("Client IP %s is not permitted for this API key.", clientIP)
+		p.writeJSONError(w, http.StatusForbidden, msg, "unauthorized_client_ip")
+		_ = p.repo.CreateSecurityEvent(ctx, &entity.SecurityEvent{
+			Kind:     "ip_blocked",
+			UserID:   user.ID,
+			APIKeyID: key.ID,
+			Detail:   msg,
+			Action:   "blocked",
+		})
+		return
+	}
+
 	// 1b. Rate Limiting Check (Key-level & User-level)
 	if key.RateLimitRPM > 0 {
 		allowed, msg := p.rateLimiter.Allow("key:"+key.ID, key.RateLimitRPM, 0, 0)

@@ -7,6 +7,7 @@ package entity
 
 import (
 	"encoding/json"
+	"net"
 	"strings"
 	"time"
 )
@@ -72,6 +73,7 @@ type APIKey struct {
 	Key            string     `json:"key"`
 	Name           string     `json:"name"`
 	AllowedModels  string     `json:"allowed_models"` // Optional model scope
+	AllowedIPs     string     `json:"allowed_ips"`    // Optional IP/CIDR whitelist (comma/newline-separated)
 	RateLimitRPM   int        `json:"rate_limit_rpm"`
 	MaxTokensLimit int        `json:"max_tokens_limit"` // Lifetime token budget; 0 = unlimited
 	DailyTokenQuota int       `json:"daily_token_quota"`  // WIB-day budget; 0 = unlimited
@@ -92,6 +94,54 @@ func (k *APIKey) IsExpired() bool {
 		return false
 	}
 	return !k.ExpiresAt.IsZero() && time.Now().After(*k.ExpiresAt)
+}
+
+// IsIPAllowed checks if a client IP is permitted to use this key.
+// Returns true if AllowedIPs is empty/unrestricted or if clientIP matches any allowed IP or CIDR subnet.
+func (k *APIKey) IsIPAllowed(clientIP string) bool {
+	if k == nil {
+		return true
+	}
+	allowedList := strings.TrimSpace(k.AllowedIPs)
+	if allowedList == "" {
+		return true
+	}
+	rawIP := strings.TrimSpace(clientIP)
+	if rawIP == "" {
+		return false
+	}
+	// Strip port if present (e.g. "192.168.1.1:8080" or "[2001:db8::1]:8080")
+	if host, _, err := net.SplitHostPort(rawIP); err == nil {
+		rawIP = host
+	}
+	// Clean brackets from IPv6 (e.g. "[2001:db8::1]")
+	rawIP = strings.Trim(rawIP, "[]")
+	ip := net.ParseIP(rawIP)
+	if ip == nil {
+		return false
+	}
+
+	entries := strings.FieldsFunc(allowedList, func(r rune) bool {
+		return r == ',' || r == ';' || r == '\n' || r == '\r' || r == ' ' || r == '	'
+	})
+	for _, entry := range entries {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		if strings.Contains(entry, "/") {
+			_, cidrNet, err := net.ParseCIDR(entry)
+			if err == nil && cidrNet.Contains(ip) {
+				return true
+			}
+		} else {
+			allowedIP := net.ParseIP(strings.Trim(entry, "[]"))
+			if allowedIP != nil && allowedIP.Equal(ip) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // GetAllowedModels returns the parsed allowed model list; nil means unrestricted.

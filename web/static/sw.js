@@ -1,14 +1,14 @@
 /* AI Manager service worker: offline shell for static assets, network-first for pages/API. */
-const CACHE = 'aimanager-static-v3';
+const CACHE = 'aimanager-static-v4';
 const CORE = [
-  '/static/css/custom.css?v=18',
-  '/static/js/app.js?v=9',
+  '/',
+  '/static/css/custom.css?v=19',
+  '/manifest.webmanifest',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
-  '/static/icons/icon-maskable-512.png',
   '/static/icons/apple-touch-icon.png',
   '/static/icons/favicon-32.png',
-  '/static/icons/favicon.ico',
+  '/static/icons/favicon-16.png'
 ];
 
 self.addEventListener('install', (event) => {

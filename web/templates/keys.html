@@ -55,11 +55,16 @@
                 </div>
               </td>
               <td>
-                {{ if and .AllowedModels (ne .AllowedModels "") (ne .AllowedModels "[]") }}
-                  <span class="badge-modern badge-indigo font-monospace" style="font-size: 0.68rem;" title="{{ .AllowedModels }}">Scoped</span>
-                {{ else }}
-                  <span class="badge-modern badge-gray text-dim" style="font-size: 0.68rem;">All Allowed</span>
-                {{ end }}
+                <div class="d-flex flex-column gap-1">
+                  {{ if and .AllowedModels (ne .AllowedModels "") (ne .AllowedModels "[]") }}
+                    <span class="badge-modern badge-indigo font-monospace" style="font-size: 0.68rem;" title="{{ .AllowedModels }}">Scoped</span>
+                  {{ else }}
+                    <span class="badge-modern badge-gray text-dim" style="font-size: 0.68rem;">All Models</span>
+                  {{ end }}
+                  {{ if and .AllowedIPs (ne .AllowedIPs "") }}
+                    <span class="badge-modern badge-cyan font-monospace" style="font-size: 0.68rem;" title="Allowed IPs: {{ .AllowedIPs }}"><i class="bi bi-shield-check"></i> IP Bound</span>
+                  {{ end }}
+                </div>
               </td>
               <td>
                 {{ if gt .MaxTokensLimit 0 }}
@@ -112,11 +117,11 @@
               </td>
               <td class="text-end">
                 <div class="d-flex justify-content-end gap-1">
-                  <!-- Edit Budgets -->
+                  <!-- Edit Budgets & Restrictions -->
                   <button type="button" class="btn-modern-ghost py-1 px-2 text-info btn-edit-budget"
-                          data-id="{{ .ID }}" data-max="{{ .MaxTokensLimit }}" data-daily="{{ .DailyTokenQuota }}"
-                          data-bs-toggle="modal" data-bs-target="#budgetModal" title="Edit Budgets">
-                    <i class="bi bi-piggy-bank"></i>
+                          data-id="{{ .ID }}" data-max="{{ .MaxTokensLimit }}" data-daily="{{ .DailyTokenQuota }}" data-ips="{{ .AllowedIPs }}"
+                          data-bs-toggle="modal" data-bs-target="#budgetModal" title="Edit Budgets & Restrictions">
+                    <i class="bi bi-shield-lock"></i>
                   </button>
                   <!-- Toggle Status -->
                   <form action="/keys/{{ .ID }}/toggle" method="POST" class="d-inline m-0">
@@ -184,6 +189,11 @@
             <div class="text-dim small mt-1">Restrict this key to specific models. Leave blank to inherit user's whitelist.</div>
           </div>
           <div class="mb-3">
+            <label class="form-label small text-muted">Allowed IPs / CIDRs (Optional)</label>
+            <input type="text" name="allowed_ips" class="form-control form-control-modern font-monospace" placeholder="e.g. 192.168.1.5, 10.0.0.0/24 (Leave blank for any IP)">
+            <div class="text-dim small mt-1">Restrict key usage to specific client IP addresses or CIDR subnets. Comma-separated.</div>
+          </div>
+          <div class="mb-3">
             <label class="form-label small text-muted">Rate Limit RPM (Requests / Minute)</label>
             <input type="number" name="rate_limit_rpm" class="form-control form-control-modern font-monospace" placeholder="0 = Unlimited" value="0" min="0" max="1000">
           </div>
@@ -223,7 +233,7 @@
     <div class="modal-content modal-content-modern">
       <div class="modal-header modal-header-modern">
         <h5 class="modal-title fw-bold text-light d-flex align-items-center gap-2">
-          <i class="bi bi-piggy-bank text-info"></i> Edit Key Budgets
+          <i class="bi bi-shield-lock text-info"></i> Edit Key Budgets & Restrictions
         </h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
@@ -235,6 +245,11 @@
         <div class="mb-3">
           <label class="form-label small text-muted">Daily Budget WIB (0 = Unlimited)</label>
           <input type="number" id="budgetDaily" class="form-control form-control-modern font-monospace" min="0">
+        </div>
+        <div class="mb-3">
+          <label class="form-label small text-muted">Allowed IPs / CIDRs (Optional)</label>
+          <input type="text" id="budgetIPs" class="form-control form-control-modern font-monospace" placeholder="e.g. 192.168.1.5, 10.0.0.0/24 (Leave blank for any IP)">
+          <div class="text-dim small mt-1">Restrict key usage to specific client IP addresses or CIDR subnets. Comma-separated.</div>
         </div>
         <div id="budgetMsg"></div>
       </div>
@@ -252,6 +267,7 @@ document.querySelectorAll(".btn-edit-budget").forEach(btn => {
     budgetKeyId = this.getAttribute("data-id");
     document.getElementById("budgetMax").value = this.getAttribute("data-max") || 0;
     document.getElementById("budgetDaily").value = this.getAttribute("data-daily") || 0;
+    document.getElementById("budgetIPs").value = this.getAttribute("data-ips") || "";
     document.getElementById("budgetMsg").innerHTML = "";
   });
 });
@@ -262,7 +278,8 @@ async function saveBudget() {
       method: "POST", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({
         max_tokens_limit: parseInt(document.getElementById("budgetMax").value, 10) || 0,
-        daily_token_quota: parseInt(document.getElementById("budgetDaily").value, 10) || 0
+        daily_token_quota: parseInt(document.getElementById("budgetDaily").value, 10) || 0,
+        allowed_ips: document.getElementById("budgetIPs").value.trim()
       })
     });
     if (!res.ok) throw new Error("Save failed");
