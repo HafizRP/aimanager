@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -225,4 +226,66 @@ func (h *Handler) DeleteKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, redirectURL+"?msg=API+key+revoked+and+deleted", http.StatusSeeOther)
+}
+
+// ResetKeyUsage zeroes an API key's token usage counter.
+func (h *Handler) ResetKeyUsage(w http.ResponseWriter, r *http.Request) {
+	keyID := chi.URLParam(r, "id")
+	ctx := r.Context()
+	currentUser := GetUserFromContext(ctx)
+
+	redirectURL := safeRedirectURL(r.URL.Query().Get("redirect"), "")
+	if redirectURL == "" {
+		redirectURL = safeRedirectURL(r.FormValue("redirect"), "/keys")
+	}
+
+	isJSON := strings.Contains(r.Header.Get("Accept"), "application/json") || strings.HasPrefix(r.URL.Path, "/api/")
+
+	// Ownership enforcement (admin can reset any key, standard user can only reset own key)
+	if currentUser != nil && !currentUser.IsAdmin() {
+		keys, _ := h.repo.GetAllAPIKeys(ctx)
+		owned := false
+		for _, k := range keys {
+			if k.ID == keyID && k.UserID == currentUser.ID {
+				owned = true
+				break
+			}
+		}
+		if !owned {
+			if isJSON {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusForbidden)
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
+					"error": "Permission denied",
+				})
+				return
+			}
+			http.Redirect(w, r, redirectURL+"?error=Permission+denied", http.StatusSeeOther)
+			return
+		}
+	}
+
+	if err := h.keys.ResetKeyUsage(ctx, keyID); err != nil {
+		if isJSON {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": err.Error(),
+			})
+			return
+		}
+		http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+
+	if isJSON {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"message": "Key token usage counter reset to 0",
+		})
+		return
+	}
+
+	http.Redirect(w, r, redirectURL+"?msg="+url.QueryEscape("API key token usage reset to 0"), http.StatusSeeOther)
 }

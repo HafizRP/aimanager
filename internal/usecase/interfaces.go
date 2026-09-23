@@ -33,6 +33,7 @@ type (
 		UpdateKeyLastUsed(ctx context.Context, id string, ip string) error
 		UpdateKeyBudgets(ctx context.Context, id string, maxTokensLimit, dailyQuota int) error
 		UpdateKeyRestrictions(ctx context.Context, id string, maxTokensLimit, dailyQuota int, allowedIPs string) error
+		ResetKeyUsage(ctx context.Context, id string) error
 	}
 
 	RequestLogStore interface {
