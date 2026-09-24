@@ -40,9 +40,15 @@
       <button type="button" class="btn-modern-ghost btn-sm py-1.5 px-2.5 d-inline-flex align-items-center gap-1.5" data-bs-toggle="offcanvas" data-bs-target="#chatHistoryOffcanvas">
         <i class="bi bi-clock-history"></i> <span class="d-none d-md-inline">History</span>
       </button>
-      <button type="button" class="btn-modern-ghost btn-sm py-1.5 px-2.5 d-inline-flex align-items-center gap-1.5" onclick="exportMarkdown()" title="Export current chat as Markdown">
-        <i class="bi bi-download"></i> <span class="d-none d-md-inline">Export MD</span>
-      </button>
+      <div class="dropdown">
+        <button type="button" class="btn-modern-ghost btn-sm py-1.5 px-2.5 d-inline-flex align-items-center gap-1.5 dropdown-toggle" data-bs-toggle="dropdown" title="Export conversation">
+          <i class="bi bi-download"></i> <span class="d-none d-md-inline">Export</span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end shadow-sm" style="font-size: 0.85rem;">
+          <li><button class="dropdown-item d-flex align-items-center gap-2" type="button" onclick="exportMarkdown()"><i class="bi bi-filetype-md text-primary"></i> Export Markdown (.md)</button></li>
+          <li><button class="dropdown-item d-flex align-items-center gap-2" type="button" onclick="exportCurrentSessionJSON()"><i class="bi bi-filetype-json text-cyan"></i> Export Session (.json)</button></li>
+        </ul>
+      </div>
       <button type="button" class="btn-modern-ghost btn-sm py-1.5 px-2.5 d-inline-flex align-items-center gap-1.5" data-bs-toggle="collapse" data-bs-target="#systemPromptCollapse">
         <i class="bi bi-sliders"></i> <span class="d-none d-md-inline">System</span>
       </button>
@@ -60,10 +66,19 @@
       </h6>
       <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"></button>
     </div>
-    <div class="p-3 border-bottom border-secondary border-opacity-10">
+    <div class="p-3 border-bottom border-secondary border-opacity-10 d-flex flex-column gap-2">
       <button type="button" class="btn-modern-primary w-100 py-1.5 d-inline-flex align-items-center justify-content-center gap-2" onclick="startNewSession(); bootstrap.Offcanvas.getInstance(document.getElementById('chatHistoryOffcanvas')).hide();">
         <i class="bi bi-plus-lg"></i> New Conversation
       </button>
+      <div class="d-flex gap-1.5">
+        <button type="button" class="btn-modern-ghost btn-sm flex-grow-1 py-1 font-monospace text-dim" style="font-size: 0.72rem;" onclick="exportAllSessionsJSON()" title="Export all sessions as JSON">
+          <i class="bi bi-download"></i> Backup JSON
+        </button>
+        <button type="button" class="btn-modern-ghost btn-sm flex-grow-1 py-1 font-monospace text-dim" style="font-size: 0.72rem;" onclick="document.getElementById('importSessionsFileInput').click()" title="Import sessions from JSON">
+          <i class="bi bi-upload"></i> Import JSON
+        </button>
+        <input type="file" id="importSessionsFileInput" accept=".json" class="d-none" onchange="handleImportSessions(event)">
+      </div>
     </div>
     <div class="offcanvas-body p-2 d-flex flex-column gap-1" id="savedSessionsContainer" style="overflow-y: auto;">
       <!-- Populated via JS -->
@@ -73,6 +88,22 @@
   <!-- System Prompt Collapse -->
   <div class="collapse mb-3" id="systemPromptCollapse">
     <div class="card-modern p-3">
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2 pb-2 border-bottom border-secondary border-opacity-10">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <span class="badge-modern badge-indigo font-monospace" style="font-size: 0.68rem;"><i class="bi bi-lightning-charge-fill"></i> Presets</span>
+          <div class="d-flex flex-wrap align-items-center gap-1" id="presetChipsContainer">
+            <!-- Populated via JS -->
+          </div>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <button type="button" class="btn btn-sm btn-modern-ghost text-primary py-0.5 px-2 font-monospace" style="font-size: 0.72rem;" onclick="saveCurrentAsCustomPreset()" title="Save current system instructions and temperature as a custom preset">
+            <i class="bi bi-bookmark-plus"></i> Save Preset
+          </button>
+          <button type="button" class="btn btn-sm btn-modern-ghost text-muted py-0.5 px-2 font-monospace" style="font-size: 0.72rem;" onclick="resetSystemPrompt()" title="Reset to default">
+            <i class="bi bi-arrow-counterclockwise"></i> Reset
+          </button>
+        </div>
+      </div>
       <div class="row g-3">
         <div class="col-12 col-md-8">
           <label class="form-label small text-muted mb-1 font-monospace" style="font-size: 0.72rem;">SYSTEM INSTRUCTIONS</label>
@@ -260,6 +291,262 @@ function exportMarkdown() {
   URL.revokeObjectURL(url);
 }
 
+function exportCurrentSessionJSON() {
+  let sess = savedSessions.find(s => s.id === currentSessionId);
+  if (!sess && chatMessages.length > 0) {
+    sess = {
+      id: currentSessionId,
+      title: chatMessages[0] ? chatMessages[0].content.substring(0, 32) : 'Chat',
+      model: document.getElementById('chatModelSelect').value,
+      createdAt: new Date().toISOString(),
+      messages: chatMessages
+    };
+  }
+  if (!sess || !sess.messages || sess.messages.length === 0) {
+    alert('No messages in current session to export.');
+    return;
+  }
+  const blob = new Blob([JSON.stringify(sess, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `chat_session_${currentSessionId}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  if (window.showToast) window.showToast('Session exported as JSON! ✨', '💾');
+}
+
+function exportAllSessionsJSON() {
+  if (savedSessions.length === 0) {
+    alert('No saved chat sessions to backup.');
+    return;
+  }
+  const payload = {
+    app: "aimanager",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    sessions: savedSessions
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `aimanager_chat_backup_${Date.now()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  if (window.showToast) window.showToast('All sessions backed up! ✨', '💾');
+}
+
+function handleImportSessions(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = JSON.parse(e.target.result);
+      let importedList = [];
+      if (Array.isArray(data)) {
+        importedList = data;
+      } else if (data && Array.isArray(data.sessions)) {
+        importedList = data.sessions;
+      } else if (data && data.messages && Array.isArray(data.messages)) {
+        importedList = [data];
+      } else {
+        throw new Error('Unrecognized session JSON format.');
+      }
+      let count = 0;
+      importedList.forEach(item => {
+        if (!item || !Array.isArray(item.messages) || item.messages.length === 0) return;
+        const newId = 'session_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+        savedSessions.unshift({
+          id: item.id || newId,
+          title: item.title || (item.messages[0] ? item.messages[0].content.substring(0, 32) : 'Imported Chat'),
+          model: item.model || 'main',
+          createdAt: item.createdAt || new Date().toISOString(),
+          messages: item.messages
+        });
+        count++;
+      });
+      // Deduplicate by id
+      const seen = new Set();
+      savedSessions = savedSessions.filter(s => {
+        if (seen.has(s.id)) return false;
+        seen.add(s.id);
+        return true;
+      });
+      saveSessions();
+      if (window.showToast) window.showToast(`Imported ${count} chat session(s)! ✨`, '📥');
+      if (count > 0 && savedSessions[0]) {
+        switchSession(savedSessions[0].id);
+      }
+    } catch (err) {
+      alert('Failed to import JSON: ' + err.message);
+    }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+// System Presets Engine
+const BUILTIN_PRESETS = [
+  {
+    id: 'general',
+    name: 'General',
+    icon: '🤖',
+    temp: 0.7,
+    prompt: 'You are a helpful, concise, and accurate AI assistant.'
+  },
+  {
+    id: 'ultra_terse',
+    name: 'Ultra-Terse',
+    icon: '⚡',
+    temp: 0.2,
+    prompt: 'Respond ultra-terse. Maximum compression. Telegraphic. Strip conjunctions. Code first. No filler, no apologies. Format: [thing] [action] [reason].'
+  },
+  {
+    id: 'code_reviewer',
+    name: 'Code Reviewer',
+    icon: '💻',
+    temp: 0.3,
+    prompt: 'You are an expert software engineer and code reviewer. Analyze code for performance, security vulnerabilities, edge cases, idiomatic architecture, and memory leaks. Provide concise, actionable suggestions with improved snippets.'
+  },
+  {
+    id: 'security_auditor',
+    name: 'Pentest Auditor',
+    icon: '🛡️',
+    temp: 0.2,
+    prompt: 'You are a certified security researcher and penetration testing specialist. Assess endpoints, payloads, authentication mechanisms, and architecture according to OWASP Top 10 and CWE standards. Provide exact remediation code.'
+  },
+  {
+    id: 'indo_translator',
+    name: 'ID/EN Translator',
+    icon: '🌐',
+    temp: 0.3,
+    prompt: 'You are a professional bilingual translator specializing in natural, context-aware English to Indonesian and Indonesian to English translation. Preserve technical terms, code identifiers, and nuanced idioms accurately.'
+  },
+  {
+    id: 'sql_architect',
+    name: 'SQL Architect',
+    icon: '📊',
+    temp: 0.3,
+    prompt: 'You are a senior database architect. Write, optimize, and explain SQL queries, index structures, query execution plans, and schema designs for SQLite and PostgreSQL.'
+  },
+  {
+    id: 'json_generator',
+    name: 'Strict JSON',
+    icon: '📋',
+    temp: 0.1,
+    prompt: 'You are a strict JSON generator. Return ONLY valid, RFC 8259 JSON adhering strictly to the requested schema. Never include markdown code fences, comments, or preamble.'
+  }
+];
+
+let customPresets = [];
+function loadCustomPresets() {
+  try {
+    const raw = localStorage.getItem('aimanager_chat_presets');
+    if (raw) customPresets = JSON.parse(raw);
+  } catch (e) {}
+  if (!Array.isArray(customPresets)) customPresets = [];
+}
+
+function saveCustomPresets() {
+  try {
+    localStorage.setItem('aimanager_chat_presets', JSON.stringify(customPresets));
+  } catch (e) {}
+  renderPresetChips();
+}
+
+let activePresetId = null;
+function renderPresetChips() {
+  loadCustomPresets();
+  const container = document.getElementById('presetChipsContainer');
+  if (!container) return;
+  container.innerHTML = '';
+
+  BUILTIN_PRESETS.forEach(p => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    const isActive = activePresetId === p.id;
+    btn.className = `btn btn-sm py-0.5 px-2 font-monospace ${isActive ? 'btn-modern-primary' : 'btn-modern-ghost text-dim'}`;
+    btn.style.fontSize = '0.72rem';
+    btn.innerHTML = `${p.icon} ${p.name}`;
+    btn.title = p.prompt;
+    btn.onclick = () => applyPreset(p);
+    container.appendChild(btn);
+  });
+
+  customPresets.forEach((p, idx) => {
+    const btn = document.createElement('div');
+    btn.className = 'btn-group btn-group-sm';
+    const isActive = activePresetId === ('custom_' + idx);
+    btn.innerHTML = `
+      <button type="button" class="btn py-0.5 px-2 font-monospace ${isActive ? 'btn-modern-primary' : 'btn-modern-ghost text-cyan'}" style="font-size: 0.72rem;" title="${escapeHtml(p.prompt)}">
+        ⭐ ${escapeHtml(p.name)}
+      </button>
+      <button type="button" class="btn py-0.5 px-1.5 btn-modern-ghost text-rose" style="font-size: 0.65rem;" title="Delete custom preset">
+        <i class="bi bi-x"></i>
+      </button>
+    `;
+    btn.firstElementChild.onclick = () => applyPreset(p, 'custom_' + idx);
+    btn.lastElementChild.onclick = (e) => {
+      e.stopPropagation();
+      if (confirm(`Delete custom preset "${p.name}"?`)) {
+        customPresets.splice(idx, 1);
+        if (activePresetId === ('custom_' + idx)) activePresetId = null;
+        saveCustomPresets();
+      }
+    };
+    container.appendChild(btn);
+  });
+}
+
+function applyPreset(preset, customId) {
+  activePresetId = customId || preset.id;
+  const promptEl = document.getElementById('systemPrompt');
+  const tempRange = document.getElementById('tempRange');
+  const tempVal = document.getElementById('tempVal');
+  if (promptEl) promptEl.value = preset.prompt || '';
+  if (tempRange && preset.temp !== undefined) {
+    tempRange.value = preset.temp;
+    if (tempVal) tempVal.textContent = preset.temp;
+  }
+  renderPresetChips();
+  if (window.showToast) window.showToast(`Applied preset: ${preset.name} ✨`, preset.icon || '🎯');
+}
+
+function saveCurrentAsCustomPreset() {
+  const prompt = document.getElementById('systemPrompt').value.trim();
+  if (!prompt) {
+    alert('Please enter system instructions before saving as preset.');
+    return;
+  }
+  const temp = parseFloat(document.getElementById('tempRange').value) || 0.7;
+  const defaultName = prompt.substring(0, 16);
+  const name = promptFn = window.prompt('Enter name for custom preset:', defaultName);
+  if (!name || !name.trim()) return;
+  customPresets.push({
+    name: name.trim(),
+    prompt: prompt,
+    temp: temp
+  });
+  saveCustomPresets();
+  if (window.showToast) window.showToast(`Saved preset "${name.trim()}"! ✨`, '💾');
+}
+
+function resetSystemPrompt() {
+  activePresetId = null;
+  const promptEl = document.getElementById('systemPrompt');
+  const tempRange = document.getElementById('tempRange');
+  const tempVal = document.getElementById('tempVal');
+  if (promptEl) promptEl.value = '';
+  if (tempRange) {
+    tempRange.value = 0.7;
+    if (tempVal) tempVal.textContent = '0.7';
+  }
+  renderPresetChips();
+  if (window.showToast) window.showToast('System instructions reset to default', '🔄');
+}
+
 function autoResizeTextarea(el) {
   el.style.height = 'auto';
   el.style.height = Math.min(el.scrollHeight, 160) + 'px';
@@ -444,7 +731,12 @@ function appendMessageBubble(role, text, modelName) {
       <div class="p-3 rounded-3 flex-grow-1" style="max-width: 85%; background: rgba(16, 20, 32, 0.8); border: 1px solid var(--border-subtle); border-bottom-left-radius: 4px;">
         <div class="d-flex align-items-center justify-content-between mb-2">
           <span class="badge-modern badge-indigo font-monospace" style="font-size: 0.68rem;">${escapeHtml(modelName || 'Assistant')}</span>
-          <span class="msg-stats"></span>
+          <div class="d-flex align-items-center gap-1.5">
+            <button type="button" class="btn btn-sm btn-link p-0 text-dim text-decoration-none" onclick="copyBubbleText(this)" title="Copy message content">
+              <i class="bi bi-clipboard" style="font-size: 0.75rem;"></i>
+            </button>
+            <span class="msg-stats"></span>
+          </div>
         </div>
         <div class="msg-content text-break" style="font-size: 0.9rem; line-height: 1.6;">
           <span class="spinner-grow spinner-grow-sm text-primary" role="status"></span>
@@ -456,6 +748,20 @@ function appendMessageBubble(role, text, modelName) {
   container.appendChild(bubble);
   scrollToBottom();
   return bubble;
+}
+
+function copyBubbleText(btn) {
+  const bubble = btn.closest('.rounded-3');
+  if (!bubble) return;
+  const contentEl = bubble.querySelector('.msg-content');
+  if (!contentEl) return;
+  const text = contentEl.innerText || contentEl.textContent || '';
+  if (!text.trim()) return;
+  navigator.clipboard.writeText(text).then(() => {
+    if (window.showToast) window.showToast('Message copied! ✨', '📋');
+  }).catch(() => {
+    if (window.showToast) window.showToast('Failed to copy', '⚠️');
+  });
 }
 
 function escapeHtml(str) {
@@ -489,7 +795,8 @@ function renderMarkdownInto(element, rawText) {
   element.innerHTML = html;
 }
 
-// Initialize sessions on page load
+// Initialize sessions and presets on page load
 initSessions();
+renderPresetChips();
 </script>
 {{ end }}

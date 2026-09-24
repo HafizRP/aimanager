@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"9router-gateway/internal/entity"
+	"9router-gateway/internal/proxy"
 	"9router-gateway/internal/usecase"
 )
 
@@ -98,6 +99,7 @@ func (h *Handler) KeysPage(w http.ResponseWriter, r *http.Request) {
 		"Models":     allModels,
 		"SuccessMsg": successMsg,
 		"ErrorMsg":   errorMsg,
+		"ClientIP":   proxy.GetClientIP(r),
 	})
 }
 

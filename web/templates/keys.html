@@ -195,8 +195,15 @@
             <div class="text-dim small mt-1">Restrict this key to specific models. Leave blank to inherit user's whitelist.</div>
           </div>
           <div class="mb-3">
-            <label class="form-label small text-muted">Allowed IPs / CIDRs (Optional)</label>
-            <input type="text" name="allowed_ips" class="form-control form-control-modern font-monospace" placeholder="e.g. 192.168.1.5, 10.0.0.0/24 (Leave blank for any IP)">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <label class="form-label small text-muted mb-0">Allowed IPs / CIDRs (Optional)</label>
+              {{ if .ClientIP }}
+                <button type="button" class="btn btn-sm btn-link p-0 text-cyan text-decoration-none font-monospace" style="font-size: 0.72rem;" onclick="insertIP('create_allowed_ips', '{{ .ClientIP }}')">
+                  <i class="bi bi-geo-alt"></i> + Add My IP ({{ .ClientIP }})
+                </button>
+              {{ end }}
+            </div>
+            <input type="text" id="create_allowed_ips" name="allowed_ips" class="form-control form-control-modern font-monospace" placeholder="e.g. 192.168.1.5, 10.0.0.0/24 (Leave blank for any IP)">
             <div class="text-dim small mt-1">Restrict key usage to specific client IP addresses or CIDR subnets. Comma-separated.</div>
           </div>
           <div class="mb-3">
@@ -253,7 +260,14 @@
           <input type="number" id="budgetDaily" class="form-control form-control-modern font-monospace" min="0">
         </div>
         <div class="mb-3">
-          <label class="form-label small text-muted">Allowed IPs / CIDRs (Optional)</label>
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <label class="form-label small text-muted mb-0">Allowed IPs / CIDRs (Optional)</label>
+            {{ if .ClientIP }}
+              <button type="button" class="btn btn-sm btn-link p-0 text-cyan text-decoration-none font-monospace" style="font-size: 0.72rem;" onclick="insertIP('budgetIPs', '{{ .ClientIP }}')">
+                <i class="bi bi-geo-alt"></i> + Add My IP ({{ .ClientIP }})
+              </button>
+            {{ end }}
+          </div>
           <input type="text" id="budgetIPs" class="form-control form-control-modern font-monospace" placeholder="e.g. 192.168.1.5, 10.0.0.0/24 (Leave blank for any IP)">
           <div class="text-dim small mt-1">Restrict key usage to specific client IP addresses or CIDR subnets. Comma-separated.</div>
         </div>
@@ -267,6 +281,22 @@
   </div>
 </div>
 <script>
+function insertIP(targetId, ip) {
+  if (!ip) return;
+  const el = document.getElementById(targetId);
+  if (!el) return;
+  const curr = el.value.trim();
+  if (!curr) {
+    el.value = ip;
+  } else {
+    const parts = curr.split(',').map(s => s.trim());
+    if (!parts.includes(ip)) {
+      el.value = curr + ', ' + ip;
+    }
+  }
+  if (window.showToast) window.showToast('Added IP: ' + ip + ' ✨', '🌐');
+}
+
 let budgetKeyId = null;
 document.querySelectorAll(".btn-edit-budget").forEach(btn => {
   btn.addEventListener("click", function() {
