@@ -1,0 +1,13 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TaskOutputContract",
+  "type": "object",
+  "properties": {
+    "task_id": { "type": "string" },
+    "verdict": { "type": "string", "enum": ["PASS", "REJECT", "BLOCKED"] },
+    "summary": { "type": "string" },
+    "modified_files": { "type": "array", "items": { "type": "string" } },
+    "feedback_notes": { "type": "string" }
+  },
+  "required": ["task_id", "verdict", "summary"]
+}

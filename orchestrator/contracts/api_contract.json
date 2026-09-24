@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "project": "aimanager",
+  "name": "9router-gateway",
+  "version": "1.0.0",
+  "target_path": "/home/b14/9router-gateway",
+  "ports": {
+    "gateway_port": 20129,
+    "core_port": 20128
+  },
+  "database": {
+    "driver": "sqlite3",
+    "wal_mode": true,
+    "path": "data/gateway.db",
+    "tables": [
+      "users",
+      "api_keys",
+      "request_logs",
+      "sessions",
+      "token_packages"
+    ]
+  },
+  "endpoints": [
+    { "method": "ALL", "path": "/v1/*", "auth": "Bearer API Key", "desc": "Reverse proxy with rate limiting & SSE streaming" },
+    { "method": "GET", "path": "/", "auth": "Session", "desc": "User dashboard" },
+    { "method": "GET", "path": "/keys", "auth": "Session", "desc": "API Key management" },
+    { "method": "POST", "path": "/keys", "auth": "Session", "desc": "Generate sk-gw- prefixed API key" },
+    { "method": "GET", "path": "/logs", "auth": "Session", "desc": "Request logs and token metrics" },
+    { "method": "GET", "path": "/login", "auth": "Public", "desc": "Web login" },
+    { "method": "GET", "path": "/admin", "auth": "Admin Role", "desc": "Admin backoffice console" },
+    { "method": "GET", "path": "/healthz", "auth": "Public", "desc": "Health probe" }
+  ],
+  "env_vars": [
+    "PORT",
+    "CORE_URL",
+    "DB_PATH",
+    "ADMIN_PASSWORD",
+    "SESSION_SECRET"
+  ]
+}
+
