@@ -71,8 +71,17 @@ description: Use the AI Manager gateway for all LLM calls.
 function copySkill(id) {
   const text = document.getElementById(id).innerText;
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(() => alert('Copied!')).catch(() => alert('Copy failed — select manually.'));
-  } else { alert('Copy not supported — select manually.'); }
+    navigator.clipboard.writeText(text).then(() => {
+      if (window.showToast) window.showToast('Prompt skill tersalin! ✨', '📋');
+      else alert('Copied!');
+    }).catch(() => {
+      if (window.showToast) window.showToast('Gagal menyalin skill', '⚠️');
+      else alert('Copy failed — select manually.');
+    });
+  } else {
+    if (window.showToast) window.showToast('Copy not supported', '⚠️');
+    else alert('Copy not supported — select manually.');
+  }
 }
 </script>
 {{ end }}
