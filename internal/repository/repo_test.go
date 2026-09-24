@@ -215,12 +215,24 @@ func TestAPIKeyOperations(t *testing.T) {
 		t.Errorf("expected token usage 1000, got %d", used)
 	}
 	// Budget check inside the loaded key
-	loaded, err := repo.GetAPIKeyByKey(ctx, "sk-gw-test-key-12345")
+	loaded, err := repo.GetAPIKeyByKey(ctx, key.Key)
 	if err != nil {
 		t.Fatalf("GetAPIKeyByKey failed: %v", err)
 	}
 	if loaded.TokenUsage != 1000 {
 		t.Errorf("expected loaded TokenUsage 1000, got %d", loaded.TokenUsage)
+	}
+
+	// 5c. Reset Key Token Usage
+	if err := repo.ResetKeyUsage(ctx, "key-1"); err != nil {
+		t.Fatalf("ResetKeyUsage failed: %v", err)
+	}
+	resetLoaded, err := repo.GetAPIKeyByKey(ctx, key.Key)
+	if err != nil {
+		t.Fatalf("GetAPIKeyByKey after reset failed: %v", err)
+	}
+	if resetLoaded.TokenUsage != 0 {
+		t.Errorf("expected reset TokenUsage 0, got %d", resetLoaded.TokenUsage)
 	}
 
 	// 6. Delete Key

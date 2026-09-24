@@ -41,6 +41,7 @@ type KeyRepository interface {
 	GetAPIKeyTokenUsage(ctx context.Context, id string) (int64, error)
 	UpdateKeyBudgets(ctx context.Context, id string, maxTokensLimit, dailyQuota int) error
 	UpdateKeyRestrictions(ctx context.Context, id string, maxTokensLimit, dailyQuota int, allowedIPs string) error
+	ResetKeyUsage(ctx context.Context, id string) error
 	GetTodayTokenUsageByKey(ctx context.Context, keyID string) (int64, error)
 	GetKeyWindowStats(ctx context.Context, since time.Time) ([]KeyWindowStats, error)
 	GetKeyBaselineTokens(ctx context.Context, days int) (map[string]float64, error)
@@ -333,10 +334,13 @@ func (r *SQLiteRepo) UpdateUserPassword(ctx context.Context, id, passwordHash st
 	return err
 }
 
-// ResetUserUsage zeroes the user's token usage counter.
+// ResetUserUsage zeroes the user's token usage counter and all associated API keys.
 func (r *SQLiteRepo) ResetUserUsage(ctx context.Context, id string) error {
 	query := `UPDATE users SET tokens_used = 0, updated_at = datetime('now') WHERE id = ?`
-	_, err := r.db.ExecContext(ctx, query, id)
+	if _, err := r.db.ExecContext(ctx, query, id); err != nil {
+		return err
+	}
+	_, err := r.db.ExecContext(ctx, `UPDATE api_keys SET tokens_used = 0 WHERE user_id = ?`, id)
 	return err
 }
 
@@ -569,6 +573,12 @@ func (r *SQLiteRepo) UpdateKeyBudgets(ctx context.Context, id string, maxTokensL
 // UpdateKeyRestrictions sets a key's lifetime and daily token budgets, and allowed IP/CIDR whitelist.
 func (r *SQLiteRepo) UpdateKeyRestrictions(ctx context.Context, id string, maxTokensLimit, dailyQuota int, allowedIPs string) error {
 	_, err := r.db.ExecContext(ctx, `UPDATE api_keys SET max_tokens_limit = ?, daily_token_quota = ?, allowed_ips = ? WHERE id = ?`, maxTokensLimit, dailyQuota, allowedIPs, id)
+	return err
+}
+
+// ResetKeyUsage zeroes an API key's token usage counter.
+func (r *SQLiteRepo) ResetKeyUsage(ctx context.Context, id string) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE api_keys SET tokens_used = 0 WHERE id = ?`, id)
 	return err
 }
 

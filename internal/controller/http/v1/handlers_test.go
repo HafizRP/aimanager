@@ -687,3 +687,126 @@ func TestAPIKeyRestrictionsAndIPWhitelist(t *testing.T) {
 		t.Errorf("expected AllowedIPs '172.16.0.0/12, 127.0.0.1', got %q", updatedKey.AllowedIPs)
 	}
 }
+
+func TestResetKeyUsage(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test_reset_keys.db")
+	db, err := database.InitDB(dbPath)
+	if err != nil {
+		t.Fatalf("InitDB failed: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+	cfg := &config.Config{
+		SessionSecret: "test-secret-12345678901234567890",
+	}
+
+	h, err := NewHandler(cfg, repo, nil, nil)
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+
+	ctx := context.Background()
+	ownerUser := &entity.User{
+		ID:           "u-owner",
+		Username:     "owner",
+		Name:         "Key Owner",
+		PasswordHash: "hash123",
+		Role:         "user",
+		IsActive:     true,
+	}
+	otherUser := &entity.User{
+		ID:           "u-other",
+		Username:     "other",
+		Name:         "Other User",
+		PasswordHash: "hash123",
+		Role:         "user",
+		IsActive:     true,
+	}
+	if err := repo.CreateUser(ctx, ownerUser); err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+	if err := repo.CreateUser(ctx, otherUser); err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+
+	// Create key for owner and accumulate token usage
+	key := &entity.APIKey{
+		ID:             "key-owner-1",
+		UserID:         ownerUser.ID,
+		Key:            "sk-gw-ownerkey123",
+		Name:           "Owner Key",
+		MaxTokensLimit: 100000,
+		IsActive:       true,
+	}
+	if err := repo.CreateAPIKey(ctx, key); err != nil {
+		t.Fatalf("CreateAPIKey failed: %v", err)
+	}
+	if err := repo.UpdateKeyTokenUsage(ctx, key.ID, 75000); err != nil {
+		t.Fatalf("UpdateKeyTokenUsage failed: %v", err)
+	}
+
+	// 1. Other unprivileged user attempts to reset owner's key via JSON API -> 403 Forbidden
+	reqOtherAPI := httptest.NewRequest(http.MethodPost, "/api/keys/"+key.ID+"/reset-usage", nil)
+	reqOtherAPI.Header.Set("Accept", "application/json")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", key.ID)
+	reqOtherAPI = reqOtherAPI.WithContext(context.WithValue(context.WithValue(ctx, userContextKey, otherUser), chi.RouteCtxKey, rctx))
+	rrOtherAPI := httptest.NewRecorder()
+	h.ResetKeyUsage(rrOtherAPI, reqOtherAPI)
+	if rrOtherAPI.Code != http.StatusForbidden {
+		t.Fatalf("expected status 403 Forbidden, got %d", rrOtherAPI.Code)
+	}
+
+	// 2. Owner resets own key via form POST -> 303 redirect and tokens_used reset to 0
+	form := url.Values{"redirect": {"/keys"}}
+	reqOwnerForm := httptest.NewRequest(http.MethodPost, "/keys/"+key.ID+"/reset-usage", strings.NewReader(form.Encode()))
+	reqOwnerForm.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rctxOwner := chi.NewRouteContext()
+	rctxOwner.URLParams.Add("id", key.ID)
+	reqOwnerForm = reqOwnerForm.WithContext(context.WithValue(context.WithValue(ctx, userContextKey, ownerUser), chi.RouteCtxKey, rctxOwner))
+	rrOwnerForm := httptest.NewRecorder()
+	h.ResetKeyUsage(rrOwnerForm, reqOwnerForm)
+	if rrOwnerForm.Code != http.StatusSeeOther {
+		t.Fatalf("expected status 303 SeeOther, got %d", rrOwnerForm.Code)
+	}
+
+	usage, err := repo.GetAPIKeyTokenUsage(ctx, key.ID)
+	if err != nil {
+		t.Fatalf("GetAPIKeyTokenUsage failed: %v", err)
+	}
+	if usage != 0 {
+		t.Fatalf("expected usage 0 after reset, got %d", usage)
+	}
+
+	// Accumulate usage again
+	if err := repo.UpdateKeyTokenUsage(ctx, key.ID, 50000); err != nil {
+		t.Fatalf("UpdateKeyTokenUsage failed: %v", err)
+	}
+
+	// 3. Admin resets key via JSON API -> 200 OK and tokens_used reset to 0
+	adminUser := &entity.User{
+		ID:       "u-admin",
+		Username: "adminuser",
+		Role:     "admin",
+		IsActive: true,
+	}
+	reqAdminAPI := httptest.NewRequest(http.MethodPost, "/api/keys/"+key.ID+"/reset-usage", nil)
+	reqAdminAPI.Header.Set("Accept", "application/json")
+	rctxAdmin := chi.NewRouteContext()
+	rctxAdmin.URLParams.Add("id", key.ID)
+	reqAdminAPI = reqAdminAPI.WithContext(context.WithValue(context.WithValue(ctx, userContextKey, adminUser), chi.RouteCtxKey, rctxAdmin))
+	rrAdminAPI := httptest.NewRecorder()
+	h.ResetKeyUsage(rrAdminAPI, reqAdminAPI)
+	if rrAdminAPI.Code != http.StatusOK {
+		t.Fatalf("expected status 200 OK, got %d", rrAdminAPI.Code)
+	}
+
+	usageAfterAdmin, err := repo.GetAPIKeyTokenUsage(ctx, key.ID)
+	if err != nil {
+		t.Fatalf("GetAPIKeyTokenUsage failed: %v", err)
+	}
+	if usageAfterAdmin != 0 {
+		t.Fatalf("expected usage 0 after admin reset, got %d", usageAfterAdmin)
+	}
+}

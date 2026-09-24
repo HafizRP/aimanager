@@ -376,6 +376,21 @@
               </td>
               <td class="text-end">
                 <div class="d-flex justify-content-end align-items-center gap-1">
+                  <!-- Edit Budgets & Restrictions -->
+                  <button type="button" class="btn-modern-ghost py-1 px-2 text-info btn-edit-budget"
+                          data-id="{{ .ID }}" data-max="{{ .MaxTokensLimit }}" data-daily="{{ .DailyTokenQuota }}" data-ips="{{ .AllowedIPs }}"
+                          data-bs-toggle="modal" data-bs-target="#budgetModal" title="Edit Budgets & Restrictions">
+                    <i class="bi bi-shield-lock"></i>
+                  </button>
+
+                  <!-- Reset Key Token Usage -->
+                  <form action="/keys/{{ .ID }}/reset-usage" method="POST" class="d-inline m-0" onsubmit="return confirm('Reset token usage counter to 0 for key \'{{ .Name }}\'?');">
+                    <input type="hidden" name="redirect" value="/users/{{ $.TargetUser.ID }}">
+                    <button type="submit" class="btn-modern-ghost py-1 px-2 text-cyan" title="Reset Key Token Usage">
+                      <i class="bi bi-arrow-counterclockwise"></i>
+                    </button>
+                  </form>
+
                   <!-- Toggle Status -->
                   <form action="/keys/{{ .ID }}/toggle" method="POST" class="d-inline m-0">
                     <input type="hidden" name="redirect" value="/users/{{ $.TargetUser.ID }}">
@@ -691,10 +706,70 @@
     </div>
   </div>
 </div>
+
+<!-- Edit Budgets Modal -->
+<div class="modal fade" id="budgetModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content modal-content-modern">
+      <div class="modal-header modal-header-modern">
+        <h5 class="modal-title fw-bold text-light d-flex align-items-center gap-2">
+          <i class="bi bi-shield-lock text-info"></i> Edit Key Budgets & Restrictions
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4">
+        <div class="mb-3">
+          <label class="form-label small text-muted">Token Budget (Lifetime, 0 = Unlimited)</label>
+          <input type="number" id="budgetMax" class="form-control form-control-modern font-monospace" min="0">
+        </div>
+        <div class="mb-3">
+          <label class="form-label small text-muted">Daily Budget WIB (0 = Unlimited)</label>
+          <input type="number" id="budgetDaily" class="form-control form-control-modern font-monospace" min="0">
+        </div>
+        <div class="mb-3">
+          <label class="form-label small text-muted">Allowed IPs / CIDRs (Optional)</label>
+          <input type="text" id="budgetIPs" class="form-control form-control-modern font-monospace" placeholder="e.g. 192.168.1.5, 10.0.0.0/24 (Leave blank for any IP)">
+          <div class="text-dim small mt-1">Restrict key usage to specific client IP addresses or CIDR subnets. Comma-separated.</div>
+        </div>
+        <div id="budgetMsg"></div>
+      </div>
+      <div class="modal-footer modal-footer-modern">
+        <button type="button" class="btn-modern-ghost" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn-modern-primary" onclick="saveBudget()"><i class="bi bi-check2"></i> Save</button>
+      </div>
+    </div>
+  </div>
+</div>
 {{ end }}
 
 {{ define "scripts" }}
 <script>
+  let budgetKeyId = null;
+  document.querySelectorAll(".btn-edit-budget").forEach(btn => {
+    btn.addEventListener("click", function() {
+      budgetKeyId = this.getAttribute("data-id");
+      document.getElementById("budgetMax").value = this.getAttribute("data-max") || 0;
+      document.getElementById("budgetDaily").value = this.getAttribute("data-daily") || 0;
+      document.getElementById("budgetIPs").value = this.getAttribute("data-ips") || "";
+      document.getElementById("budgetMsg").innerHTML = "";
+    });
+  });
+  async function saveBudget() {
+    const msg = document.getElementById("budgetMsg");
+    try {
+      const res = await fetch("/api/keys/" + budgetKeyId + "/budget", {
+        method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          max_tokens_limit: parseInt(document.getElementById("budgetMax").value, 10) || 0,
+          daily_token_quota: parseInt(document.getElementById("budgetDaily").value, 10) || 0,
+          allowed_ips: document.getElementById("budgetIPs").value.trim()
+        })
+      });
+      if (!res.ok) throw new Error("Save failed");
+      msg.innerHTML = '<p class="text-emerald small mb-0">Saved. Reloading…</p>';
+      setTimeout(() => location.reload(), 800);
+    } catch (e) { msg.innerHTML = '<p class="text-rose small mb-0">Error: ' + e.message + '</p>'; }
+  }
   function randomStr(len) {
     const chars = "abcdefghjkmnpqrstuvwxyz23456789";
     let s = "";

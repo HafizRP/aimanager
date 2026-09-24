@@ -154,6 +154,12 @@ func (f *fakeStore) UpdateKeyRestrictions(ctx context.Context, id string, maxTok
 	}
 	return nil
 }
+func (f *fakeStore) ResetKeyUsage(ctx context.Context, id string) error {
+	if k, ok := f.keys[id]; ok {
+		k.TokenUsage = 0
+	}
+	return nil
+}
 
 // RequestLogStore
 func (f *fakeStore) CreateRequestLog(ctx context.Context, l *entity.RequestLog) error { return nil }
@@ -458,6 +464,30 @@ func TestKeyService_CreateKey(t *testing.T) {
 	_, err = svc.CreateKey(context.Background(), CreateKeyInput{UserID: "u1", CustomKey: k.Key})
 	if err == nil {
 		t.Fatal("expected duplicate key error")
+	}
+}
+
+func TestKeyService_ResetKeyUsage(t *testing.T) {
+	store := newFakeStore()
+	store.keys["k1"] = &entity.APIKey{
+		ID:         "k1",
+		UserID:     "u1",
+		Key:        "sk-gw-testkey1",
+		Name:       "Test Key",
+		TokenUsage: 250000,
+	}
+	svc := NewKeyService(store, nil)
+
+	if err := svc.ResetKeyUsage(context.Background(), "k1"); err != nil {
+		t.Fatalf("ResetKeyUsage failed: %v", err)
+	}
+	if store.keys["k1"].TokenUsage != 0 {
+		t.Errorf("expected TokenUsage 0, got %d", store.keys["k1"].TokenUsage)
+	}
+
+	// Non-existent key returns error
+	if err := svc.ResetKeyUsage(context.Background(), "non-existent"); err == nil {
+		t.Fatal("expected error for non-existent key")
 	}
 }
 

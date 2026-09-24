@@ -123,6 +123,12 @@
                           data-bs-toggle="modal" data-bs-target="#budgetModal" title="Edit Budgets & Restrictions">
                     <i class="bi bi-shield-lock"></i>
                   </button>
+                  <!-- Reset Key Token Usage -->
+                  <form action="/keys/{{ .ID }}/reset-usage" method="POST" class="d-inline m-0" onsubmit="return confirm('Reset token usage counter to 0 for key \'{{ .Name }}\'?');">
+                    <button type="submit" class="btn-modern-ghost py-1 px-2 text-cyan" title="Reset Key Token Usage">
+                      <i class="bi bi-arrow-counterclockwise"></i>
+                    </button>
+                  </form>
                   <!-- Toggle Status -->
                   <form action="/keys/{{ .ID }}/toggle" method="POST" class="d-inline m-0">
                     <button type="submit" class="btn-modern-ghost py-1 px-2 {{ if .IsActive }}text-warning{{ else }}text-success{{ end }}" 

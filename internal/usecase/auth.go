@@ -633,6 +633,14 @@ func (s *KeyService) DeleteKey(ctx context.Context, keyID string) error {
 	return nil
 }
 
+// ResetKeyUsage zeroes an API key's token usage counter.
+func (s *KeyService) ResetKeyUsage(ctx context.Context, keyID string) error {
+	if _, err := s.getKeyByID(ctx, keyID); err != nil {
+		return err
+	}
+	return s.store.ResetKeyUsage(ctx, keyID)
+}
+
 func (s *KeyService) getKeyByID(ctx context.Context, keyID string) (*entity.APIKey, error) {
 	keys, err := s.store.GetAllAPIKeys(ctx)
 	if err != nil {
