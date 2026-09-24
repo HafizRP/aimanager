@@ -308,7 +308,8 @@ function copySnippet(elementId) {
   
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).then(() => {
-      alert('Copied configuration snippet to clipboard!');
+      if (window.showToast) window.showToast('Config snippet tersalin! ✨', '📋');
+      else alert('Copied configuration snippet to clipboard!');
     }).catch(() => fallbackCopy(text));
   } else {
     fallbackCopy(text);
@@ -324,9 +325,11 @@ function fallbackCopy(text) {
   textarea.select();
   try {
     document.execCommand('copy');
-    alert('Copied configuration snippet to clipboard!');
+    if (window.showToast) window.showToast('Config snippet tersalin! ✨', '📋');
+    else alert('Copied configuration snippet to clipboard!');
   } catch (err) {
-    alert('Failed to copy. Please select and copy manually.');
+    if (window.showToast) window.showToast('Gagal menyalin snippet', '⚠️');
+    else alert('Failed to copy. Please select and copy manually.');
   }
   document.body.removeChild(textarea);
 }

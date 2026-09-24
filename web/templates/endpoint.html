@@ -59,8 +59,17 @@
 function copyEp(btn) {
   const text = btn.getAttribute('data-copy');
   if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(() => alert('Copied!')).catch(() => alert('Copy failed.'));
-  } else { alert('Copy not supported.'); }
+    navigator.clipboard.writeText(text).then(() => {
+      const orig = btn.innerHTML;
+      btn.innerHTML = '<i class="bi bi-check2 text-success"></i> Copied!';
+      if (window.showToast) window.showToast('Endpoint URL tersalin! ✨', '📋');
+      setTimeout(() => { btn.innerHTML = orig; }, 1800);
+    }).catch(() => {
+      if (window.showToast) window.showToast('Gagal menyalin text', '⚠️');
+    });
+  } else {
+    if (window.showToast) window.showToast('Clipboard not supported', '⚠️');
+  }
 }
 </script>
 {{ end }}

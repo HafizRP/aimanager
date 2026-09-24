@@ -98,26 +98,31 @@ function initApp() {
     });
   }
 
-  // Floating Toast Notification
-  function showCopyToast(msg) {
-    let container = document.getElementById("toast-container");
+  // Playful Saweria Neo-Brutalist Floating Toast Notification
+  window.showToast = function(msg, icon) {
+    let container = document.getElementById("neoToastContainer");
     if (!container) {
       container = document.createElement("div");
-      container.id = "toast-container";
-      container.style.cssText = "position: fixed; bottom: 24px; right: 24px; z-index: 99999; display: flex; flex-direction: column; gap: 8px;";
+      container.id = "neoToastContainer";
+      container.className = "neo-toast-container";
       document.body.appendChild(container);
     }
 
     const toast = document.createElement("div");
-    toast.style.cssText = "background: #18181b; border: 1px solid rgba(16, 185, 129, 0.4); color: #fafafa; padding: 10px 16px; border-radius: 8px; font-size: 0.82rem; font-family: 'Geist', sans-serif; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); display: flex; align-items: center; gap: 8px; animation: fadeIn 0.2s ease;";
-    toast.innerHTML = `<i class="bi bi-check-circle-fill text-success"></i> <span>${msg || "Copied to clipboard!"}</span>`;
+    toast.className = "neo-toast";
+    const iconHtml = icon ? `<span style="font-size:1.15rem;">${icon}</span>` : '<i class="bi bi-stars text-warning" style="font-size:1.1rem;"></i>';
+    toast.innerHTML = `${iconHtml} <span>${msg || "Tersalin ke clipboard!"}</span>`;
     
     container.appendChild(toast);
     setTimeout(() => {
       toast.style.opacity = "0";
-      toast.style.transition = "opacity 0.3s ease";
-      setTimeout(() => toast.remove(), 300);
-    }, 2000);
+      toast.style.transform = "translateY(-12px) scale(0.95)";
+      setTimeout(() => toast.remove(), 250);
+    }, 2200);
+  };
+
+  function showCopyToast(msg) {
+    window.showToast(msg || "Tersalin ke clipboard! ✨", "📋");
   }
 
   // Global Delegated Copy Handler
