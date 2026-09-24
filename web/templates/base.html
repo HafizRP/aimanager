@@ -20,7 +20,7 @@
   <!-- Bootstrap Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <!-- Custom Modern Design System -->
-  <link href="/static/css/custom.css?v=19" rel="stylesheet">
+  <link href="/static/css/custom.css?v=20" rel="stylesheet">
   <!-- PWA: installable app -->
   <link rel="manifest" href="/manifest.webmanifest">
   <meta name="theme-color" content="#09090b">
@@ -75,217 +75,57 @@
         <div class="sidebar-nav-group">
           <span class="sidebar-group-title">Workspace</span>
           <a class="sidebar-link {{ if eq .ActivePage "dashboard" }}active{{ end }}" href="/" data-keywords="overview stats kpi metrics rolling windows trends volume beranda ringkasan statistik pemantauan">
-            <i class="bi bi-speedometer2"></i>
+            <i class="bi bi-speedometer2 text-primary"></i>
             <span>Dashboard</span>
           </a>
           <a class="sidebar-link {{ if eq .ActivePage "chat" }}active{{ end }}" href="/chat" data-keywords="playground chat completion stream prompt test conversation sse percakapan uji coba pesan ai playground">
             <i class="bi bi-terminal-fill text-primary"></i>
             <span>Playground</span>
           </a>
-          <a class="sidebar-link {{ if eq .ActivePage "cli-tools" }}active{{ end }}" href="/cli-tools" data-keywords="cli tools terminal claude cursor codex cline roo hermes copilot opencode panduan setup konfigurasi ide terminal">
-            <i class="bi bi-tools text-cyan"></i>
-            <span>CLI Tools Hub</span>
+          <a class="sidebar-link {{ if or (eq .ActivePage "endpoint") (eq .ActivePage "keys") (eq .ActivePage "cli-tools") (eq .ActivePage "skills") }}active{{ end }}" href="/endpoint" data-keywords="developer hub endpoint api keys cli tools skills tokens integration panduan terminal token">
+            <i class="bi bi-code-slash text-info"></i>
+            <span>Developer Hub</span>
+            <span class="badge-modern badge-indigo ms-auto" style="font-size:0.65rem; padding:0.12rem 0.4rem;">4</span>
           </a>
-          <a class="sidebar-link {{ if eq .ActivePage "skills" }}active{{ end }}" href="/skills" data-keywords="agent skills prompt snippets system instructions templates universal keahlian agen panduan prompt">
-            <i class="bi bi-puzzle-fill text-emerald"></i>
-            <span>Agent Skills</span>
+          <a class="sidebar-link {{ if or (eq .ActivePage "logs") (eq .ActivePage "usage") (eq .ActivePage "cache-analytics") (eq .ActivePage "benchmark") (eq .ActivePage "replay") (eq .ActivePage "radar") }}active{{ end }}" href="/logs" data-keywords="observability logs audit usage stats analytics cache benchmark replay radar traffic telemetri analisis">
+            <i class="bi bi-graph-up text-cyan"></i>
+            <span>Observability</span>
+            <span class="badge-modern badge-cyan ms-auto" style="font-size:0.65rem; padding:0.12rem 0.4rem;">6</span>
           </a>
-          <a class="sidebar-link {{ if eq .ActivePage "endpoint" }}active{{ end }}" href="/endpoint" data-keywords="endpoint hub api url base loopback v1 completions addresses alamat gateway port">
-            <i class="bi bi-plug-fill text-info"></i>
-            <span>Endpoint Hub</span>
-          </a>
-
-          <!-- Sub-menu: Access & Billing -->
-          <button type="button" class="sidebar-dropdown-toggle {{ if not (or (eq .ActivePage "billing") (eq .ActivePage "keys") (eq .ActivePage "profile")) }}collapsed{{ end }}" data-bs-toggle="collapse" data-bs-target="#submenu-access" aria-expanded="{{ if or (eq .ActivePage "billing") (eq .ActivePage "keys") (eq .ActivePage "profile") }}true{{ else }}false{{ end }}">
-            <div class="d-flex align-items-center gap-2">
-              <i class="bi bi-wallet2 text-emerald"></i>
-              <span>Access & Billing</span>
-            </div>
-            <i class="bi bi-chevron-down sidebar-chevron"></i>
-          </button>
-          <div class="collapse {{ if or (eq .ActivePage "billing") (eq .ActivePage "keys") (eq .ActivePage "profile") }}show{{ end }}" id="submenu-access">
-            <div class="sidebar-submenu-items">
-              <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "billing" }}active{{ end }}" href="/billing" data-keywords="billing buy tokens topup payment midtrans qris gopay va credit invoice packages balance beli token saldo bayar isi ulang pembayaran paket">
-                <i class="bi bi-cart text-emerald"></i>
-                <span>Buy Tokens</span>
-              </a>
-              <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "keys" }}active{{ end }}" href="/keys" data-keywords="api keys token budget rate limit create rotate revoke sk-gw secret kunci api buat kunci rahasia batas token pemakaian">
-                <i class="bi bi-key text-warning"></i>
-                <span>API Keys</span>
-              </a>
-              <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "profile" }}active{{ end }}" href="/profile" data-keywords="my profile user account password credentials timezone quota profil saya akun ganti password ubah sandi pengaturan akun user">
-                <i class="bi bi-person-circle text-muted"></i>
-                <span>My Profile</span>
-              </a>
-            </div>
-          </div>
-
-          <!-- Sub-menu: Observability & Analytics -->
-          <button type="button" class="sidebar-dropdown-toggle {{ if not (or (eq .ActivePage "logs") (eq .ActivePage "usage") (eq .ActivePage "cache-analytics") (eq .ActivePage "benchmark") (eq .ActivePage "replay") (eq .ActivePage "radar")) }}collapsed{{ end }}" data-bs-toggle="collapse" data-bs-target="#submenu-observability" aria-expanded="{{ if or (eq .ActivePage "logs") (eq .ActivePage "usage") (eq .ActivePage "cache-analytics") (eq .ActivePage "benchmark") (eq .ActivePage "replay") (eq .ActivePage "radar") }}true{{ else }}false{{ end }}">
-            <div class="d-flex align-items-center gap-2">
-              <i class="bi bi-graph-up text-cyan"></i>
-              <span>Observability & Stats</span>
-            </div>
-            <i class="bi bi-chevron-down sidebar-chevron"></i>
-          </button>
-          <div class="collapse {{ if or (eq .ActivePage "logs") (eq .ActivePage "usage") (eq .ActivePage "cache-analytics") (eq .ActivePage "benchmark") (eq .ActivePage "replay") (eq .ActivePage "radar") }}show{{ end }}" id="submenu-observability">
-            <div class="sidebar-submenu-items">
-              <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "logs" }}active{{ end }}" href="/logs" data-keywords="request logs audit traffic history status errors export csv json filter riwayat log audit kesalahan lalu lintas histori permintaan">
-                <i class="bi bi-activity text-info"></i>
-                <span>Request Logs</span>
-              </a>
-              <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "usage" }}active{{ end }}" href="/usage" data-keywords="usage analytics breakdown tokens provider model account cost pemakaian penggunaan statistik biaya perincian token">
-                <i class="bi bi-bar-chart-fill text-primary"></i>
-                <span>Usage Analytics</span>
-              </a>
-              <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "cache-analytics" }}active{{ end }}" href="/cache-analytics" data-keywords="cache analytics exact response hit ratio sha256 savings finops rtk analisis cache rasio hit penghematan respon">
-                <i class="bi bi-database-check text-cyan"></i>
-                <span>Cache Analytics</span>
-              </a>
-              <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "benchmark" }}active{{ end }}" href="/benchmark" data-keywords="speed benchmark ttft latency performance throughput test leaderboard uji kecepatan performa latensi tes model tolok ukur">
-                <i class="bi bi-speedometer text-warning"></i>
-                <span>Speed Benchmark</span>
-              </a>
-              <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "replay" }}active{{ end }}" href="/replay" data-keywords="replay lab prompt diff compare models side by side output latency rerun uji ulang bandingkan model perbandingan tes prompt">
-                <i class="bi bi-repeat text-info"></i>
-                <span>Replay Lab</span>
-              </a>
-              <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "radar" }}active{{ end }}" href="/radar" data-keywords="anomaly radar security spike alerts errors baseline detection cutoff radar anomali keamanan lonjakan peringatan batas">
-                <i class="bi bi-radar text-rose"></i>
-                <span>Anomaly Radar</span>
-              </a>
-            </div>
-          </div>
         </div>
 
-        <!-- 9router Core Administration Group (Admin Only) -->
         {{ if .IsAdmin }}
+          <!-- Engine & Control Group (Admin Only) -->
           <div class="sidebar-nav-group">
-            <span class="sidebar-group-title">Engine Administration</span>
-
-            <!-- Sub-menu: Models & Routing -->
-            <button type="button" class="sidebar-dropdown-toggle {{ if not (or (eq .ActivePage "models") (eq .ActivePage "combos") (eq .ActivePage "pricing") (eq .ActivePage "translator")) }}collapsed{{ end }}" data-bs-toggle="collapse" data-bs-target="#submenu-models" aria-expanded="{{ if or (eq .ActivePage "models") (eq .ActivePage "combos") (eq .ActivePage "pricing") (eq .ActivePage "translator") }}true{{ else }}false{{ end }}">
-              <div class="d-flex align-items-center gap-2">
-                <i class="bi bi-diagram-3-fill text-indigo"></i>
-                <span>Models & Routing</span>
-              </div>
-              <i class="bi bi-chevron-down sidebar-chevron"></i>
-            </button>
-            <div class="collapse {{ if or (eq .ActivePage "models") (eq .ActivePage "combos") (eq .ActivePage "pricing") (eq .ActivePage "translator") }}show{{ end }}" id="submenu-models">
-              <div class="sidebar-submenu-items">
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "models" }}active{{ end }}" href="/models" data-keywords="models aliases upstream mapping context list gpt claude gemini daftar model alias pemetaan rute model ai">
-                  <i class="bi bi-cpu text-primary"></i>
-                  <span>Models & Aliases</span>
-                </a>
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "combos" }}active{{ end }}" href="/combos" data-keywords="model combos fallback chains failover round robin fusion strategy sticky kombo model rantai failover cadangan rotasi strategi">
-                  <i class="bi bi-diagram-3 text-indigo"></i>
-                  <span>Model Combos</span>
-                </a>
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "pricing" }}active{{ end }}" href="/pricing" data-keywords="pricing token rates cost per million upstream catalog harga tarif biaya katalog token per juta">
-                  <i class="bi bi-tag text-warning"></i>
-                  <span>Pricing Catalog</span>
-                </a>
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "translator" }}active{{ end }}" href="/translator" data-keywords="translator protocol format translation convert anthropic openai gemini penerjemah konversi protokol format payload">
-                  <i class="bi bi-translate text-emerald"></i>
-                  <span>Translator</span>
-                </a>
-              </div>
-            </div>
-
-            <!-- Sub-menu: Providers & Networks -->
-            <button type="button" class="sidebar-dropdown-toggle {{ if not (or (eq .ActivePage "providers") (eq .ActivePage "nodes") (eq .ActivePage "quota") (eq .ActivePage "proxy-pools")) }}collapsed{{ end }}" data-bs-toggle="collapse" data-bs-target="#submenu-providers" aria-expanded="{{ if or (eq .ActivePage "providers") (eq .ActivePage "nodes") (eq .ActivePage "quota") (eq .ActivePage "proxy-pools") }}true{{ else }}false{{ end }}">
-              <div class="d-flex align-items-center gap-2">
-                <i class="bi bi-hdd-network text-primary"></i>
-                <span>Providers & Networks</span>
-              </div>
-              <i class="bi bi-chevron-down sidebar-chevron"></i>
-            </button>
-            <div class="collapse {{ if or (eq .ActivePage "providers") (eq .ActivePage "nodes") (eq .ActivePage "quota") (eq .ActivePage "proxy-pools") }}show{{ end }}" id="submenu-providers">
-              <div class="sidebar-submenu-items">
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "providers" }}active{{ end }}" href="/providers" data-keywords="providers connections upstream antigravity kiro openai oauth accounts priority test penyedia akun koneksi sambungan prioritas tes">
-                  <i class="bi bi-cloud-check text-primary"></i>
-                  <span>Providers</span>
-                </a>
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "nodes" }}active{{ end }}" href="/nodes" data-keywords="provider nodes openai compatible self hosted endpoints prefix routing node penyedia endpoint mandiri rute awalan">
-                  <i class="bi bi-server text-cyan"></i>
-                  <span>Provider Nodes</span>
-                </a>
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "quota" }}active{{ end }}" href="/quota" data-keywords="quota overview rolling windows accounts reset timers limits pools ringkasan kuota sisa kuota batas waktu reset akun pemulihan">
-                  <i class="bi bi-pie-chart-fill text-emerald"></i>
-                  <span>Quota Overview</span>
-                </a>
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "proxy-pools" }}active{{ end }}" href="/proxy-pools" data-keywords="proxy pools egress outbound ip rotate socks5 http residential kolam proxy rotasi ip keluar proxy jaringan">
-                  <i class="bi bi-shield-shaded text-cyan"></i>
-                  <span>Proxy Pools</span>
-                </a>
-              </div>
-            </div>
-
-            <!-- Sub-menu: Saver & Plugins -->
-            <button type="button" class="sidebar-dropdown-toggle {{ if not (or (eq .ActivePage "token-saver") (eq .ActivePage "pxpipe") (eq .ActivePage "media") (eq .ActivePage "mitm") (eq .ActivePage "mcp")) }}collapsed{{ end }}" data-bs-toggle="collapse" data-bs-target="#submenu-plugins" aria-expanded="{{ if or (eq .ActivePage "token-saver") (eq .ActivePage "pxpipe") (eq .ActivePage "media") (eq .ActivePage "mitm") (eq .ActivePage "mcp") }}true{{ else }}false{{ end }}">
-              <div class="d-flex align-items-center gap-2">
-                <i class="bi bi-magic text-emerald"></i>
-                <span>Saver & Plugins</span>
-              </div>
-              <i class="bi bi-chevron-down sidebar-chevron"></i>
-            </button>
-            <div class="collapse {{ if or (eq .ActivePage "token-saver") (eq .ActivePage "pxpipe") (eq .ActivePage "media") (eq .ActivePage "mitm") (eq .ActivePage "mcp") }}show{{ end }}" id="submenu-plugins">
-              <div class="sidebar-submenu-items">
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "token-saver" }}active{{ end }}" href="/token-saver" data-keywords="token saver rtk compression thinking intensity ponytail caveman headroom pxpipe penghemat token pengaturan kompresi mode berpikir ponytail caveman">
-                  <i class="bi bi-magic text-emerald"></i>
-                  <span>Token Saver & RTK</span>
-                </a>
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "pxpipe" }}active{{ end }}" href="/pxpipe" data-keywords="pxpipe prompt transform images compression pipeline proxy pipa transformasi kompresi gambar prompt">
-                  <i class="bi bi-funnel text-info"></i>
-                  <span>PXPipe</span>
-                </a>
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "media" }}active{{ end }}" href="/media" data-keywords="media voices tts audio speech deepgram elevenlabs minimax voices suara media teks ke suara sintesis ucapan">
-                  <i class="bi bi-speaker text-pink"></i>
-                  <span>Media Voices</span>
-                </a>
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "mitm" }}active{{ end }}" href="/mitm" data-keywords="mitm bridge antigravity dns interception proxy certificate tools jembatan mitm intersepsi dns sertifikat lokal">
-                  <i class="bi bi-shuffle text-warning"></i>
-                  <span>MITM Bridge</span>
-                </a>
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "mcp" }}active{{ end }}" href="/mcp" data-keywords="mcp inspector model context protocol cowork tools registry inspektur mcp protokol konteks model registri alat">
-                  <i class="bi bi-boxes text-emerald"></i>
-                  <span>MCP Inspector</span>
-                </a>
-              </div>
-            </div>
-
-            <!-- Sub-menu: System & Control -->
-            <button type="button" class="sidebar-dropdown-toggle {{ if not (or (eq .ActivePage "users") (eq .ActivePage "settings") (eq .ActivePage "console-log")) }}collapsed{{ end }}" data-bs-toggle="collapse" data-bs-target="#submenu-system" aria-expanded="{{ if or (eq .ActivePage "users") (eq .ActivePage "settings") (eq .ActivePage "console-log") }}true{{ else }}false{{ end }}">
-              <div class="d-flex align-items-center gap-2">
-                <i class="bi bi-sliders text-warning"></i>
-                <span>System & Control</span>
-              </div>
-              <i class="bi bi-chevron-down sidebar-chevron"></i>
-            </button>
-            <div class="collapse {{ if or (eq .ActivePage "users") (eq .ActivePage "settings") (eq .ActivePage "console-log") }}show{{ end }}" id="submenu-system">
-              <div class="sidebar-submenu-items">
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "users" }}active{{ end }}" href="/users" data-keywords="users quotas management accounts role admin active daily reset password pengguna manajemen akun peran kuota harian batas reset sandi">
-                  <i class="bi bi-people-fill text-warning"></i>
-                  <span>Users & Quotas</span>
-                </a>
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "settings" }}active{{ end }}" href="/settings" data-keywords="gateway settings upstream core midtrans configuration secrets env pengaturan gateway konfigurasi core database pembayaran midtrans sistem pengaturan">
-                  <i class="bi bi-gear-fill text-muted"></i>
-                  <span>Gateway Settings</span>
-                </a>
-                <a class="sidebar-link sidebar-sublink {{ if eq .ActivePage "console-log" }}active{{ end }}" href="/console-log" data-keywords="console log server core translator live stream debug output log konsol keluaran server live debug aliran pesan">
-                  <i class="bi bi-terminal-split text-info"></i>
-                  <span>Console Log</span>
-                </a>
-              </div>
-            </div>
+            <span class="sidebar-group-title">Engine & Control</span>
+            <a class="sidebar-link {{ if or (eq .ActivePage "models") (eq .ActivePage "combos") (eq .ActivePage "pricing") (eq .ActivePage "translator") }}active{{ end }}" href="/models" data-keywords="models routing aliases combos fallback pricing translator katalog rute model">
+              <i class="bi bi-diagram-3-fill text-indigo"></i>
+              <span>Models & Routing</span>
+              <span class="badge-modern badge-indigo ms-auto" style="font-size:0.65rem; padding:0.12rem 0.4rem;">4</span>
+            </a>
+            <a class="sidebar-link {{ if or (eq .ActivePage "providers") (eq .ActivePage "nodes") (eq .ActivePage "quota") (eq .ActivePage "proxy-pools") }}active{{ end }}" href="/providers" data-keywords="providers networks nodes connections upstream quota proxy pools akun kuota penyedia sambungan">
+              <i class="bi bi-hdd-network text-primary"></i>
+              <span>Providers & Networks</span>
+              <span class="badge-modern badge-primary ms-auto" style="font-size:0.65rem; padding:0.12rem 0.4rem;">4</span>
+            </a>
+            <a class="sidebar-link {{ if or (eq .ActivePage "token-saver") (eq .ActivePage "pxpipe") (eq .ActivePage "media") (eq .ActivePage "mitm") (eq .ActivePage "mcp") }}active{{ end }}" href="/token-saver" data-keywords="optimization saver rtk compression pxpipe media voices mitm mcp plugins penghemat plugin">
+              <i class="bi bi-magic text-emerald"></i>
+              <span>Optimization & Plugins</span>
+              <span class="badge-modern badge-emerald ms-auto" style="font-size:0.65rem; padding:0.12rem 0.4rem;">5</span>
+            </a>
+            <a class="sidebar-link {{ if or (eq .ActivePage "settings") (eq .ActivePage "users") (eq .ActivePage "console-log") (eq .ActivePage "profile") (eq .ActivePage "billing") }}active{{ end }}" href="/settings" data-keywords="settings administration users quotas profile billing tokens gateway console logs konfigurasi sistem">
+              <i class="bi bi-sliders text-warning"></i>
+              <span>System & Settings</span>
+              <span class="badge-modern badge-warning ms-auto" style="font-size:0.65rem; padding:0.12rem 0.4rem;">5</span>
+            </a>
           </div>
         {{ else }}
-          <!-- Account Settings (Standard User) -->
+          <!-- Account Preferences (Standard User) -->
           <div class="sidebar-nav-group">
-            <span class="sidebar-group-title">Preferences</span>
-            <a class="sidebar-link {{ if eq .ActivePage "settings" }}active{{ end }}" href="/settings" data-keywords="setup password preferences account configuration guides pengaturan sandi preferensi panduan akun konfigurasi pengaturan">
-              <i class="bi bi-sliders text-warning"></i>
-              <span>Setup & Password</span>
+            <span class="sidebar-group-title">Account</span>
+            <a class="sidebar-link {{ if or (eq .ActivePage "profile") (eq .ActivePage "billing") (eq .ActivePage "settings") }}active{{ end }}" href="/profile" data-keywords="profile account billing tokens password profil akun saldo beli token pengaturan">
+              <i class="bi bi-person-circle text-muted"></i>
+              <span>My Profile & Billing</span>
             </a>
           </div>
         {{ end }}
@@ -392,6 +232,165 @@
 
       <!-- Main Body Content -->
       <main class="container-fluid px-3 px-sm-4 py-3 flex-grow-1" style="min-width: 0; max-width: 100%;">
+        {{ if or (eq .ActivePage "endpoint") (eq .ActivePage "keys") (eq .ActivePage "cli-tools") (eq .ActivePage "skills") }}
+        <!-- Developer Hub Nav -->
+        <div class="hub-nav-wrapper mb-4">
+          <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
+            <div class="d-flex align-items-center gap-2">
+              <span class="badge-modern badge-indigo text-uppercase" style="font-size:0.65rem; letter-spacing:0.04em;">HUB</span>
+              <span class="fw-bold text-light fs-6"><i class="bi bi-code-slash text-info me-1"></i>Developer Hub</span>
+            </div>
+            <ul class="nav nav-pills nav-pills-modern" role="tablist">
+              <li class="nav-item">
+                <a class="nav-link {{ if eq .ActivePage "endpoint" }}active{{ end }}" href="/endpoint"><i class="bi bi-plug-fill text-info"></i> Endpoint Hub</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {{ if eq .ActivePage "keys" }}active{{ end }}" href="/keys"><i class="bi bi-key text-warning"></i> API Keys</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {{ if eq .ActivePage "cli-tools" }}active{{ end }}" href="/cli-tools"><i class="bi bi-tools text-cyan"></i> CLI Tools</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {{ if eq .ActivePage "skills" }}active{{ end }}" href="/skills"><i class="bi bi-puzzle-fill text-emerald"></i> Agent Skills</a>
+              </li>
+            </ul>
+          </div>
+        </div>
+        {{ else if or (eq .ActivePage "logs") (eq .ActivePage "usage") (eq .ActivePage "cache-analytics") (eq .ActivePage "benchmark") (eq .ActivePage "replay") (eq .ActivePage "radar") }}
+        <!-- Observability Hub Nav -->
+        <div class="hub-nav-wrapper mb-4">
+          <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
+            <div class="d-flex align-items-center gap-2">
+              <span class="badge-modern badge-cyan text-uppercase" style="font-size:0.65rem; letter-spacing:0.04em;">HUB</span>
+              <span class="fw-bold text-light fs-6"><i class="bi bi-graph-up text-cyan me-1"></i>Observability & Stats</span>
+            </div>
+            <ul class="nav nav-pills nav-pills-modern" role="tablist">
+              <li class="nav-item">
+                <a class="nav-link {{ if eq .ActivePage "logs" }}active{{ end }}" href="/logs"><i class="bi bi-activity text-info"></i> Logs</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {{ if eq .ActivePage "usage" }}active{{ end }}" href="/usage"><i class="bi bi-bar-chart-fill text-primary"></i> Usage</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {{ if eq .ActivePage "cache-analytics" }}active{{ end }}" href="/cache-analytics"><i class="bi bi-database-check text-cyan"></i> Cache & FinOps</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {{ if eq .ActivePage "benchmark" }}active{{ end }}" href="/benchmark"><i class="bi bi-speedometer text-warning"></i> Benchmark</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {{ if eq .ActivePage "replay" }}active{{ end }}" href="/replay"><i class="bi bi-repeat text-info"></i> Replay Lab</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {{ if eq .ActivePage "radar" }}active{{ end }}" href="/radar"><i class="bi bi-radar text-rose"></i> Anomaly Radar</a>
+              </li>
+            </ul>
+          </div>
+        </div>
+        {{ else if or (eq .ActivePage "models") (eq .ActivePage "combos") (eq .ActivePage "pricing") (eq .ActivePage "translator") }}
+        <!-- Models & Routing Hub Nav -->
+        <div class="hub-nav-wrapper mb-4">
+          <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
+            <div class="d-flex align-items-center gap-2">
+              <span class="badge-modern badge-indigo text-uppercase" style="font-size:0.65rem; letter-spacing:0.04em;">HUB</span>
+              <span class="fw-bold text-light fs-6"><i class="bi bi-diagram-3-fill text-indigo me-1"></i>Models & Routing</span>
+            </div>
+            <ul class="nav nav-pills nav-pills-modern" role="tablist">
+              <li class="nav-item">
+                <a class="nav-link {{ if eq .ActivePage "models" }}active{{ end }}" href="/models"><i class="bi bi-cpu text-primary"></i> Models & Aliases</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {{ if eq .ActivePage "combos" }}active{{ end }}" href="/combos"><i class="bi bi-diagram-3 text-indigo"></i> Model Combos</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {{ if eq .ActivePage "pricing" }}active{{ end }}" href="/pricing"><i class="bi bi-tag text-warning"></i> Pricing Catalog</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {{ if eq .ActivePage "translator" }}active{{ end }}" href="/translator"><i class="bi bi-translate text-emerald"></i> Translator</a>
+              </li>
+            </ul>
+          </div>
+        </div>
+        {{ else if or (eq .ActivePage "providers") (eq .ActivePage "nodes") (eq .ActivePage "quota") (eq .ActivePage "proxy-pools") }}
+        <!-- Providers & Networks Hub Nav -->
+        <div class="hub-nav-wrapper mb-4">
+          <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
+            <div class="d-flex align-items-center gap-2">
+              <span class="badge-modern badge-primary text-uppercase" style="font-size:0.65rem; letter-spacing:0.04em;">HUB</span>
+              <span class="fw-bold text-light fs-6"><i class="bi bi-hdd-network text-primary me-1"></i>Providers & Networks</span>
+            </div>
+            <ul class="nav nav-pills nav-pills-modern" role="tablist">
+              <li class="nav-item">
+                <a class="nav-link {{ if eq .ActivePage "providers" }}active{{ end }}" href="/providers"><i class="bi bi-cloud-check text-primary"></i> Upstream Accounts</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {{ if eq .ActivePage "nodes" }}active{{ end }}" href="/nodes"><i class="bi bi-server text-cyan"></i> Provider Nodes</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {{ if eq .ActivePage "quota" }}active{{ end }}" href="/quota"><i class="bi bi-pie-chart-fill text-emerald"></i> Quota Overview</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {{ if eq .ActivePage "proxy-pools" }}active{{ end }}" href="/proxy-pools"><i class="bi bi-shield-shaded text-cyan"></i> Proxy Pools</a>
+              </li>
+            </ul>
+          </div>
+        </div>
+        {{ else if or (eq .ActivePage "token-saver") (eq .ActivePage "pxpipe") (eq .ActivePage "media") (eq .ActivePage "mitm") (eq .ActivePage "mcp") }}
+        <!-- Optimization & Plugins Hub Nav -->
+        <div class="hub-nav-wrapper mb-4">
+          <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
+            <div class="d-flex align-items-center gap-2">
+              <span class="badge-modern badge-emerald text-uppercase" style="font-size:0.65rem; letter-spacing:0.04em;">HUB</span>
+              <span class="fw-bold text-light fs-6"><i class="bi bi-magic text-emerald me-1"></i>Optimization & Plugins</span>
+            </div>
+            <ul class="nav nav-pills nav-pills-modern" role="tablist">
+              <li class="nav-item">
+                <a class="nav-link {{ if eq .ActivePage "token-saver" }}active{{ end }}" href="/token-saver"><i class="bi bi-magic text-emerald"></i> Token Saver & RTK</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {{ if eq .ActivePage "pxpipe" }}active{{ end }}" href="/pxpipe"><i class="bi bi-funnel text-info"></i> PXPipe</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {{ if eq .ActivePage "media" }}active{{ end }}" href="/media"><i class="bi bi-speaker text-pink"></i> Media Voices</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {{ if eq .ActivePage "mitm" }}active{{ end }}" href="/mitm"><i class="bi bi-shuffle text-warning"></i> MITM Bridge</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {{ if eq .ActivePage "mcp" }}active{{ end }}" href="/mcp"><i class="bi bi-boxes text-emerald"></i> MCP Inspector</a>
+              </li>
+            </ul>
+          </div>
+        </div>
+        {{ else if or (eq .ActivePage "settings") (eq .ActivePage "profile") (eq .ActivePage "billing") (eq .ActivePage "users") (eq .ActivePage "console-log") }}
+        <!-- System & Settings Hub Nav -->
+        <div class="hub-nav-wrapper mb-4">
+          <div class="d-flex flex-column flex-lg-row align-items-lg-center justify-content-between gap-3">
+            <div class="d-flex align-items-center gap-2">
+              <span class="badge-modern badge-warning text-uppercase" style="font-size:0.65rem; letter-spacing:0.04em;">HUB</span>
+              <span class="fw-bold text-light fs-6"><i class="bi bi-sliders text-warning me-1"></i>System & Settings</span>
+            </div>
+            <ul class="nav nav-pills nav-pills-modern" role="tablist">
+              <li class="nav-item">
+                <a class="nav-link {{ if eq .ActivePage "profile" }}active{{ end }}" href="/profile"><i class="bi bi-person-circle text-muted"></i> My Profile</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {{ if eq .ActivePage "billing" }}active{{ end }}" href="/billing"><i class="bi bi-cart text-emerald"></i> Buy Tokens</a>
+              </li>
+              {{ if .IsAdmin }}
+              <li class="nav-item">
+                <a class="nav-link {{ if eq .ActivePage "users" }}active{{ end }}" href="/users"><i class="bi bi-people-fill text-warning"></i> Users & Quotas</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {{ if eq .ActivePage "settings" }}active{{ end }}" href="/settings"><i class="bi bi-gear-fill text-muted"></i> Gateway Settings</a>
+              </li>
+              <li class="nav-item">
+                <a class="nav-link {{ if eq .ActivePage "console-log" }}active{{ end }}" href="/console-log"><i class="bi bi-terminal-split text-info"></i> Console Log</a>
+              </li>
+              {{ end }}
+            </ul>
+          </div>
+        </div>
+        {{ end }}
         {{ template "content" . }}
       </main>
     </div>
@@ -423,7 +422,7 @@
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <script src="/static/js/app.js?v=9"></script>
+  <script src="/static/js/app.js?v=10"></script>
   <script>
     // PWA: service worker + install prompt.
     if ('serviceWorker' in navigator) {
