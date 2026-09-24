@@ -69,3 +69,7 @@ Thumbs.db
 
 # Docker Local Overrides
 docker-compose.override.yml
+
+# Internal Multi-Agent Orchestrator
+orchestrator/
+
