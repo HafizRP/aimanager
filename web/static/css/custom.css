@@ -633,6 +633,35 @@ body {
   transform: translate(1px, 1px);
 }
 
+/* Hub Sub-Navigation Bar (CatatKeu Neo-Brutalis) */
+.hub-nav-wrapper {
+  background-color: var(--bg-surface);
+  border: 2.5px solid var(--neo-border);
+  border-radius: var(--neo-radius);
+  box-shadow: 4px 4px 0px var(--neo-shadow);
+  padding: 0.65rem 1rem;
+}
+
+.hub-nav-wrapper .nav-pills-modern {
+  overflow-x: auto;
+  white-space: nowrap;
+  flex-wrap: nowrap;
+  padding-bottom: 2px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.hub-nav-wrapper .nav-pills-modern::-webkit-scrollbar {
+  display: none;
+}
+
+@media (min-width: 992px) {
+  .hub-nav-wrapper .nav-pills-modern {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+}
+
 /* Cards & Surface Containers (CatatKeu Neo-Brutalist) */
 .card-modern {
   background-color: var(--bg-surface);
