@@ -128,4 +128,41 @@ func TestCircuitBreakerRegistry(t *testing.T) {
 	if _, ok := snaps["provider:antigravity"]; !ok {
 		t.Fatal("expected provider:antigravity in snapshots")
 	}
+
+	// Trip cb1 to Open
+	cb1.RecordFailure()
+	cb1.RecordFailure()
+	cb1.RecordFailure()
+	if cb1.State() != StateOpen {
+		t.Fatalf("expected cb1 state Open, got %s", cb1.State())
+	}
+
+	// Reset specific breaker
+	if !registry.Reset("provider:antigravity") {
+		t.Fatal("expected Reset to return true for existing breaker")
+	}
+	if cb1.State() != StateClosed {
+		t.Fatalf("expected cb1 state Closed after Reset, got %s", cb1.State())
+	}
+	if registry.Reset("non-existent") {
+		t.Fatal("expected Reset to return false for non-existent breaker")
+	}
+
+	// Trip both to Open
+	cb1.RecordFailure()
+	cb1.RecordFailure()
+	cb1.RecordFailure()
+	cb3.RecordFailure()
+	cb3.RecordFailure()
+	cb3.RecordFailure()
+	if cb1.State() != StateOpen || cb3.State() != StateOpen {
+		t.Fatal("expected both cb1 and cb3 to be Open")
+	}
+
+	// Reset all
+	registry.ResetAll()
+	if cb1.State() != StateClosed || cb3.State() != StateClosed {
+		t.Fatal("expected all breakers to be Closed after ResetAll")
+	}
 }
+

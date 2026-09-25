@@ -6,18 +6,45 @@
     <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
       <i class="bi bi-radar text-rose"></i> Anomaly Radar
     </h4>
-    <p class="text-dim small mb-0">Error spikes auto-disable keys · usage spikes & IP bursts alert via Telegram · budget cutoffs logged.</p>
+    <p class="text-dim small mb-0">Upstream circuit breakers · error spikes & auto-disabled keys · Telegram alerts & budget logs.</p>
   </div>
   <button type="button" class="btn-modern-primary btn-sm" onclick="loadRadar()">Refresh</button>
 </div>
 
 <div class="card-modern p-4 mb-4">
-  <h6 class="fw-bold text-light mb-3">Upstream Health</h6>
+  <h6 class="fw-bold text-light mb-3"><i class="bi bi-heart-pulse text-emerald me-1"></i> Upstream Reliability Health</h6>
   <div id="upHealth"><p class="text-dim small mb-0">Loading…</p></div>
 </div>
 
+<div class="card-modern p-0 overflow-hidden mb-4">
+  <div class="p-3 border-bottom border-secondary border-opacity-10 d-flex justify-content-between align-items-center">
+    <h6 class="fw-bold text-light mb-0"><i class="bi bi-lightning-charge text-amber me-1"></i> Upstream Circuit Breakers</h6>
+    <button type="button" class="btn-modern-ghost btn-sm text-rose py-1 px-2" onclick="resetAllBreakers()" title="Reset all circuit breakers to Closed state">
+      <i class="bi bi-arrow-counterclockwise me-1"></i> Reset All
+    </button>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-modern mb-0">
+      <thead>
+        <tr>
+          <th>Target / Model</th>
+          <th>State</th>
+          <th>Consecutive Fails</th>
+          <th>Requests (OK / Fail)</th>
+          <th>Short-Circuits</th>
+          <th>Last State Change</th>
+          <th class="text-end"><span class="visually-hidden">Action</span></th>
+        </tr>
+      </thead>
+      <tbody id="circuitBreakersBody">
+        <tr><td colspan="7" class="text-dim small">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
 <div class="card-modern p-0 overflow-hidden">
-  <div class="p-3 border-bottom border-secondary border-opacity-10"><h6 class="fw-bold text-light mb-0">Findings</h6></div>
+  <div class="p-3 border-bottom border-secondary border-opacity-10"><h6 class="fw-bold text-light mb-0"><i class="bi bi-shield-exclamation text-indigo me-1"></i> Security & Anomaly Findings</h6></div>
   <div class="table-responsive"><table class="table table-modern mb-0">
     <thead><tr><th>Time</th><th>Kind</th><th>Detail</th><th>Action</th></tr></thead>
     <tbody id="radarBody"><tr><td colspan="4" class="text-dim small">Loading…</td></tr></tbody>
@@ -27,6 +54,7 @@
 <script>
 function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function formatWIB(isoString) {
+  if (!isoString) return '-';
   try {
     const d = new Date(isoString);
     if (isNaN(d.getTime())) return isoString;
@@ -49,7 +77,20 @@ function kindBadge(k){
   const v = m[k] || ['gray', k];
   return `<span class="badge-modern badge-${v[0]}">${v[1]}</span>`;
 }
+function stateBadge(state) {
+  const s = String(state || '').toLowerCase();
+  if (s === 'closed') {
+    return `<span class="badge-modern badge-emerald"><i class="bi bi-shield-check me-1"></i>CLOSED</span>`;
+  } else if (s === 'half-open' || s === 'halfopen') {
+    return `<span class="badge-modern badge-amber"><i class="bi bi-shield-slash me-1"></i>HALF-OPEN</span>`;
+  } else if (s === 'open') {
+    return `<span class="badge-modern badge-rose"><i class="bi bi-exclamation-triangle-fill me-1"></i>OPEN</span>`;
+  }
+  return `<span class="badge-modern badge-gray">${esc(state)}</span>`;
+}
+
 async function loadRadar() {
+  // Upstream Health
   try {
     const h = await fetch('/api/upstream/health').then(r => r.json());
     const pct = (h.error_rate * 100).toFixed(1);
@@ -58,6 +99,37 @@ async function loadRadar() {
       `<div class="d-flex flex-wrap align-items-center gap-3 small"><span class="text-light fw-bold"><i class="bi bi-circle-fill ${dot} me-1"></i>${esc(h.status.toUpperCase())}</span>` +
       `<span class="text-dim font-monospace">${h.total_requests} req · ${h.failures} fail (${pct}%) · consec fails ${h.consecutive_failures}</span></div>`;
   } catch (e) { document.getElementById('upHealth').innerHTML = '<p class="text-rose small mb-0">Health unavailable.</p>'; }
+
+  // Circuit Breakers
+  try {
+    const cbData = await fetch('/api/upstream/circuit-breakers').then(r => r.json());
+    const breakers = cbData.breakers || {};
+    const keys = Object.keys(breakers);
+    if (!keys.length) {
+      document.getElementById('circuitBreakersBody').innerHTML = '<tr><td colspan="7" class="text-dim small">No upstream circuit breakers active yet. Active breakers appear upon proxy requests.</td></tr>';
+    } else {
+      document.getElementById('circuitBreakersBody').innerHTML = keys.map(k => {
+        const b = breakers[k];
+        return `<tr>
+          <td class="fw-bold text-light small"><span class="font-monospace">${esc(b.name || k)}</span></td>
+          <td>${stateBadge(b.state)}</td>
+          <td class="small font-monospace ${b.consecutive_failures > 0 ? 'text-rose fw-bold' : 'text-dim'}">${b.consecutive_failures}</td>
+          <td class="small font-monospace">${b.total_successes} / <span class="text-rose">${b.total_failures}</span> <span class="text-dim">(${b.total_requests} total)</span></td>
+          <td class="small font-monospace ${b.total_short_circuits > 0 ? 'text-rose' : 'text-dim'}">${b.total_short_circuits}</td>
+          <td class="text-dim small font-monospace">${formatWIB(b.last_state_change)}</td>
+          <td class="text-end">
+            <button type="button" class="btn-modern-ghost py-1 px-2 text-warning" title="Reset this circuit breaker" onclick="resetBreaker('${esc(k)}')">
+              <i class="bi bi-arrow-counterclockwise"></i> Reset
+            </button>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+  } catch (e) {
+    document.getElementById('circuitBreakersBody').innerHTML = '<tr><td colspan="7" class="text-rose small">Error loading circuit breakers: ' + esc(e.message) + '</td></tr>';
+  }
+
+  // Security & Radar Findings
   try {
     const evs = await fetch('/api/radar/events?limit=100').then(r => r.json());
     document.getElementById('radarBody').innerHTML = evs && evs.length ? evs.map(e =>
@@ -65,6 +137,48 @@ async function loadRadar() {
       : '<tr><td colspan="4" class="text-dim small">No findings. Quiet is good.</td></tr>';
   } catch (e) { document.getElementById('radarBody').innerHTML = '<tr><td colspan="4" class="text-rose small">Error: ' + esc(e.message) + '</td></tr>'; }
 }
+
+async function resetBreaker(name) {
+  try {
+    const res = await fetch(`/api/upstream/circuit-breakers/${encodeURIComponent(name)}/reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (res.ok) {
+      if (typeof window.showToast === 'function') {
+        window.showToast("Circuit breaker reset! ✨", "🔄");
+      }
+      loadRadar();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      alert('Failed to reset circuit breaker: ' + (data.message || res.statusText));
+    }
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+async function resetAllBreakers() {
+  if (!confirm('Are you sure you want to reset all upstream circuit breakers to Closed state?')) return;
+  try {
+    const res = await fetch('/api/upstream/circuit-breakers/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (res.ok) {
+      if (typeof window.showToast === 'function') {
+        window.showToast("All circuit breakers reset! ✨", "🔄");
+      }
+      loadRadar();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      alert('Failed to reset circuit breakers: ' + (data.message || res.statusText));
+    }
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+
 document.addEventListener('DOMContentLoaded', loadRadar);
 </script>
 {{ end }}
