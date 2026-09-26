@@ -910,3 +910,71 @@ func TestAPICircuitBreakers(t *testing.T) {
 	}
 }
 
+func TestChatPageHandler(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test_chat_page.db")
+	db, err := database.InitDB(dbPath)
+	if err != nil {
+		t.Fatalf("InitDB failed: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+	cfg := &config.Config{
+		SessionSecret: "test-secret-12345678901234567890",
+		Port:          20129,
+	}
+
+	h, err := NewHandler(cfg, repo, nil, nil)
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+
+	ctx := context.Background()
+	user := &entity.User{
+		ID:            "u-chat-tester",
+		Username:      "chattester",
+		Name:          "Chat Tester",
+		PasswordHash:  "hash123",
+		Role:          "user",
+		AllowedModels: `["main", "free-only"]`,
+		IsActive:      true,
+	}
+	if err := repo.CreateUser(ctx, user); err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+
+	key := &entity.APIKey{
+		ID:       "key-chat-1",
+		UserID:   user.ID,
+		Key:      "«redacted:sk-…»",
+		Name:     "Test Chat Key",
+		IsActive: true,
+	}
+	if err := repo.CreateAPIKey(ctx, key); err != nil {
+		t.Fatalf("CreateAPIKey failed: %v", err)
+	}
+
+	// 1. Authenticated user accesses /chat
+	req := httptest.NewRequest(http.MethodGet, "/chat", nil)
+	req = req.WithContext(context.WithValue(ctx, userContextKey, user))
+	rr := httptest.NewRecorder()
+	h.ChatPage(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status 200 OK for /chat, got %d", rr.Code)
+	}
+
+	body := rr.Body.String()
+	if !strings.Contains(body, "Playground") {
+		t.Errorf("expected response to contain 'Playground', got %s", body)
+	}
+	if !strings.Contains(body, "PRESETS") && !strings.Contains(body, "Presets") {
+		t.Errorf("expected response to contain Presets toolbar")
+	}
+	if !strings.Contains(body, "BUILTIN_PRESETS") {
+		t.Errorf("expected response to contain BUILTIN_PRESETS script")
+	}
+	if !strings.Contains(body, "exportAllSessionsJSON") {
+		t.Errorf("expected response to contain exportAllSessionsJSON")
+	}
+}
