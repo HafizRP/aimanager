@@ -62,13 +62,24 @@ func (h *Handler) APIReplaySource(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"id":            l.ID,
-		"model":         l.Model,
-		"path":          l.Path,
-		"request_body":  l.RequestBody,
-		"response_text": l.ResponseText,
-		"status_code":   l.StatusCode,
-		"created_at":    l.CreatedAt,
+		"id":                l.ID,
+		"user_id":           l.UserID,
+		"user_name":         l.UserName,
+		"key_name":          l.KeyName,
+		"model":             l.Model,
+		"path":              l.Path,
+		"method":            l.Method,
+		"is_stream":         l.IsStream,
+		"prompt_tokens":     l.PromptTokens,
+		"completion_tokens": l.CompletionTokens,
+		"total_tokens":      l.TotalTokens,
+		"duration_ms":       l.DurationMs,
+		"client_ip":         l.ClientIP,
+		"error_message":     l.ErrorMessage,
+		"request_body":      l.RequestBody,
+		"response_text":     l.ResponseText,
+		"status_code":       l.StatusCode,
+		"created_at":        l.CreatedAt,
 	})
 }
 

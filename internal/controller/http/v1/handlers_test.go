@@ -3,6 +3,7 @@ package v1
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -976,5 +977,172 @@ func TestChatPageHandler(t *testing.T) {
 	}
 	if !strings.Contains(body, "exportAllSessionsJSON") {
 		t.Errorf("expected response to contain exportAllSessionsJSON")
+	}
+}
+
+func TestLogsPageAndPayloadInspector(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test_logs_inspect.db")
+	db, err := database.InitDB(dbPath)
+	if err != nil {
+		t.Fatalf("InitDB failed: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+	cfg := &config.Config{
+		SessionSecret: "test-secret-12345678901234567890",
+		Port:          20129,
+	}
+
+	h, err := NewHandler(cfg, repo, nil, nil)
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+
+	ctx := context.Background()
+	user1 := &entity.User{
+		ID:            "u-logs-1",
+		Username:      "loguser1",
+		Name:          "Log User 1",
+		PasswordHash:  "hash123",
+		Role:          "user",
+		AllowedModels: `["main"]`,
+		IsActive:      true,
+	}
+	if err := repo.CreateUser(ctx, user1); err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+
+	user2 := &entity.User{
+		ID:            "u-logs-2",
+		Username:      "loguser2",
+		Name:          "Log User 2",
+		PasswordHash:  "hash123",
+		Role:          "user",
+		AllowedModels: `["main"]`,
+		IsActive:      true,
+	}
+	if err := repo.CreateUser(ctx, user2); err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+
+	adminUser := &entity.User{
+		ID:            "u-logs-admin",
+		Username:      "adminlogs",
+		Name:          "Admin Logs",
+		PasswordHash:  "hash123",
+		Role:          "admin",
+		AllowedModels: `["*"]`,
+		IsActive:      true,
+	}
+	if err := repo.CreateUser(ctx, adminUser); err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+
+	key1 := &entity.APIKey{
+		ID:       "k-log-1",
+		UserID:   user1.ID,
+		Key:      "«redacted:sk-…»",
+		Name:     "Test Key 1",
+		IsActive: true,
+	}
+	if err := repo.CreateAPIKey(ctx, key1); err != nil {
+		t.Fatalf("CreateAPIKey failed: %v", err)
+	}
+
+	logEntry := &entity.RequestLog{
+		UserID:           user1.ID,
+		APIKeyID:         key1.ID,
+		Path:             "/v1/chat/completions",
+		Method:           "POST",
+		Model:            "ag/gemini-3.7-flash-high",
+		IsStream:         true,
+		PromptTokens:     42,
+		CompletionTokens: 88,
+		TotalTokens:      130,
+		StatusCode:       200,
+		DurationMs:       650,
+		ClientIP:         "127.0.0.1",
+		RequestBody:      `{"model":"ag/gemini-3.7-flash-high","messages":[{"role":"user","content":"Hello AI"}]}`,
+		ResponseText:     "Hello there! How can I assist you today?",
+	}
+	if err := repo.CreateRequestLog(ctx, logEntry); err != nil {
+		t.Fatalf("CreateRequestLog failed: %v", err)
+	}
+
+	logs, _, err := repo.GetRequestLogs(ctx, 10, 0, user1.ID, "", 0)
+	if err != nil || len(logs) == 0 {
+		t.Fatalf("failed to retrieve inserted log: %v", err)
+	}
+	logID := logs[0].ID
+
+	// 1. LogsPage renders 200 OK and includes inspect modal & table
+	reqLogs := httptest.NewRequest(http.MethodGet, "/logs", nil)
+	reqLogs = reqLogs.WithContext(context.WithValue(ctx, userContextKey, user1))
+	rrLogs := httptest.NewRecorder()
+	h.LogsPage(rrLogs, reqLogs)
+
+	if rrLogs.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for /logs, got %d", rrLogs.Code)
+	}
+	bodyLogs := rrLogs.Body.String()
+	if !strings.Contains(bodyLogs, "Request Audit Logs") {
+		t.Errorf("expected page to contain 'Request Audit Logs'")
+	}
+	if !strings.Contains(bodyLogs, "inspectLogModal") {
+		t.Errorf("expected page to contain 'inspectLogModal'")
+	}
+	if !strings.Contains(bodyLogs, "inspectLog(") {
+		t.Errorf("expected page to contain 'inspectLog(' JS call")
+	}
+
+	// 2. Fetch log payload via APIReplaySource by owner (user1) -> 200 OK
+	reqSource := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/replay/source?id=%d", logID), nil)
+	reqSource = reqSource.WithContext(context.WithValue(ctx, userContextKey, user1))
+	rrSource := httptest.NewRecorder()
+	h.APIReplaySource(rrSource, reqSource)
+
+	if rrSource.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK from APIReplaySource for owner, got %d", rrSource.Code)
+	}
+
+	var payload map[string]interface{}
+	if err := json.NewDecoder(rrSource.Body).Decode(&payload); err != nil {
+		t.Fatalf("failed to decode APIReplaySource response: %v", err)
+	}
+	if payload["model"] != "ag/gemini-3.7-flash-high" {
+		t.Errorf("expected model 'ag/gemini-3.7-flash-high', got %v", payload["model"])
+	}
+	if payload["request_body"] != logEntry.RequestBody {
+		t.Errorf("expected request_body match, got %v", payload["request_body"])
+	}
+	if payload["response_text"] != logEntry.ResponseText {
+		t.Errorf("expected response_text match, got %v", payload["response_text"])
+	}
+	if int(payload["status_code"].(float64)) != 200 {
+		t.Errorf("expected status_code 200, got %v", payload["status_code"])
+	}
+	if int(payload["total_tokens"].(float64)) != 130 {
+		t.Errorf("expected total_tokens 130, got %v", payload["total_tokens"])
+	}
+
+	// 3. User2 (non-admin, not owner) attempts to fetch user1's log -> 404
+	reqForbidden := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/replay/source?id=%d", logID), nil)
+	reqForbidden = reqForbidden.WithContext(context.WithValue(ctx, userContextKey, user2))
+	rrForbidden := httptest.NewRecorder()
+	h.APIReplaySource(rrForbidden, reqForbidden)
+
+	if rrForbidden.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 Not Found for non-owner, got %d", rrForbidden.Code)
+	}
+
+	// 4. Admin attempts to fetch user1's log -> 200 OK
+	reqAdmin := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/replay/source?id=%d", logID), nil)
+	reqAdmin = reqAdmin.WithContext(context.WithValue(ctx, userContextKey, adminUser))
+	rrAdmin := httptest.NewRecorder()
+	h.APIReplaySource(rrAdmin, reqAdmin)
+
+	if rrAdmin.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for admin, got %d", rrAdmin.Code)
 	}
 }
