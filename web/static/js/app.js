@@ -412,7 +412,7 @@ function initApp() {
       { title: "Cache Analytics & FinOps (Exact Response Hits)", group: "Observability", href: "/cache-analytics", iconClass: "bi bi-database-check text-cyan", badgeText: "FinOps", keywords: "cache analytics exact response hit ratio sha256 savings finops rtk analisis cache" },
       { title: "Speed Benchmark (TTFT & Throughput)", group: "Observability", href: "/benchmark", iconClass: "bi bi-speedometer text-warning", badgeText: "Speed", keywords: "speed benchmark ttft latency performance throughput test leaderboard uji kecepatan" },
       { title: "Replay Lab (Prompt Diff & Model Compare)", group: "Observability", href: "/replay", iconClass: "bi bi-repeat text-info", badgeText: "Lab", keywords: "replay lab prompt diff compare models side by side output latency rerun uji ulang" },
-      { title: "Anomaly Radar (Error Spikes & Baseline Cutoff)", group: "Observability", href: "/radar", iconClass: "bi bi-radar text-rose", badgeText: "Radar", keywords: "anomaly radar security spike alerts errors baseline detection cutoff radar anomali" },
+      { title: "Anomaly Radar & Circuit Breakers", group: "Observability", href: "/radar", iconClass: "bi bi-radar text-rose", badgeText: "Radar", keywords: "anomaly radar circuit breaker breakers fault tolerance upstream health security spike alerts errors baseline detection cutoff reset anomali" },
 
       // Engine & Admin
       { title: "Models & Aliases (Catalog & Context)", group: "Models & Routing", href: "/models", iconClass: "bi bi-cpu text-primary", badgeText: "Models", keywords: "models aliases upstream mapping context list gpt claude gemini daftar model alias" },

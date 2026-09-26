@@ -76,3 +76,46 @@ func (h *Handler) APIKeyBudget(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, map[string]interface{}{"ok": true})
 }
+
+// APICircuitBreakers returns all registered upstream circuit breaker snapshots.
+func (h *Handler) APICircuitBreakers(w http.ResponseWriter, r *http.Request) {
+	if h.gwProxy == nil || h.gwProxy.CircuitBreakers() == nil {
+		writeJSON(w, map[string]interface{}{"breakers": map[string]interface{}{}, "total": 0})
+		return
+	}
+	snaps := h.gwProxy.CircuitBreakers().Snapshots()
+	writeJSON(w, map[string]interface{}{
+		"breakers": snaps,
+		"total":    len(snaps),
+	})
+}
+
+// APICircuitBreakerReset resets a specific circuit breaker by name.
+func (h *Handler) APICircuitBreakerReset(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	if name == "" {
+		http.Error(w, "circuit breaker name required", http.StatusBadRequest)
+		return
+	}
+	if h.gwProxy == nil || h.gwProxy.CircuitBreakers() == nil {
+		http.Error(w, "proxy not attached", http.StatusServiceUnavailable)
+		return
+	}
+	ok := h.gwProxy.CircuitBreakers().Reset(name)
+	if !ok {
+		http.Error(w, "circuit breaker not found", http.StatusNotFound)
+		return
+	}
+	writeJSON(w, map[string]interface{}{"ok": true, "name": name, "message": "Circuit breaker reset to Closed state"})
+}
+
+// APICircuitBreakersResetAll resets all registered circuit breakers.
+func (h *Handler) APICircuitBreakersResetAll(w http.ResponseWriter, r *http.Request) {
+	if h.gwProxy == nil || h.gwProxy.CircuitBreakers() == nil {
+		http.Error(w, "proxy not attached", http.StatusServiceUnavailable)
+		return
+	}
+	h.gwProxy.CircuitBreakers().ResetAll()
+	writeJSON(w, map[string]interface{}{"ok": true, "message": "All circuit breakers reset to Closed state"})
+}
+

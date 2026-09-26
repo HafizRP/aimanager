@@ -811,6 +811,105 @@ func TestResetKeyUsage(t *testing.T) {
 	}
 }
 
+func TestAPICircuitBreakers(t *testing.T) {
+	tempDir := t.TempDir()
+	db, err := database.InitDB(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("failed to init db: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+	cfg := &config.Config{
+		SessionSecret: "secret-12345678901234567890123456789012",
+	}
+	h, err := NewHandler(cfg, repo, nil, nil)
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+
+	gw := proxy.NewGatewayProxy(cfg, repo)
+	h.SetGatewayProxy(gw)
+
+	// Register breakers and trip one
+	cb1 := gw.CircuitBreakers().GetOrCreate("model:ag/gemini-3.7-flash-high")
+	cb2 := gw.CircuitBreakers().GetOrCreate("model:ag/claude-sonnet-4-6")
+	cb1.RecordFailure()
+	cb1.RecordFailure()
+	cb1.RecordFailure()
+
+	if cb1.State() != proxy.StateOpen {
+		t.Fatalf("expected cb1 state Open, got %s", cb1.State())
+	}
+	if cb2.State() != proxy.StateClosed {
+		t.Fatalf("expected cb2 state Closed, got %s", cb2.State())
+	}
+
+	// 1. GET /api/upstream/circuit-breakers
+	reqList := httptest.NewRequest(http.MethodGet, "/api/upstream/circuit-breakers", nil)
+	rrList := httptest.NewRecorder()
+	h.APICircuitBreakers(rrList, reqList)
+	if rrList.Code != http.StatusOK {
+		t.Fatalf("APICircuitBreakers returned %d", rrList.Code)
+	}
+	var listResp struct {
+		Breakers map[string]proxy.CircuitBreakerSnapshot `json:"breakers"`
+		Total    int                                     `json:"total"`
+	}
+	if err := json.NewDecoder(rrList.Body).Decode(&listResp); err != nil {
+		t.Fatalf("decode circuit breakers failed: %v", err)
+	}
+	if listResp.Total != 2 {
+		t.Fatalf("expected 2 breakers, got %d", listResp.Total)
+	}
+	if listResp.Breakers["model:ag/gemini-3.7-flash-high"].State != proxy.StateOpen {
+		t.Errorf("expected gemini breaker Open in snapshot, got %s", listResp.Breakers["model:ag/gemini-3.7-flash-high"].State)
+	}
+
+	// 2. POST /api/upstream/circuit-breakers/{name}/reset
+	reqReset := httptest.NewRequest(http.MethodPost, "/api/upstream/circuit-breakers/model:ag/gemini-3.7-flash-high/reset", nil)
+	rctxReset := chi.NewRouteContext()
+	rctxReset.URLParams.Add("name", "model:ag/gemini-3.7-flash-high")
+	reqReset = reqReset.WithContext(context.WithValue(reqReset.Context(), chi.RouteCtxKey, rctxReset))
+	rrReset := httptest.NewRecorder()
+	h.APICircuitBreakerReset(rrReset, reqReset)
+	if rrReset.Code != http.StatusOK {
+		t.Fatalf("APICircuitBreakerReset returned %d", rrReset.Code)
+	}
+	if cb1.State() != proxy.StateClosed {
+		t.Fatalf("expected cb1 state Closed after reset, got %s", cb1.State())
+	}
+
+	// Reset non-existent breaker -> 404
+	reqReset404 := httptest.NewRequest(http.MethodPost, "/api/upstream/circuit-breakers/non-existent/reset", nil)
+	rctx404 := chi.NewRouteContext()
+	rctx404.URLParams.Add("name", "non-existent")
+	reqReset404 = reqReset404.WithContext(context.WithValue(reqReset404.Context(), chi.RouteCtxKey, rctx404))
+	rrReset404 := httptest.NewRecorder()
+	h.APICircuitBreakerReset(rrReset404, reqReset404)
+	if rrReset404.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for non-existent breaker, got %d", rrReset404.Code)
+	}
+
+	// 3. Trip both and test ResetAll
+	cb1.RecordFailure()
+	cb1.RecordFailure()
+	cb1.RecordFailure()
+	cb2.RecordFailure()
+	cb2.RecordFailure()
+	cb2.RecordFailure()
+
+	reqResetAll := httptest.NewRequest(http.MethodPost, "/api/upstream/circuit-breakers/reset", nil)
+	rrResetAll := httptest.NewRecorder()
+	h.APICircuitBreakersResetAll(rrResetAll, reqResetAll)
+	if rrResetAll.Code != http.StatusOK {
+		t.Fatalf("APICircuitBreakersResetAll returned %d", rrResetAll.Code)
+	}
+	if cb1.State() != proxy.StateClosed || cb2.State() != proxy.StateClosed {
+		t.Fatalf("expected all breakers Closed after ResetAll, got cb1=%s, cb2=%s", cb1.State(), cb2.State())
+	}
+}
+
 func TestChatPageHandler(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "test_chat_page.db")
 	db, err := database.InitDB(dbPath)
@@ -847,7 +946,7 @@ func TestChatPageHandler(t *testing.T) {
 	key := &entity.APIKey{
 		ID:       "key-chat-1",
 		UserID:   user.ID,
-		Key:      "sk-gw-chat123456",
+		Key:      "«redacted:sk-…»",
 		Name:     "Test Chat Key",
 		IsActive: true,
 	}

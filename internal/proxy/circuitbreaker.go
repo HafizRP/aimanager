@@ -275,3 +275,25 @@ func (r *CircuitBreakerRegistry) Snapshots() map[string]CircuitBreakerSnapshot {
 	}
 	return result
 }
+
+// Reset resets the state and metrics of a specific circuit breaker by name.
+func (r *CircuitBreakerRegistry) Reset(name string) bool {
+	r.mu.RLock()
+	cb, exists := r.breakers[name]
+	r.mu.RUnlock()
+	if !exists {
+		return false
+	}
+	cb.Reset()
+	return true
+}
+
+// ResetAll resets all registered circuit breakers to Closed state.
+func (r *CircuitBreakerRegistry) ResetAll() {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, cb := range r.breakers {
+		cb.Reset()
+	}
+}
+
