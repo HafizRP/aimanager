@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	"9router-gateway/internal/entity"
 	"9router-gateway/internal/proxy"
 	"9router-gateway/internal/repository"
+	"9router-gateway/internal/upstream"
 )
 
 func TestSafeRedirectURL(t *testing.T) {
@@ -977,4 +979,201 @@ func TestChatPageHandler(t *testing.T) {
 	if !strings.Contains(body, "exportAllSessionsJSON") {
 		t.Errorf("expected response to contain exportAllSessionsJSON")
 	}
+}
+
+func TestPricingAndCostEstimator(t *testing.T) {
+	tempDir := t.TempDir()
+	db, err := database.InitDB(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("InitDB failed: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+	cfg := &config.Config{
+		SessionSecret: "test-secret-12345678901234567890",
+		Port:          20129,
+	}
+
+	h, err := NewHandler(cfg, repo, nil, nil)
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+	ctx := context.Background()
+
+	// Mock Pricing on CoreClient
+	mockCore := &upstream.MockCoreClient{
+		PricingFunc: func(ctx context.Context) (map[string]interface{}, error) {
+			return map[string]interface{}{
+				"tokenrouter": map[string]interface{}{
+					"anthropic/claude-3-7-sonnet": map[string]interface{}{
+						"input":     3.0,
+						"output":    15.0,
+						"cached":    0.3,
+						"reasoning": 15.0,
+					},
+				},
+				"gh": map[string]interface{}{
+					"gpt-4o": map[string]interface{}{
+						"input":  2.5,
+						"output": 10.0,
+					},
+				},
+			}, nil
+		},
+	}
+	h.coreClient = mockCore
+
+	adminUser := &entity.User{
+		ID:       "admin-1",
+		Username: "admin",
+		Role:     "admin",
+		IsActive: true,
+	}
+
+	// 1. Test PricingPage renders 200 OK and contains calculator elements
+	t.Run("PricingPage Render", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/pricing", nil)
+		req = req.WithContext(context.WithValue(ctx, userContextKey, adminUser))
+		rr := httptest.NewRecorder()
+		h.PricingPage(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected status 200 OK for /pricing, got %d", rr.Code)
+		}
+
+		body := rr.Body.String()
+		if !strings.Contains(body, "Pricing &amp; Cost Calculator") && !strings.Contains(body, "Pricing & Cost Calculator") {
+			t.Errorf("expected response to contain 'Pricing & Cost Calculator'")
+		}
+		if !strings.Contains(body, "Cost Calculator") {
+			t.Errorf("expected response to contain 'Cost Calculator'")
+		}
+		if !strings.Contains(body, "Rate Catalog") {
+			t.Errorf("expected response to contain 'Rate Catalog'")
+		}
+		if !strings.Contains(body, "calculateCost") {
+			t.Errorf("expected response to contain 'calculateCost' function")
+		}
+	})
+
+	// 2. Test APIPricing returns raw pricing map
+	t.Run("APIPricing JSON", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/pricing", nil)
+		req = req.WithContext(context.WithValue(ctx, userContextKey, adminUser))
+		rr := httptest.NewRecorder()
+		h.APIPricing(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected status 200 OK for /api/pricing, got %d", rr.Code)
+		}
+
+		var data map[string]interface{}
+		if err := json.Unmarshal(rr.Body.Bytes(), &data); err != nil {
+			t.Fatalf("invalid json response: %v", err)
+		}
+		if _, ok := data["tokenrouter"]; !ok {
+			t.Errorf("expected 'tokenrouter' key in pricing response")
+		}
+	})
+
+	// 3. Test APIPricingEstimate with catalog model
+	t.Run("APIPricingEstimate Catalog Model", func(t *testing.T) {
+		payload := map[string]interface{}{
+			"source":            "tokenrouter",
+			"model":             "anthropic/claude-3-7-sonnet",
+			"prompt_tokens":     1000,
+			"completion_tokens": 500,
+			"cached_tokens":     200,
+			"reasoning_tokens":  100,
+			"requests":          100,
+			"usd_to_idr":        16000.0,
+		}
+		bodyBytes, _ := json.Marshal(payload)
+		req := httptest.NewRequest(http.MethodPost, "/api/pricing/estimate", bytes.NewReader(bodyBytes))
+		req = req.WithContext(context.WithValue(ctx, userContextKey, adminUser))
+		rr := httptest.NewRecorder()
+		h.APIPricingEstimate(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected status 200 OK for /api/pricing/estimate, got %d: %s", rr.Code, rr.Body.String())
+		}
+
+		var res PricingEstimateResponse
+		if err := json.Unmarshal(rr.Body.Bytes(), &res); err != nil {
+			t.Fatalf("invalid response json: %v", err)
+		}
+
+		if res.Model != "anthropic/claude-3-7-sonnet" {
+			t.Errorf("expected model 'anthropic/claude-3-7-sonnet', got %s", res.Model)
+		}
+
+		// Calculations:
+		// input: 1000 tokens * (3.0 / 1M) = $0.003
+		// output: 500 tokens * (15.0 / 1M) = $0.0075
+		// cached: 200 tokens * (0.3 / 1M) = $0.00006
+		// reasoning: 100 tokens * (15.0 / 1M) = $0.0015
+		// single req = 0.003 + 0.0075 + 0.00006 + 0.0015 = 0.01206
+		// total 100 reqs = 1.206 USD
+		totalCostUSD := res.CostUSD["total_cost"]
+		if totalCostUSD < 1.20 || totalCostUSD > 1.21 {
+			t.Errorf("expected total_cost around 1.206 USD, got %f", totalCostUSD)
+		}
+
+		totalCostIDR := res.CostIDR["total_cost"]
+		expectedIDR := totalCostUSD * 16000.0
+		if totalCostIDR != expectedIDR {
+			t.Errorf("expected total IDR %f, got %f", expectedIDR, totalCostIDR)
+		}
+	})
+
+	// 4. Test APIPricingEstimate with Custom Model
+	t.Run("APIPricingEstimate Custom Rates", func(t *testing.T) {
+		payload := map[string]interface{}{
+			"source":              "custom",
+			"prompt_tokens":       2000,
+			"completion_tokens":   1000,
+			"requests":            50,
+			"usd_to_idr":          16500.0,
+			"custom_input_rate":   1.0,
+			"custom_output_rate":  2.0,
+			"custom_cached_rate":  0.1,
+			"custom_reasoning_rate": 2.0,
+		}
+		bodyBytes, _ := json.Marshal(payload)
+		req := httptest.NewRequest(http.MethodPost, "/api/pricing/estimate", bytes.NewReader(bodyBytes))
+		req = req.WithContext(context.WithValue(ctx, userContextKey, adminUser))
+		rr := httptest.NewRecorder()
+		h.APIPricingEstimate(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected status 200 OK, got %d", rr.Code)
+		}
+
+		var res PricingEstimateResponse
+		if err := json.Unmarshal(rr.Body.Bytes(), &res); err != nil {
+			t.Fatalf("invalid json: %v", err)
+		}
+
+		// Single req:
+		// input: 2000 * (1.0 / 1M) = 0.002
+		// output: 1000 * (2.0 / 1M) = 0.002
+		// single = 0.004
+		// total 50 reqs = 0.20 USD
+		if res.CostUSD["total_cost"] != 0.20 {
+			t.Errorf("expected total_cost 0.20 USD, got %f", res.CostUSD["total_cost"])
+		}
+	})
+
+	// 5. Test APIPricingEstimate Invalid JSON
+	t.Run("APIPricingEstimate Bad Request", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/pricing/estimate", bytes.NewReader([]byte("invalid json")))
+		req = req.WithContext(context.WithValue(ctx, userContextKey, adminUser))
+		rr := httptest.NewRecorder()
+		h.APIPricingEstimate(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400 Bad Request, got %d", rr.Code)
+		}
+	})
 }

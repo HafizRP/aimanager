@@ -1,60 +1,684 @@
-{{ define "title" }}Pricing - AI Manager{{ end }}
+{{ define "title" }}Pricing & Cost Calculator - AI Manager{{ end }}
 
 {{ define "content" }}
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
   <div>
     <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
-      <i class="bi bi-tag text-warning"></i> Pricing
+      <i class="bi bi-tag text-warning"></i> Pricing & Cost Calculator
     </h4>
-    <p class="text-dim small mb-0">Per-model rates in USD per 1M tokens, mirroring 9router pricing.</p>
+    <p class="text-dim small mb-0">Interactive token cost estimator, IDR currency converter, and upstream rate catalog.</p>
+  </div>
+  <div class="d-flex flex-wrap align-items-center gap-2">
+    <button type="button" class="btn-modern-ghost text-decoration-none d-inline-flex align-items-center gap-2" id="copyEstimateBtn" onclick="copyEstimateSummary()">
+      <i class="bi bi-clipboard"></i> Copy Estimate
+    </button>
+    <button type="button" class="btn-modern-ghost text-decoration-none d-inline-flex align-items-center gap-2" onclick="resetCalculator()">
+      <i class="bi bi-arrow-counterclockwise"></i> Reset
+    </button>
   </div>
 </div>
 
-<div class="card-modern p-3 mb-4 d-flex flex-column flex-md-row align-items-md-center gap-3">
-  <ul class="nav nav-pills nav-pills-modern gap-2 flex-shrink-0" id="priceTabs" role="tablist">
-    <li class="nav-item"><button type="button" class="nav-link active font-monospace small py-1.5 px-3" data-src="tokenrouter">TokenRouter</button></li>
-    <li class="nav-item"><button type="button" class="nav-link font-monospace small py-1.5 px-3" data-src="gh">GitHub Models</button></li>
+<!-- Hub Sub-Tabs -->
+<div class="card-modern p-3 mb-4">
+  <ul class="nav nav-pills nav-pills-modern gap-2 flex-wrap" id="pricingMainTabs" role="tablist">
+    <li class="nav-item">
+      <button class="nav-link active font-monospace small py-1.5 px-3 d-flex align-items-center gap-2" id="calculator-tab" data-bs-toggle="pill" data-bs-target="#calculator-pane" type="button" role="tab">
+        <i class="bi bi-calculator"></i> Cost Calculator
+      </button>
+    </li>
+    <li class="nav-item">
+      <button class="nav-link font-monospace small py-1.5 px-3 d-flex align-items-center gap-2" id="catalog-tab" data-bs-toggle="pill" data-bs-target="#catalog-pane" type="button" role="tab">
+        <i class="bi bi-table"></i> Rate Catalog
+      </button>
+    </li>
   </ul>
-  <input type="search" class="form-control form-control-modern flex-grow-1" id="priceSearch" placeholder="Search models…">
 </div>
 
-<div class="card-modern p-0 overflow-hidden">
-  <div class="p-3 border-bottom border-secondary border-opacity-10 d-flex justify-content-between align-items-center">
-    <h6 class="fw-bold text-light mb-0">Rates</h6>
-    <span class="text-dim small" id="priceCount"></span>
+<div class="tab-content" id="pricingTabContent">
+  <!-- TAB 1: INTERACTIVE CALCULATOR -->
+  <div class="tab-pane fade show active" id="calculator-pane" role="tabpanel">
+    
+    <!-- Presets Toolbar -->
+    <div class="card-modern p-3 mb-4">
+      <div class="d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-2 mb-2">
+        <div class="small fw-bold text-light d-flex align-items-center gap-2">
+          <i class="bi bi-lightning-charge text-amber"></i> Quick Workload Presets
+        </div>
+        <div class="text-dim small">Load standard scenarios in one click</div>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button type="button" class="btn-modern-ghost btn-sm py-1 px-2.5 font-monospace" onclick="applyPreset('chat')">
+          ⚡ Chat (1k/300)
+        </button>
+        <button type="button" class="btn-modern-ghost btn-sm py-1 px-2.5 font-monospace" onclick="applyPreset('code')">
+          💻 Code Review (8k/2k)
+        </button>
+        <button type="button" class="btn-modern-ghost btn-sm py-1 px-2.5 font-monospace" onclick="applyPreset('rag')">
+          🔍 RAG Q&amp;A (25k/1.5k)
+        </button>
+        <button type="button" class="btn-modern-ghost btn-sm py-1 px-2.5 font-monospace" onclick="applyPreset('doc')">
+          📚 Long Context (100k/4k)
+        </button>
+        <button type="button" class="btn-modern-ghost btn-sm py-1 px-2.5 font-monospace" onclick="applyPreset('agent')">
+          🤖 Agent Loop (5k/1.5k + 2k reasoning)
+        </button>
+      </div>
+    </div>
+
+    <div class="row g-4 mb-4">
+      <!-- Left Column: Input Parameters -->
+      <div class="col-lg-7">
+        <div class="card-modern p-4 h-100">
+          <h6 class="fw-bold text-light mb-3 d-flex align-items-center gap-2">
+            <i class="bi bi-sliders text-primary"></i> Workload Parameters
+          </h6>
+
+          <!-- Source & Model Selection -->
+          <div class="row g-3 mb-3">
+            <div class="col-sm-5">
+              <label class="form-label small text-muted mb-1">Catalog Source</label>
+              <select class="form-select form-select-modern form-select-sm" id="calcSource" onchange="onSourceChanged()">
+                <option value="tokenrouter">TokenRouter</option>
+                <option value="gh">GitHub Models</option>
+                <option value="custom">Custom Rates</option>
+              </select>
+            </div>
+            <div class="col-sm-7" id="modelSelectContainer">
+              <label class="form-label small text-muted mb-1">Select Model</label>
+              <select class="form-select form-select-modern form-select-sm font-monospace" id="calcModel" onchange="onModelSelected()">
+                <option value="">Loading models…</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Custom Rates Box (Visible if source == custom) -->
+          <div id="customRatesBox" class="p-3 mb-3 subcard-modern d-none">
+            <div class="small fw-bold text-light mb-2 d-flex align-items-center gap-1">
+              <i class="bi bi-pencil-square text-cyan"></i> Custom Rates ($ per 1M tokens)
+            </div>
+            <div class="row g-2">
+              <div class="col-6 col-sm-3">
+                <label class="form-label text-dim small mb-0" style="font-size:0.75rem;">Input ($/1M)</label>
+                <input type="number" step="0.001" min="0" class="form-control form-control-modern form-control-sm font-monospace" id="customInputRate" value="3.0" oninput="calculateCost()">
+              </div>
+              <div class="col-6 col-sm-3">
+                <label class="form-label text-dim small mb-0" style="font-size:0.75rem;">Output ($/1M)</label>
+                <input type="number" step="0.001" min="0" class="form-control form-control-modern form-control-sm font-monospace" id="customOutputRate" value="15.0" oninput="calculateCost()">
+              </div>
+              <div class="col-6 col-sm-3">
+                <label class="form-label text-dim small mb-0" style="font-size:0.75rem;">Cached ($/1M)</label>
+                <input type="number" step="0.001" min="0" class="form-control form-control-modern form-control-sm font-monospace" id="customCachedRate" value="0.3" oninput="calculateCost()">
+              </div>
+              <div class="col-6 col-sm-3">
+                <label class="form-label text-dim small mb-0" style="font-size:0.75rem;">Reasoning ($/1M)</label>
+                <input type="number" step="0.001" min="0" class="form-control form-control-modern form-control-sm font-monospace" id="customReasoningRate" value="15.0" oninput="calculateCost()">
+              </div>
+            </div>
+          </div>
+
+          <!-- Active Rates Badges -->
+          <div class="d-flex flex-wrap gap-2 mb-3 align-items-center" id="activeRatesPills">
+            <span class="badge-modern badge-gray small font-monospace">Input: <span id="badgeRateInput" class="text-light fw-bold">$0.00</span>/1M</span>
+            <span class="badge-modern badge-gray small font-monospace">Output: <span id="badgeRateOutput" class="text-light fw-bold">$0.00</span>/1M</span>
+            <span class="badge-modern badge-gray small font-monospace">Cached: <span id="badgeRateCached" class="text-light fw-bold">$0.00</span>/1M</span>
+            <span class="badge-modern badge-gray small font-monospace">Reasoning: <span id="badgeRateReasoning" class="text-light fw-bold">$0.00</span>/1M</span>
+          </div>
+
+          <hr class="border-secondary border-opacity-10 my-3">
+
+          <!-- Token Volumes -->
+          <div class="row g-3 mb-3">
+            <div class="col-sm-6">
+              <label class="form-label small text-muted mb-1">Prompt / Input Tokens</label>
+              <div class="input-group input-group-sm">
+                <input type="number" min="0" step="100" class="form-control form-control-modern font-monospace" id="calcPromptTokens" value="1000" oninput="calculateCost()">
+                <span class="input-group-text bg-dark border-secondary border-opacity-25 text-dim font-monospace small">tokens</span>
+              </div>
+            </div>
+            <div class="col-sm-6">
+              <label class="form-label small text-muted mb-1">Completion / Output Tokens</label>
+              <div class="input-group input-group-sm">
+                <input type="number" min="0" step="50" class="form-control form-control-modern font-monospace" id="calcCompletionTokens" value="500" oninput="calculateCost()">
+                <span class="input-group-text bg-dark border-secondary border-opacity-25 text-dim font-monospace small">tokens</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Advanced / Optional Tokens -->
+          <div class="row g-3 mb-3">
+            <div class="col-sm-6">
+              <label class="form-label small text-muted mb-1">Cached Input Tokens <span class="text-dim" style="font-size:0.75rem;">(Optional)</span></label>
+              <div class="input-group input-group-sm">
+                <input type="number" min="0" step="100" class="form-control form-control-modern font-monospace" id="calcCachedTokens" value="0" oninput="calculateCost()">
+                <span class="input-group-text bg-dark border-secondary border-opacity-25 text-dim font-monospace small">tokens</span>
+              </div>
+            </div>
+            <div class="col-sm-6">
+              <label class="form-label small text-muted mb-1">Reasoning Tokens <span class="text-dim" style="font-size:0.75rem;">(Optional)</span></label>
+              <div class="input-group input-group-sm">
+                <input type="number" min="0" step="100" class="form-control form-control-modern font-monospace" id="calcReasoningTokens" value="0" oninput="calculateCost()">
+                <span class="input-group-text bg-dark border-secondary border-opacity-25 text-dim font-monospace small">tokens</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Requests Count Multiplier -->
+          <div class="mb-3">
+            <label class="form-label small text-muted mb-1 d-flex justify-content-between">
+              <span>Total Request Volume</span>
+              <span class="text-primary font-monospace fw-bold" id="reqMultiplierLabel">100 requests</span>
+            </label>
+            <div class="d-flex gap-2 align-items-center mb-2">
+              <input type="number" min="1" step="1" class="form-control form-control-modern form-control-sm font-monospace w-50" id="calcRequests" value="100" oninput="calculateCost()">
+              <div class="d-flex gap-1 flex-wrap">
+                <button type="button" class="btn-modern-ghost btn-sm py-0.5 px-2 font-monospace small" onclick="setMultiplier(1)">×1</button>
+                <button type="button" class="btn-modern-ghost btn-sm py-0.5 px-2 font-monospace small" onclick="setMultiplier(10)">×10</button>
+                <button type="button" class="btn-modern-ghost btn-sm py-0.5 px-2 font-monospace small" onclick="setMultiplier(100)">×100</button>
+                <button type="button" class="btn-modern-ghost btn-sm py-0.5 px-2 font-monospace small" onclick="setMultiplier(1000)">×1k</button>
+                <button type="button" class="btn-modern-ghost btn-sm py-0.5 px-2 font-monospace small" onclick="setMultiplier(10000)">×10k</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- USD to IDR Currency Conversion -->
+          <div class="row g-2 align-items-center">
+            <div class="col-sm-6">
+              <label class="form-label small text-muted mb-1">Exchange Rate (USD / IDR)</label>
+              <div class="input-group input-group-sm">
+                <span class="input-group-text bg-dark border-secondary border-opacity-25 text-dim small">Rp</span>
+                <input type="number" min="1" step="100" class="form-control form-control-modern font-monospace" id="calcUsdIdr" value="16200" oninput="calculateCost()">
+              </div>
+            </div>
+            <div class="col-sm-6 text-end">
+              <span class="text-dim small d-block">Midtrans &amp; Local Billing Standard</span>
+              <span class="badge-modern badge-emerald small" style="font-size:0.75rem;">WIB Real-time Conversion</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Right Column: Results & Breakdown Cards -->
+      <div class="col-lg-5">
+        <div class="d-flex flex-column gap-3 h-100">
+          
+          <!-- Main Hero Cost Card -->
+          <div class="card-modern p-4" style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.08) 0%, rgba(16, 185, 129, 0.04) 100%);">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <span class="text-dim small fw-bold text-uppercase" style="letter-spacing: 0.05em;">Estimated Total Cost</span>
+              <span class="badge-modern badge-primary font-monospace" id="resModelBadge">Model</span>
+            </div>
+            
+            <div class="my-2">
+              <div class="text-light fw-extrabold font-monospace display-6 mb-0" id="resTotalUSD">$0.0000</div>
+              <div class="text-emerald fw-bold font-monospace fs-5 mt-1" id="resTotalIDR">Rp 0</div>
+            </div>
+
+            <hr class="border-secondary border-opacity-10 my-3">
+
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <span class="text-dim small d-block">Cost Per Request</span>
+                <span class="text-light font-monospace fw-bold small" id="resPerReqUSD">$0.0000 / req</span>
+              </div>
+              <div class="text-end">
+                <span class="text-dim small d-block">IDR / Request</span>
+                <span class="text-emerald font-monospace fw-bold small" id="resPerReqIDR">Rp 0 / req</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Token Volumes Breakdown Subcard -->
+          <div class="subcard-modern p-3">
+            <div class="small fw-bold text-light mb-2.5 d-flex align-items-center justify-content-between">
+              <span class="d-flex align-items-center gap-1.5"><i class="bi bi-pie-chart text-info"></i> Token Volume &amp; Costs</span>
+              <span class="text-dim font-monospace small" id="resTotalTokens">0 total tokens</span>
+            </div>
+            <div class="d-flex flex-column gap-2 small">
+              <div class="d-flex justify-content-between align-items-center">
+                <span class="text-dim d-flex align-items-center gap-1.5">
+                  <i class="bi bi-arrow-right-short text-primary"></i> Prompt Input:
+                </span>
+                <span class="font-monospace text-light"><span id="resTokensInput">0</span> tokens (<span id="resCostInput">$0.00</span>)</span>
+              </div>
+              <div class="d-flex justify-content-between align-items-center">
+                <span class="text-dim d-flex align-items-center gap-1.5">
+                  <i class="bi bi-arrow-left-short text-emerald"></i> Completion Output:
+                </span>
+                <span class="font-monospace text-light"><span id="resTokensOutput">0</span> tokens (<span id="resCostOutput">$0.00</span>)</span>
+              </div>
+              <div class="d-flex justify-content-between align-items-center" id="resRowCached" style="display:none !important;">
+                <span class="text-dim d-flex align-items-center gap-1.5">
+                  <i class="bi bi-lightning text-amber"></i> Cached Tokens:
+                </span>
+                <span class="font-monospace text-light"><span id="resTokensCached">0</span> tokens (<span id="resCostCached">$0.00</span>)</span>
+              </div>
+              <div class="d-flex justify-content-between align-items-center" id="resRowReasoning" style="display:none !important;">
+                <span class="text-dim d-flex align-items-center gap-1.5">
+                  <i class="bi bi-cpu text-cyan"></i> Reasoning Tokens:
+                </span>
+                <span class="font-monospace text-light"><span id="resTokensReasoning">0</span> tokens (<span id="resCostReasoning">$0.00</span>)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Benchmark ROI & Savings Subcard -->
+          <div class="subcard-modern p-3">
+            <div class="small fw-bold text-light mb-2 d-flex align-items-center justify-content-between">
+              <span class="d-flex align-items-center gap-1.5"><i class="bi bi-graph-up-arrow text-emerald"></i> Retail Benchmark ($5/1M)</span>
+              <span class="badge-modern badge-emerald" id="resSavingsBadge">0% Saved</span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center small mb-1">
+              <span class="text-dim">Standard Retail Cost:</span>
+              <span class="font-monospace text-light" id="resBaselineUSD">$0.0000</span>
+            </div>
+            <div class="d-flex justify-content-between align-items-center small">
+              <span class="text-dim">Estimated Savings:</span>
+              <span class="font-monospace text-emerald fw-bold" id="resSavingsUSD">+$0.0000</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
   </div>
-  <div class="table-responsive"><table class="table table-modern mb-0">
-    <thead><tr><th>Model</th><th class="text-end">Input</th><th class="text-end">Output</th><th class="text-end">Cached</th><th class="text-end">Reasoning</th></tr></thead>
-    <tbody id="priceBody"><tr><td colspan="5" class="text-dim small">Loading…</td></tr></tbody>
-  </table></div>
+
+  <!-- TAB 2: RATE CATALOG -->
+  <div class="tab-pane fade" id="catalog-pane" role="tabpanel">
+    
+    <div class="card-modern p-3 mb-4 d-flex flex-column flex-md-row align-items-md-center gap-3">
+      <ul class="nav nav-pills nav-pills-modern gap-2 flex-shrink-0" id="priceTabs" role="tablist">
+        <li class="nav-item"><button type="button" class="nav-link active font-monospace small py-1.5 px-3" data-src="tokenrouter">TokenRouter</button></li>
+        <li class="nav-item"><button type="button" class="nav-link font-monospace small py-1.5 px-3" data-src="gh">GitHub Models</button></li>
+      </ul>
+      <input type="search" class="form-control form-control-modern flex-grow-1" id="priceSearch" placeholder="Search models…">
+    </div>
+
+    <div class="card-modern p-0 overflow-hidden">
+      <div class="p-3 border-bottom border-secondary border-opacity-10 d-flex justify-content-between align-items-center">
+        <h6 class="fw-bold text-light mb-0">Rates per 1M Tokens (USD)</h6>
+        <span class="text-dim small" id="priceCount"></span>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-modern mb-0">
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th class="text-end">Input</th>
+              <th class="text-end">Output</th>
+              <th class="text-end">Cached</th>
+              <th class="text-end">Reasoning</th>
+              <th class="text-end"><span class="visually-hidden">Action</span></th>
+            </tr>
+          </thead>
+          <tbody id="priceBody">
+            <tr><td colspan="6" class="text-dim small text-center py-4">Loading rates…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
 </div>
 
 <script>
 let priceData = {};
-function money(v){ return (v === undefined || v === null || v === '') ? '—' : '$' + v; }
+let currentActiveSource = 'tokenrouter';
+
+function money(v) {
+  if (v === undefined || v === null || v === '') return '—';
+  const num = parseFloat(v);
+  if (isNaN(num)) return '—';
+  return '$' + num.toFixed(3).replace(/\.?0+$/, '');
+}
+
+function formatNum(n) {
+  return (n || 0).toLocaleString('en-US');
+}
+
+function formatMoneyUSD(n) {
+  if (n === 0) return '$0.0000';
+  if (n < 0.0001) return '$' + n.toFixed(6);
+  if (n < 0.01) return '$' + n.toFixed(4);
+  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+}
+
+function formatMoneyIDR(n) {
+  if (n === 0) return 'Rp 0';
+  return 'Rp ' + Math.round(n).toLocaleString('id-ID');
+}
+
 async function loadPricing() {
   try {
     const res = await fetch('/api/pricing');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
     priceData = await res.json();
-    renderPrices('tokenrouter', '');
-    document.getElementById('priceCount').textContent = Object.keys(priceData.tokenrouter || {}).length + ' models';
-  } catch (e) { document.getElementById('priceBody').innerHTML = '<tr><td colspan="5" class="text-rose small">Error: ' + e.message + '</td></tr>'; }
+    populateModelDropdown();
+    renderPrices(currentActiveSource, '');
+    calculateCost();
+  } catch (e) {
+    const pb = document.getElementById('priceBody');
+    if (pb) pb.innerHTML = '<tr><td colspan="6" class="text-rose small text-center py-4">Error loading rates: ' + e.message + '</td></tr>';
+  }
 }
+
+function populateModelDropdown() {
+  const modelSelect = document.getElementById('calcModel');
+  if (!modelSelect) return;
+
+  const src = document.getElementById('calcSource').value;
+  if (src === 'custom') return;
+
+  const table = priceData[src] || {};
+  const models = Object.keys(table).sort();
+
+  if (models.length === 0) {
+    modelSelect.innerHTML = '<option value="">No models available</option>';
+    return;
+  }
+
+  modelSelect.innerHTML = models.map(m => `<option value="${m}">${m}</option>`).join('');
+  
+  // Try to default to claude or gemini or first model
+  const preferred = models.find(m => m.includes('claude-3-7') || m.includes('claude') || m.includes('gpt-4o') || m.includes('gemini'));
+  if (preferred) {
+    modelSelect.value = preferred;
+  }
+  onModelSelected();
+}
+
+function onSourceChanged() {
+  const src = document.getElementById('calcSource').value;
+  const customBox = document.getElementById('customRatesBox');
+  const modelCont = document.getElementById('modelSelectContainer');
+  const pills = document.getElementById('activeRatesPills');
+
+  if (src === 'custom') {
+    if (customBox) customBox.classList.remove('d-none');
+    if (modelCont) modelCont.classList.add('d-none');
+    if (pills) pills.classList.add('d-none');
+  } else {
+    if (customBox) customBox.classList.add('d-none');
+    if (modelCont) modelCont.classList.remove('d-none');
+    if (pills) pills.classList.remove('d-none');
+    populateModelDropdown();
+  }
+  calculateCost();
+}
+
+function onModelSelected() {
+  const src = document.getElementById('calcSource').value;
+  const model = document.getElementById('calcModel').value;
+  const table = priceData[src] || {};
+  const rates = table[model] || {};
+
+  document.getElementById('badgeRateInput').textContent = money(rates.input);
+  document.getElementById('badgeRateOutput').textContent = money(rates.output);
+  document.getElementById('badgeRateCached').textContent = money(rates.cached);
+  document.getElementById('badgeRateReasoning').textContent = money(rates.reasoning);
+
+  calculateCost();
+}
+
+function setMultiplier(val) {
+  const input = document.getElementById('calcRequests');
+  if (input) {
+    input.value = val;
+    calculateCost();
+  }
+}
+
+function applyPreset(type) {
+  const promptIn = document.getElementById('calcPromptTokens');
+  const compIn = document.getElementById('calcCompletionTokens');
+  const cachedIn = document.getElementById('calcCachedTokens');
+  const reasIn = document.getElementById('calcReasoningTokens');
+  const reqsIn = document.getElementById('calcRequests');
+
+  switch (type) {
+    case 'chat':
+      promptIn.value = 1000;
+      compIn.value = 300;
+      cachedIn.value = 0;
+      reasIn.value = 0;
+      reqsIn.value = 100;
+      break;
+    case 'code':
+      promptIn.value = 8000;
+      compIn.value = 2000;
+      cachedIn.value = 0;
+      reasIn.value = 0;
+      reqsIn.value = 50;
+      break;
+    case 'rag':
+      promptIn.value = 25000;
+      compIn.value = 1500;
+      cachedIn.value = 15000;
+      reasIn.value = 0;
+      reqsIn.value = 20;
+      break;
+    case 'doc':
+      promptIn.value = 100000;
+      compIn.value = 4000;
+      cachedIn.value = 60000;
+      reasIn.value = 0;
+      reqsIn.value = 10;
+      break;
+    case 'agent':
+      promptIn.value = 5000;
+      compIn.value = 1500;
+      cachedIn.value = 0;
+      reasIn.value = 2000;
+      reqsIn.value = 50;
+      break;
+  }
+  calculateCost();
+}
+
+function resetCalculator() {
+  document.getElementById('calcSource').value = 'tokenrouter';
+  onSourceChanged();
+  applyPreset('chat');
+  if (window.showToast) {
+    window.showToast("Kalkulator direset! ✨", "🔄");
+  }
+}
+
+function selectModelForCalc(source, modelName) {
+  const tabBtn = document.getElementById('calculator-tab');
+  if (tabBtn) {
+    const bsTab = new bootstrap.Tab(tabBtn);
+    bsTab.show();
+  }
+  const srcSelect = document.getElementById('calcSource');
+  if (srcSelect) {
+    srcSelect.value = source;
+    onSourceChanged();
+    const modelSelect = document.getElementById('calcModel');
+    if (modelSelect) {
+      modelSelect.value = modelName;
+      onModelSelected();
+    }
+  }
+}
+
+function calculateCost() {
+  const src = document.getElementById('calcSource').value;
+  let model = document.getElementById('calcModel').value;
+  let inputRate = 0, outputRate = 0, cachedRate = 0, reasoningRate = 0;
+
+  if (src === 'custom') {
+    model = 'Custom Model';
+    inputRate = parseFloat(document.getElementById('customInputRate').value) || 0;
+    outputRate = parseFloat(document.getElementById('customOutputRate').value) || 0;
+    cachedRate = parseFloat(document.getElementById('customCachedRate').value) || 0;
+    reasoningRate = parseFloat(document.getElementById('customReasoningRate').value) || 0;
+  } else {
+    const table = priceData[src] || {};
+    const rates = table[model] || {};
+    inputRate = parseFloat(rates.input) || 0;
+    outputRate = parseFloat(rates.output) || 0;
+    cachedRate = parseFloat(rates.cached) || 0;
+    reasoningRate = parseFloat(rates.reasoning) || 0;
+  }
+
+  const promptTokens = Math.max(0, parseInt(document.getElementById('calcPromptTokens').value) || 0);
+  const completionTokens = Math.max(0, parseInt(document.getElementById('calcCompletionTokens').value) || 0);
+  const cachedTokens = Math.max(0, parseInt(document.getElementById('calcCachedTokens').value) || 0);
+  const reasoningTokens = Math.max(0, parseInt(document.getElementById('calcReasoningTokens').value) || 0);
+  const requests = Math.max(1, parseInt(document.getElementById('calcRequests').value) || 1);
+  const usdToIdr = Math.max(1, parseFloat(document.getElementById('calcUsdIdr').value) || 16200);
+
+  document.getElementById('reqMultiplierLabel').textContent = formatNum(requests) + ' request' + (requests > 1 ? 's' : '');
+
+  // Costs per request
+  const inputCostSingle = (promptTokens / 1000000.0) * inputRate;
+  const outputCostSingle = (completionTokens / 1000000.0) * outputRate;
+  const cachedCostSingle = (cachedTokens / 1000000.0) * cachedRate;
+  const reasoningCostSingle = (reasoningTokens / 1000000.0) * reasoningRate;
+
+  const costPerReqUSD = inputCostSingle + outputCostSingle + cachedCostSingle + reasoningCostSingle;
+  const totalCostUSD = costPerReqUSD * requests;
+  const costPerReqIDR = costPerReqUSD * usdToIdr;
+  const totalCostIDR = totalCostUSD * usdToIdr;
+
+  const tokensPerReq = promptTokens + completionTokens + cachedTokens + reasoningTokens;
+  const totalTokens = tokensPerReq * requests;
+
+  // Baseline Comparison ($5/1M OpenAI retail standard)
+  const baselineRate = 5.0;
+  const baselineCostTotal = ((totalTokens) / 1000000.0) * baselineRate;
+  const savingsUSD = baselineCostTotal - totalCostUSD;
+  const savingsPct = baselineCostTotal > 0 ? (savingsUSD / baselineCostTotal) * 100.0 : 0;
+
+  // Render values to UI
+  document.getElementById('resModelBadge').textContent = model || 'Model';
+  document.getElementById('resTotalUSD').textContent = formatMoneyUSD(totalCostUSD);
+  document.getElementById('resTotalIDR').textContent = formatMoneyIDR(totalCostIDR);
+  document.getElementById('resPerReqUSD').textContent = formatMoneyUSD(costPerReqUSD) + ' / req';
+  document.getElementById('resPerReqIDR').textContent = formatMoneyIDR(costPerReqIDR) + ' / req';
+
+  document.getElementById('resTotalTokens').textContent = formatNum(totalTokens) + ' total tokens';
+  document.getElementById('resTokensInput').textContent = formatNum(promptTokens * requests);
+  document.getElementById('resCostInput').textContent = formatMoneyUSD(inputCostSingle * requests);
+  document.getElementById('resTokensOutput').textContent = formatNum(completionTokens * requests);
+  document.getElementById('resCostOutput').textContent = formatMoneyUSD(outputCostSingle * requests);
+
+  const rowCached = document.getElementById('resRowCached');
+  if (cachedTokens > 0) {
+    rowCached.style.display = 'flex';
+    document.getElementById('resTokensCached').textContent = formatNum(cachedTokens * requests);
+    document.getElementById('resCostCached').textContent = formatMoneyUSD(cachedCostSingle * requests);
+  } else {
+    rowCached.style.display = 'none';
+  }
+
+  const rowReasoning = document.getElementById('resRowReasoning');
+  if (reasoningTokens > 0) {
+    rowReasoning.style.display = 'flex';
+    document.getElementById('resTokensReasoning').textContent = formatNum(reasoningTokens * requests);
+    document.getElementById('resCostReasoning').textContent = formatMoneyUSD(reasoningCostSingle * requests);
+  } else {
+    rowReasoning.style.display = 'none';
+  }
+
+  document.getElementById('resBaselineUSD').textContent = formatMoneyUSD(baselineCostTotal);
+  if (savingsUSD >= 0) {
+    document.getElementById('resSavingsUSD').textContent = '+' + formatMoneyUSD(savingsUSD) + ' (' + savingsPct.toFixed(1) + '% saved)';
+    document.getElementById('resSavingsUSD').className = 'font-monospace text-emerald fw-bold';
+    document.getElementById('resSavingsBadge').textContent = savingsPct.toFixed(1) + '% Saved';
+    document.getElementById('resSavingsBadge').className = 'badge-modern badge-emerald';
+  } else {
+    document.getElementById('resSavingsUSD').textContent = formatMoneyUSD(savingsUSD);
+    document.getElementById('resSavingsUSD').className = 'font-monospace text-rose fw-bold';
+    document.getElementById('resSavingsBadge').textContent = 'Premium Rate';
+    document.getElementById('resSavingsBadge').className = 'badge-modern badge-amber';
+  }
+}
+
+function copyEstimateSummary() {
+  const model = document.getElementById('resModelBadge').textContent;
+  const totalUSD = document.getElementById('resTotalUSD').textContent;
+  const totalIDR = document.getElementById('resTotalIDR').textContent;
+  const perReqUSD = document.getElementById('resPerReqUSD').textContent;
+  const perReqIDR = document.getElementById('resPerReqIDR').textContent;
+  const promptTokens = document.getElementById('calcPromptTokens').value;
+  const compTokens = document.getElementById('calcCompletionTokens').value;
+  const reqs = document.getElementById('calcRequests').value;
+  const totalTokens = document.getElementById('resTotalTokens').textContent;
+  const savings = document.getElementById('resSavingsUSD').textContent;
+
+  const text = `📊 **AI Manager Token Cost Estimate**
+- **Model**: \`${model}\`
+- **Requests**: ${reqs} reqs (${promptTokens} in / ${compTokens} out per req)
+- **Total Volume**: ${totalTokens}
+- **Estimated Total**: **${totalUSD}** (${totalIDR})
+- **Cost / Request**: ${perReqUSD} (${perReqIDR})
+- **Savings vs Retail ($5/1M)**: ${savings}
+Generated with AI Manager (https://aimanager.b14.my.id/pricing)`;
+
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => {
+      if (window.showToast) window.showToast("Estimasi tersalin! ✨", "📋");
+    });
+  }
+}
+
 function renderPrices(src, q) {
+  currentActiveSource = src;
   q = (q || '').toLowerCase();
   const table = priceData[src] || {};
-  const rows = Object.entries(table).filter(([k]) => !q || k.toLowerCase().includes(q)).sort((a, b) => a[0].localeCompare(b[0]));
-  document.getElementById('priceBody').innerHTML = rows.length ? rows.map(([k, v]) =>
-    `<tr><td class="text-light small font-monospace">${k}</td><td class="text-end text-light small font-monospace">${money(v.input)}</td><td class="text-end text-light small font-monospace">${money(v.output)}</td><td class="text-end text-light small font-monospace">${money(v.cached)}</td><td class="text-end text-light small font-monospace">${money(v.reasoning)}</td></tr>`).join('')
-    : '<tr><td colspan="5" class="text-dim small">No models found.</td></tr>';
-  document.getElementById('priceCount').textContent = rows.length + ' models';
+  const rows = Object.entries(table)
+    .filter(([k]) => !q || k.toLowerCase().includes(q))
+    .sort((a, b) => a[0].localeCompare(b[0]));
+
+  const countSpan = document.getElementById('priceCount');
+  if (countSpan) countSpan.textContent = rows.length + ' models';
+
+  const body = document.getElementById('priceBody');
+  if (!body) return;
+
+  if (rows.length === 0) {
+    body.innerHTML = '<tr><td colspan="6" class="text-dim small text-center py-4">No matching models found.</td></tr>';
+    return;
+  }
+
+  body.innerHTML = rows.map(([k, v]) => `
+    <tr>
+      <td class="text-light small font-monospace fw-bold">${k}</td>
+      <td class="text-end text-light small font-monospace">${money(v.input)}</td>
+      <td class="text-end text-light small font-monospace">${money(v.output)}</td>
+      <td class="text-end text-light small font-monospace">${money(v.cached)}</td>
+      <td class="text-end text-light small font-monospace">${money(v.reasoning)}</td>
+      <td class="text-end">
+        <button type="button" class="btn-modern-ghost btn-sm py-1 px-2 font-monospace small" title="Estimate cost with this model" onclick="selectModelForCalc('${src}', '${k}')">
+          <i class="bi bi-calculator text-primary"></i> <span class="d-none d-md-inline">Calculate</span>
+        </button>
+      </td>
+    </tr>
+  `).join('');
 }
-document.getElementById('priceSearch').addEventListener('input', e => renderPrices(document.querySelector('#priceTabs button.active').dataset.src, e.target.value));
-document.querySelectorAll('#priceTabs button').forEach(b => b.addEventListener('click', () => {
-  document.querySelectorAll('#priceTabs button').forEach(x => x.classList.remove('active'));
-  b.classList.add('active');
-  renderPrices(b.dataset.src, document.getElementById('priceSearch').value);
-}));
-document.addEventListener('DOMContentLoaded', loadPricing);
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadPricing();
+
+  const priceSearch = document.getElementById('priceSearch');
+  if (priceSearch) {
+    priceSearch.addEventListener('input', e => {
+      const activeBtn = document.querySelector('#priceTabs button.active');
+      const src = activeBtn ? activeBtn.dataset.src : 'tokenrouter';
+      renderPrices(src, e.target.value);
+    });
+  }
+
+  document.querySelectorAll('#priceTabs button').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('#priceTabs button').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      const searchVal = document.getElementById('priceSearch') ? document.getElementById('priceSearch').value : '';
+      renderPrices(b.dataset.src, searchVal);
+    });
+  });
+});
 </script>
 {{ end }}
