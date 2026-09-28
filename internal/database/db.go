@@ -92,6 +92,7 @@ func migrate(db *sql.DB) error {
 
 	CREATE INDEX IF NOT EXISTS idx_request_logs_created_at ON request_logs(created_at);
 	CREATE INDEX IF NOT EXISTS idx_request_logs_user_id ON request_logs(user_id);
+	CREATE INDEX IF NOT EXISTS idx_request_logs_api_key_id ON request_logs(api_key_id);
 	CREATE INDEX IF NOT EXISTS idx_request_logs_model ON request_logs(model);
 
 	CREATE TABLE IF NOT EXISTS settings (
@@ -193,6 +194,7 @@ func migrate(db *sql.DB) error {
 	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_login_audits_created_at ON login_audits(created_at);`)
 	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_login_audits_ip ON login_audits(ip);`)
 	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_api_keys_expires_at ON api_keys(expires_at);`)
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_request_logs_api_key_id ON request_logs(api_key_id);`)
 	_, _ = db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username);`)
 
 	// Seed default packages if none exist

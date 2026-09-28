@@ -978,3 +978,143 @@ func TestChatPageHandler(t *testing.T) {
 		t.Errorf("expected response to contain exportAllSessionsJSON")
 	}
 }
+
+func TestAPIKeyStats(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test_key_stats.db")
+	db, err := database.InitDB(dbPath)
+	if err != nil {
+		t.Fatalf("InitDB failed: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+	cfg := &config.Config{
+		SessionSecret: "test-secret-12345678901234567890",
+		Port:          20129,
+	}
+
+	h, err := NewHandler(cfg, repo, nil, nil)
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// 1. Setup User 1 (Admin)
+	adminUser := &entity.User{
+		ID:            "u-admin-stats",
+		Username:      "adminstats",
+		Name:          "Admin Stats",
+		PasswordHash:  "hash123",
+		Role:          "admin",
+		AllowedModels: `["*"]`,
+		IsActive:      true,
+	}
+	_ = repo.CreateUser(ctx, adminUser)
+
+	// 2. Setup User 2 (Standard User)
+	user2 := &entity.User{
+		ID:            "u-user2-stats",
+		Username:      "user2stats",
+		Name:          "User Two",
+		PasswordHash:  "hash123",
+		Role:          "user",
+		AllowedModels: `["*"]`,
+		IsActive:      true,
+	}
+	_ = repo.CreateUser(ctx, user2)
+
+	// 3. Setup User 3 (Standard User)
+	user3 := &entity.User{
+		ID:            "u-user3-stats",
+		Username:      "user3stats",
+		Name:          "User Three",
+		PasswordHash:  "hash123",
+		Role:          "user",
+		AllowedModels: `["*"]`,
+		IsActive:      true,
+	}
+	_ = repo.CreateUser(ctx, user3)
+
+	// Setup API Key for User 2
+	key2 := &entity.APIKey{
+		ID:              "key-u2-1",
+		UserID:          user2.ID,
+		Key:             "«redacted:sk-…»",
+		Name:            "User 2 Key",
+		RateLimitRPM:    120,
+		MaxTokensLimit:  500000,
+		DailyTokenQuota: 50000,
+		IsActive:        true,
+	}
+	_ = repo.CreateAPIKey(ctx, key2)
+
+	// Insert test request logs for key2
+	log1 := &entity.RequestLog{
+		UserID:           user2.ID,
+		APIKeyID:         key2.ID,
+		Path:             "/v1/chat/completions",
+		Method:           "POST",
+		Model:            "ag/gemini-3.7-flash-high",
+		IsStream:         false,
+		PromptTokens:     100,
+		CompletionTokens: 300,
+		TotalTokens:      400,
+		StatusCode:       200,
+		DurationMs:       180,
+		ClientIP:         "10.0.0.2",
+	}
+	_ = repo.CreateRequestLog(ctx, log1)
+
+	// Router setup for Chi URL param binding
+	r := chi.NewRouter()
+	r.Get("/api/keys/{id}/stats", h.APIKeyStats)
+
+	// Case A: Owner (User 2) queries own key stats -> 200 OK
+	reqA := httptest.NewRequest(http.MethodGet, "/api/keys/"+key2.ID+"/stats", nil)
+	reqA = reqA.WithContext(context.WithValue(ctx, userContextKey, user2))
+	rrA := httptest.NewRecorder()
+	r.ServeHTTP(rrA, reqA)
+
+	if rrA.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for owner key stats, got %d: %s", rrA.Code, rrA.Body.String())
+	}
+
+	var respA entity.KeyStatsResponse
+	if err := json.Unmarshal(rrA.Body.Bytes(), &respA); err != nil {
+		t.Fatalf("failed to parse JSON response: %v", err)
+	}
+	if respA.Key.ID != key2.ID || respA.Summary.TotalRequests != 1 || respA.Summary.TotalTokens != 400 {
+		t.Errorf("unexpected KeyStatsResponse payload: %+v", respA)
+	}
+
+	// Case B: Non-owner standard user (User 3) queries User 2's key stats -> 404 Not Found (Security isolation)
+	reqB := httptest.NewRequest(http.MethodGet, "/api/keys/"+key2.ID+"/stats", nil)
+	reqB = reqB.WithContext(context.WithValue(ctx, userContextKey, user3))
+	rrB := httptest.NewRecorder()
+	r.ServeHTTP(rrB, reqB)
+
+	if rrB.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 Not Found for non-owner user, got %d", rrB.Code)
+	}
+
+	// Case C: Admin queries User 2's key stats -> 200 OK
+	reqC := httptest.NewRequest(http.MethodGet, "/api/keys/"+key2.ID+"/stats", nil)
+	reqC = reqC.WithContext(context.WithValue(ctx, userContextKey, adminUser))
+	rrC := httptest.NewRecorder()
+	r.ServeHTTP(rrC, reqC)
+
+	if rrC.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for admin query, got %d", rrC.Code)
+	}
+
+	// Case D: Non-existent key -> 404 Not Found
+	reqD := httptest.NewRequest(http.MethodGet, "/api/keys/non-existent-key-999/stats", nil)
+	reqD = reqD.WithContext(context.WithValue(ctx, userContextKey, adminUser))
+	rrD := httptest.NewRecorder()
+	r.ServeHTTP(rrD, reqD)
+
+	if rrD.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 Not Found for non-existent key, got %d", rrD.Code)
+	}
+}
