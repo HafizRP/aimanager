@@ -24,6 +24,7 @@ type (
 	}
 
 	APIKeyStore interface {
+		GetAPIKeyByID(ctx context.Context, id string) (*entity.APIKey, error)
 		GetAPIKeyByKey(ctx context.Context, key string) (*entity.APIKey, error)
 		GetAPIKeysByUserID(ctx context.Context, userID string) ([]entity.APIKey, error)
 		GetAllAPIKeys(ctx context.Context) ([]entity.APIKey, error)
@@ -34,6 +35,7 @@ type (
 		UpdateKeyBudgets(ctx context.Context, id string, maxTokensLimit, dailyQuota int) error
 		UpdateKeyRestrictions(ctx context.Context, id string, maxTokensLimit, dailyQuota int, allowedIPs string) error
 		ResetKeyUsage(ctx context.Context, id string) error
+		GetAPIKeyStats(ctx context.Context, keyID string) (*entity.KeyStats, error)
 	}
 
 	RequestLogStore interface {

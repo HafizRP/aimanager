@@ -98,6 +98,12 @@ func (f *fakeStore) DeductTokens(ctx context.Context, id string, tokens int) err
 }
 
 // APIKeyStore
+func (f *fakeStore) GetAPIKeyByID(ctx context.Context, id string) (*entity.APIKey, error) {
+	if k, ok := f.keys[id]; ok {
+		return k, nil
+	}
+	return nil, errors.New("not found")
+}
 func (f *fakeStore) GetAPIKeyByKey(ctx context.Context, key string) (*entity.APIKey, error) {
 	for _, k := range f.keys {
 		if k.Key == key {
@@ -159,6 +165,20 @@ func (f *fakeStore) ResetKeyUsage(ctx context.Context, id string) error {
 		k.TokenUsage = 0
 	}
 	return nil
+}
+func (f *fakeStore) GetAPIKeyStats(ctx context.Context, keyID string) (*entity.KeyStats, error) {
+	k, ok := f.keys[keyID]
+	if !ok {
+		return nil, errors.New("not found")
+	}
+	return &entity.KeyStats{
+		KeyID:          k.ID,
+		KeyName:        k.Name,
+		UserID:         k.UserID,
+		TokenUsage:     k.TokenUsage,
+		TopModels:      []entity.KeyModelUsage{},
+		RecentRequests: []entity.KeyRecentActivity{},
+	}, nil
 }
 
 // RequestLogStore
@@ -472,7 +492,7 @@ func TestKeyService_ResetKeyUsage(t *testing.T) {
 	store.keys["k1"] = &entity.APIKey{
 		ID:         "k1",
 		UserID:     "u1",
-		Key:        "sk-gw-testkey1",
+		Key:        "sk-gw-testkey123",
 		Name:       "Test Key",
 		TokenUsage: 250000,
 	}
@@ -488,6 +508,31 @@ func TestKeyService_ResetKeyUsage(t *testing.T) {
 	// Non-existent key returns error
 	if err := svc.ResetKeyUsage(context.Background(), "non-existent"); err == nil {
 		t.Fatal("expected error for non-existent key")
+	}
+}
+
+func TestKeyService_GetKeyStats(t *testing.T) {
+	store := newFakeStore()
+	store.keys["k1"] = &entity.APIKey{
+		ID:         "k1",
+		UserID:     "u1",
+		Key:        "sk-gw-testkey123",
+		Name:       "Dev Key",
+		TokenUsage: 5000,
+	}
+	svc := NewKeyService(store, nil)
+
+	stats, err := svc.GetKeyStats(context.Background(), "k1")
+	if err != nil {
+		t.Fatalf("expected key stats, got error: %v", err)
+	}
+	if stats.KeyName != "Dev Key" || stats.TokenUsage != 5000 {
+		t.Errorf("unexpected key stats: %+v", stats)
+	}
+
+	// Non-existent key
+	if _, err := svc.GetKeyStats(context.Background(), "unknown-key"); err == nil {
+		t.Fatal("expected error for non-existent key stats")
 	}
 }
 

@@ -178,6 +178,7 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 		authRouter.Post("/keys/{id}/delete", h.DeleteKey)
 		authRouter.Post("/keys/{id}/reset-usage", h.ResetKeyUsage)
 		authRouter.Post("/api/keys/{id}/reset-usage", h.ResetKeyUsage)
+		authRouter.Get("/api/keys/{id}/stats", h.GetKeyStats)
 
 		// Logs, Models, Settings
 		authRouter.Get("/logs", h.LogsPage)

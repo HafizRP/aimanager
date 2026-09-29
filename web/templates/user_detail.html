@@ -376,6 +376,13 @@
               </td>
               <td class="text-end">
                 <div class="d-flex justify-content-end align-items-center gap-1">
+                  <!-- Key Activity & Model Stats -->
+                  <button type="button" class="btn-modern-ghost py-1 px-2 text-primary btn-key-stats"
+                          data-id="{{ .ID }}" data-name="{{ .Name }}"
+                          data-bs-toggle="modal" data-bs-target="#keyStatsModal" title="Key Activity & Model Stats">
+                    <i class="bi bi-bar-chart-fill"></i>
+                  </button>
+
                   <!-- Edit Budgets & Restrictions -->
                   <button type="button" class="btn-modern-ghost py-1 px-2 text-info btn-edit-budget"
                           data-id="{{ .ID }}" data-max="{{ .MaxTokensLimit }}" data-daily="{{ .DailyTokenQuota }}" data-ips="{{ .AllowedIPs }}"
@@ -754,6 +761,93 @@
     </div>
   </div>
 </div>
+
+<!-- Modal: Key Activity & Model Stats -->
+<div class="modal fade" id="keyStatsModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content modal-content-modern">
+      <div class="modal-header modal-header-modern">
+        <div>
+          <h5 class="modal-title fw-bold text-light d-flex align-items-center gap-2 mb-0">
+            <i class="bi bi-bar-chart-fill text-primary"></i> <span id="statsKeyName">API Key Stats</span>
+          </h5>
+          <div class="text-dim small" id="statsKeySub">Loading details…</div>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4" id="statsModalBody">
+        <div class="text-center py-4" id="statsLoading">
+          <div class="spinner-border text-primary" role="status"></div>
+          <p class="text-dim small mt-2 mb-0">Loading key analytics…</p>
+        </div>
+
+        <div id="statsContent" style="display: none;">
+          <!-- 4 KPI Cards -->
+          <div class="row g-3 mb-4">
+            <div class="col-6 col-md-3">
+              <div class="subcard-modern p-3 text-center">
+                <span class="text-dim small d-block mb-1">Total Tokens</span>
+                <span class="fs-5 fw-bold font-monospace text-emerald" id="statsTotalTokens">0</span>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="subcard-modern p-3 text-center">
+                <span class="text-dim small d-block mb-1">Total Requests</span>
+                <span class="fs-5 fw-bold font-monospace text-cyan" id="statsTotalRequests">0</span>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="subcard-modern p-3 text-center">
+                <span class="text-dim small d-block mb-1">Today Tokens</span>
+                <span class="fs-5 fw-bold font-monospace text-amber" id="statsTodayTokens">0</span>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="subcard-modern p-3 text-center">
+                <span class="text-dim small d-block mb-1">Avg Latency</span>
+                <span class="fs-5 fw-bold font-monospace text-indigo" id="statsAvgDuration">0ms</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Top Models Breakdown -->
+          <h6 class="fw-bold text-light d-flex align-items-center gap-2 mb-2">
+            <i class="bi bi-cpu text-info"></i> Top Models Usage
+          </h6>
+          <div id="statsTopModels" class="mb-4"></div>
+
+          <!-- Recent Requests -->
+          <h6 class="fw-bold text-light d-flex align-items-center gap-2 mb-2">
+            <i class="bi bi-clock-history text-muted"></i> Recent Activity (Last 10)
+          </h6>
+          <div class="table-responsive">
+            <table class="table table-modern table-sm mb-0">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Model</th>
+                  <th>Status</th>
+                  <th>Tokens</th>
+                  <th>Latency</th>
+                  <th>Client IP</th>
+                </tr>
+              </thead>
+              <tbody id="statsRecentRequests"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div id="statsError" class="text-center py-4 text-rose" style="display: none;">
+          <i class="bi bi-exclamation-triangle fs-3 d-block mb-2"></i>
+          <span id="statsErrorMsg">Failed to load statistics.</span>
+        </div>
+      </div>
+      <div class="modal-footer modal-footer-modern">
+        <button type="button" class="btn-modern-ghost" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
 {{ end }}
 
 {{ define "scripts" }}
@@ -782,6 +876,97 @@
       document.getElementById("budgetDaily").value = this.getAttribute("data-daily") || 0;
       document.getElementById("budgetIPs").value = this.getAttribute("data-ips") || "";
       document.getElementById("budgetMsg").innerHTML = "";
+    });
+  });
+
+  document.querySelectorAll(".btn-key-stats").forEach(btn => {
+    btn.addEventListener("click", async function() {
+      const keyId = this.getAttribute("data-id");
+      const keyName = this.getAttribute("data-name") || "API Key";
+
+      document.getElementById("statsKeyName").textContent = keyName;
+      document.getElementById("statsKeySub").textContent = "ID: " + keyId;
+      document.getElementById("statsLoading").style.display = "block";
+      document.getElementById("statsContent").style.display = "none";
+      document.getElementById("statsError").style.display = "none";
+
+      try {
+        const res = await fetch("/api/keys/" + encodeURIComponent(keyId) + "/stats");
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({}));
+          throw new Error(errJson.error || ("HTTP " + res.status));
+        }
+        const data = await res.json();
+        const s = data.stats;
+        if (!s) throw new Error("No statistics returned");
+
+        document.getElementById("statsTotalTokens").textContent = Number(s.total_tokens || 0).toLocaleString();
+        document.getElementById("statsTotalRequests").textContent = Number(s.total_requests || 0).toLocaleString();
+        document.getElementById("statsTodayTokens").textContent = Number(s.today_tokens || 0).toLocaleString();
+        document.getElementById("statsAvgDuration").textContent = (s.avg_duration_ms || 0) + "ms";
+
+        const modelsContainer = document.getElementById("statsTopModels");
+        if (!s.top_models || s.top_models.length === 0) {
+          modelsContainer.innerHTML = '<div class="text-dim small py-2">No model activity logged for this key yet.</div>';
+        } else {
+          let html = '<div class="d-flex flex-column gap-2">';
+          const totalTok = s.total_tokens || 1;
+          s.top_models.forEach(m => {
+            const pct = Math.min(100, Math.max(1, Math.round((m.total_tokens / totalTok) * 100)));
+            html += `
+              <div class="subcard-modern p-2">
+                <div class="d-flex justify-content-between align-items-center small mb-1">
+                  <span class="font-monospace fw-bold text-light">${m.model}</span>
+                  <span class="text-dim font-monospace">${Number(m.total_tokens).toLocaleString()} tok (${pct}%) &bull; ${m.requests} reqs</span>
+                </div>
+                <div class="progress" style="height: 4px; background: rgba(255,255,255,0.08);">
+                  <div class="progress-bar bg-primary" role="progressbar" style="width: ${pct}%;"></div>
+                </div>
+              </div>`;
+          });
+          html += '</div>';
+          modelsContainer.innerHTML = html;
+        }
+
+        const recentTbody = document.getElementById("statsRecentRequests");
+        if (!s.recent_requests || s.recent_requests.length === 0) {
+          recentTbody.innerHTML = '<tr><td colspan="6" class="text-center text-dim py-3">No recent requests recorded.</td></tr>';
+        } else {
+          let rows = '';
+          s.recent_requests.forEach(r => {
+            const isOk = r.status_code >= 200 && r.status_code < 300;
+            const statusBadge = isOk 
+              ? `<span class="badge-modern badge-emerald">${r.status_code}</span>`
+              : `<span class="badge-modern badge-rose">${r.status_code}</span>`;
+            
+            let dateStr = r.created_at || '';
+            if (dateStr) {
+              const d = new Date(dateStr);
+              if (!isNaN(d.getTime())) {
+                dateStr = d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+              }
+            }
+
+            rows += `
+              <tr>
+                <td class="text-dim font-monospace small">${dateStr || '-'}</td>
+                <td class="font-monospace text-light small">${r.model || '-'}</td>
+                <td>${statusBadge}</td>
+                <td class="font-monospace text-emerald small">${Number(r.total_tokens || 0).toLocaleString()}</td>
+                <td class="font-monospace text-dim small">${r.duration_ms}ms</td>
+                <td class="font-monospace text-dim small">${r.client_ip || '-'}</td>
+              </tr>`;
+          });
+          recentTbody.innerHTML = rows;
+        }
+
+        document.getElementById("statsLoading").style.display = "none";
+        document.getElementById("statsContent").style.display = "block";
+      } catch (err) {
+        document.getElementById("statsLoading").style.display = "none";
+        document.getElementById("statsErrorMsg").textContent = err.message || "Failed to load key stats";
+        document.getElementById("statsError").style.display = "block";
+      }
     });
   });
   async function saveBudget() {

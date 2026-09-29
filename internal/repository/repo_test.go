@@ -696,3 +696,104 @@ func TestSQLiteRepo_LoginAudit(t *testing.T) {
 	}
 }
 
+func TestGetAPIKeyStats(t *testing.T) {
+	repo, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Seed user
+	u := &entity.User{
+		ID:       "user-stats-1",
+		Username: "statsuser",
+		Name:     "Stats User",
+		Role:     "user",
+		IsActive: true,
+	}
+	if err := repo.CreateUser(ctx, u); err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+
+	// Seed API key
+	key := &entity.APIKey{
+		ID:             "key-stats-1",
+		UserID:         "user-stats-1",
+		Key:            "sk-gw-statstestkey",
+		Name:           "Stats Test Key",
+		RateLimitRPM:   60,
+		MaxTokensLimit: 100000,
+		IsActive:       true,
+	}
+	if err := repo.CreateAPIKey(ctx, key); err != nil {
+		t.Fatalf("CreateAPIKey failed: %v", err)
+	}
+
+	// Seed request logs
+	log1 := &entity.RequestLog{
+		UserID:           "user-stats-1",
+		APIKeyID:         "key-stats-1",
+		Path:             "/v1/chat/completions",
+		Method:           "POST",
+		Model:            "ag/gemini-3.7-flash-high",
+		PromptTokens:     100,
+		CompletionTokens: 50,
+		TotalTokens:      150,
+		StatusCode:       200,
+		DurationMs:       420,
+		ClientIP:         "192.168.1.10",
+		CreatedAt:        time.Now().UTC(),
+	}
+	if err := repo.CreateRequestLog(ctx, log1); err != nil {
+		t.Fatalf("CreateRequestLog 1 failed: %v", err)
+	}
+
+	log2 := &entity.RequestLog{
+		UserID:           "user-stats-1",
+		APIKeyID:         "key-stats-1",
+		Path:             "/v1/chat/completions",
+		Method:           "POST",
+		Model:            "ag/claude-sonnet-4-6",
+		PromptTokens:     200,
+		CompletionTokens: 100,
+		TotalTokens:      300,
+		StatusCode:       200,
+		DurationMs:       850,
+		ClientIP:         "192.168.1.10",
+		CreatedAt:        time.Now().UTC(),
+	}
+	if err := repo.CreateRequestLog(ctx, log2); err != nil {
+		t.Fatalf("CreateRequestLog 2 failed: %v", err)
+	}
+
+	// Fetch key stats
+	stats, err := repo.GetAPIKeyStats(ctx, "key-stats-1")
+	if err != nil {
+		t.Fatalf("GetAPIKeyStats failed: %v", err)
+	}
+
+	if stats.KeyName != "Stats Test Key" || stats.UserName != "Stats User" {
+		t.Errorf("unexpected key or user name in stats: %+v", stats)
+	}
+	if stats.TotalRequests != 2 {
+		t.Errorf("expected 2 total requests, got %d", stats.TotalRequests)
+	}
+	if stats.TotalTokens != 450 {
+		t.Errorf("expected 450 total tokens, got %d", stats.TotalTokens)
+	}
+	if len(stats.TopModels) != 2 {
+		t.Fatalf("expected 2 top models, got %d", len(stats.TopModels))
+	}
+	if len(stats.RecentRequests) != 2 {
+		t.Fatalf("expected 2 recent requests, got %d", len(stats.RecentRequests))
+	}
+
+	// Test GetAPIKeyByID
+	fetchedKey, err := repo.GetAPIKeyByID(ctx, "key-stats-1")
+	if err != nil {
+		t.Fatalf("GetAPIKeyByID failed: %v", err)
+	}
+	if fetchedKey.Name != "Stats Test Key" || fetchedKey.UserID != "user-stats-1" {
+		t.Errorf("unexpected fetched key: %+v", fetchedKey)
+	}
+}
+

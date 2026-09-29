@@ -208,6 +208,51 @@ type TopModelStat struct {
 	TotalTokens int64  `json:"total_tokens"`
 }
 
+// KeyModelUsage represents model-level aggregation for an API key.
+type KeyModelUsage struct {
+	Model            string `json:"model"`
+	Requests         int    `json:"requests"`
+	TotalTokens      int64  `json:"total_tokens"`
+	PromptTokens     int64  `json:"prompt_tokens"`
+	CompletionTokens int64  `json:"completion_tokens"`
+}
+
+// KeyRecentActivity represents recent request logs for an API key.
+type KeyRecentActivity struct {
+	ID          int64     `json:"id"`
+	Model       string    `json:"model"`
+	StatusCode  int       `json:"status_code"`
+	DurationMs  int64     `json:"duration_ms"`
+	TotalTokens int       `json:"total_tokens"`
+	ClientIP    string    `json:"client_ip"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// KeyStats provides consolidated analytics for an API key.
+type KeyStats struct {
+	KeyID           string              `json:"key_id"`
+	KeyName         string              `json:"key_name"`
+	UserID          string              `json:"user_id"`
+	UserName        string              `json:"user_name"`
+	IsActive        bool                `json:"is_active"`
+	AllowedModels   string              `json:"allowed_models"`
+	AllowedIPs      string              `json:"allowed_ips"`
+	RateLimitRPM    int                 `json:"rate_limit_rpm"`
+	MaxTokensLimit  int                 `json:"max_tokens_limit"`
+	DailyTokenQuota int                 `json:"daily_token_quota"`
+	TokenUsage      int64               `json:"token_usage"`
+	TotalTokens     int64               `json:"total_tokens"`
+	TotalRequests   int                 `json:"total_requests"`
+	TodayTokens     int64               `json:"today_tokens"`
+	TodayRequests   int                 `json:"today_requests"`
+	AvgDurationMs   int64               `json:"avg_duration_ms"`
+	LastUsedAt      *time.Time          `json:"last_used_at,omitempty"`
+	LastUsedIP      string              `json:"last_used_ip,omitempty"`
+	CreatedAt       time.Time           `json:"created_at"`
+	TopModels       []KeyModelUsage     `json:"top_models"`
+	RecentRequests  []KeyRecentActivity `json:"recent_requests"`
+}
+
 // DashboardStats is the aggregate statistics payload for the dashboard.
 type DashboardStats struct {
 	TotalRequests  int64          `json:"total_requests"`

@@ -291,3 +291,48 @@ func (h *Handler) ResetKeyUsage(w http.ResponseWriter, r *http.Request) {
 
 	http.Redirect(w, r, redirectURL+"?msg="+url.QueryEscape("API key token usage reset to 0"), http.StatusSeeOther)
 }
+
+// GetKeyStats returns JSON analytics for an API key.
+func (h *Handler) GetKeyStats(w http.ResponseWriter, r *http.Request) {
+	keyID := chi.URLParam(r, "id")
+	if keyID == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": "Key ID required"})
+		return
+	}
+
+	ctx := r.Context()
+	currentUser := GetUserFromContext(ctx)
+
+	// Ownership enforcement (admin can inspect any key; standard user only their own)
+	if currentUser != nil && !currentUser.IsAdmin() {
+		key, err := h.keys.GetKeyByID(ctx, keyID)
+		if err != nil || key == nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": "Key not found"})
+			return
+		}
+		if key.UserID != currentUser.ID {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": "Permission denied"})
+			return
+		}
+	}
+
+	stats, err := h.keys.GetKeyStats(ctx, keyID)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": err.Error()})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"stats":   stats,
+	})
+}

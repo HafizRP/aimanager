@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -976,5 +977,121 @@ func TestChatPageHandler(t *testing.T) {
 	}
 	if !strings.Contains(body, "exportAllSessionsJSON") {
 		t.Errorf("expected response to contain exportAllSessionsJSON")
+	}
+}
+
+func TestGetKeyStats_Endpoint(t *testing.T) {
+	tempDir := t.TempDir()
+	dbPath := filepath.Join(tempDir, "test.db")
+	db, err := database.InitDB(dbPath)
+	if err != nil {
+		t.Fatalf("failed to init db: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+	cfg := &config.Config{
+		SessionSecret: "test-secret-key-12345678901234567890",
+		AdminUsername: "admin",
+		AdminPassword: "adminpassword",
+	}
+	h, err := NewHandler(cfg, repo, nil, nil)
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+
+	ctx := context.Background()
+
+	// 1. Create owner user & target key
+	owner := &entity.User{
+		ID:       "user-keyowner",
+		Username: "keyowner",
+		Role:     "user",
+		IsActive: true,
+	}
+	if err := repo.CreateUser(ctx, owner); err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+
+	key := &entity.APIKey{
+		ID:       "key-endpoint-stats",
+		UserID:   owner.ID,
+		Key:      "sk-gw-endpointstatskey",
+		Name:     "Endpoint Stats Key",
+		IsActive: true,
+	}
+	if err := repo.CreateAPIKey(ctx, key); err != nil {
+		t.Fatalf("CreateAPIKey failed: %v", err)
+	}
+
+	// Create a log
+	_ = repo.CreateRequestLog(ctx, &entity.RequestLog{
+		UserID:      owner.ID,
+		APIKeyID:    key.ID,
+		Path:        "/v1/chat/completions",
+		Method:      "POST",
+		Model:       "ag/gemini-3.7-flash-high",
+		TotalTokens: 120,
+		StatusCode:  200,
+		DurationMs:  300,
+		CreatedAt:   time.Now().UTC(),
+	})
+
+	// 2. Another normal user cannot access owner's key stats
+	stranger := &entity.User{
+		ID:       "user-stranger",
+		Username: "stranger",
+		Role:     "user",
+		IsActive: true,
+	}
+	reqForbidden := httptest.NewRequest(http.MethodGet, "/api/keys/key-endpoint-stats/stats", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "key-endpoint-stats")
+	reqForbidden = reqForbidden.WithContext(context.WithValue(reqForbidden.Context(), chi.RouteCtxKey, rctx))
+	reqForbidden = reqForbidden.WithContext(context.WithValue(reqForbidden.Context(), userContextKey, stranger))
+
+	rrForbidden := httptest.NewRecorder()
+	h.GetKeyStats(rrForbidden, reqForbidden)
+	if rrForbidden.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 Forbidden for stranger, got %d", rrForbidden.Code)
+	}
+
+	// 3. Owner can access their own key stats
+	reqOwner := httptest.NewRequest(http.MethodGet, "/api/keys/key-endpoint-stats/stats", nil)
+	reqOwner = reqOwner.WithContext(context.WithValue(reqOwner.Context(), chi.RouteCtxKey, rctx))
+	reqOwner = reqOwner.WithContext(context.WithValue(reqOwner.Context(), userContextKey, owner))
+
+	rrOwner := httptest.NewRecorder()
+	h.GetKeyStats(rrOwner, reqOwner)
+	if rrOwner.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for owner, got %d", rrOwner.Code)
+	}
+
+	var resp struct {
+		Success bool            `json:"success"`
+		Stats   entity.KeyStats `json:"stats"`
+	}
+	if err := json.NewDecoder(rrOwner.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode json response: %v", err)
+	}
+	if !resp.Success || resp.Stats.KeyName != "Endpoint Stats Key" || resp.Stats.TotalTokens != 120 {
+		t.Errorf("unexpected stats in response: %+v", resp)
+	}
+
+	// 4. Admin can also access
+	admin := &entity.User{
+		ID:       "user-admin-stats",
+		Username: "adminstats",
+		Role:     "admin",
+		IsActive: true,
+	}
+	reqAdmin := httptest.NewRequest(http.MethodGet, "/api/keys/key-endpoint-stats/stats", nil)
+	reqAdmin = reqAdmin.WithContext(context.WithValue(reqAdmin.Context(), chi.RouteCtxKey, rctx))
+	reqAdmin = reqAdmin.WithContext(context.WithValue(reqAdmin.Context(), userContextKey, admin))
+
+	rrAdmin := httptest.NewRecorder()
+	h.GetKeyStats(rrAdmin, reqAdmin)
+	if rrAdmin.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for admin, got %d", rrAdmin.Code)
 	}
 }
