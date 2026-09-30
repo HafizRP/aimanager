@@ -16,6 +16,7 @@ services:
       - BASE_URL=${BASE_URL}
       - NEXT_PUBLIC_BASE_URL=${NEXT_PUBLIC_BASE_URL}
       - ENABLE_TRANSLATOR=${ENABLE_TRANSLATOR:-false}
+      - TZ=${TZ:-Asia/Jakarta}
     volumes:
       - ./data/core:/app/data
     healthcheck:
@@ -43,6 +44,7 @@ services:
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - SESSION_SECRET=${SESSION_SECRET}
       - UPSTREAM_API_KEY=${UPSTREAM_API_KEY}
+      - TZ=${TZ:-Asia/Jakarta}
     env_file:
       - .env
     volumes:
