@@ -688,6 +688,161 @@ func TestAPIKeyRestrictionsAndIPWhitelist(t *testing.T) {
 	}
 }
 
+func TestEditKey(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test_edit_keys.db")
+	db, err := database.InitDB(dbPath)
+	if err != nil {
+		t.Fatalf("InitDB failed: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+	cfg := &config.Config{
+		SessionSecret: "test-secret-12345678901234567890",
+	}
+
+	h, err := NewHandler(cfg, repo, nil, nil)
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+
+	ctx := context.Background()
+	owner := &entity.User{
+		ID:           "u-owner",
+		Username:     "keyowner",
+		Name:         "Key Owner",
+		PasswordHash: "hash123",
+		Role:         "user",
+		IsActive:     true,
+	}
+	otherUser := &entity.User{
+		ID:           "u-other",
+		Username:     "otheruser",
+		Name:         "Other User",
+		PasswordHash: "hash123",
+		Role:         "user",
+		IsActive:     true,
+	}
+	adminUser := &entity.User{
+		ID:           "u-admin",
+		Username:     "adminuser",
+		Name:         "Admin User",
+		PasswordHash: "hash123",
+		Role:         "admin",
+		IsActive:     true,
+	}
+
+	_ = repo.CreateUser(ctx, owner)
+	_ = repo.CreateUser(ctx, otherUser)
+	_ = repo.CreateUser(ctx, adminUser)
+
+	key := &entity.APIKey{
+		ID:            "k-edit-1",
+		UserID:        owner.ID,
+		Key:           "sk-gw-test-edit-key-12345",
+		Name:          "Original Key Name",
+		AllowedModels: `["main"]`,
+		RateLimitRPM:  30,
+		IsActive:      true,
+	}
+	if err := repo.CreateAPIKey(ctx, key); err != nil {
+		t.Fatalf("CreateAPIKey failed: %v", err)
+	}
+
+	// 1. Owner updates key via Form POST
+	form := url.Values{
+		"name":              {"Modified Key Name"},
+		"allowed_models":    {"main, ag/claude-sonnet-4-6"},
+		"allowed_ips":       {"192.168.1.100, 10.0.0.0/16"},
+		"rate_limit_rpm":    {"90"},
+		"max_tokens_limit":  {"1500000"},
+		"daily_token_quota": {"75000"},
+		"expires_at":        {"2026-12-31T23:59"},
+	}
+	reqForm := httptest.NewRequest(http.MethodPost, "/keys/"+key.ID+"/edit", strings.NewReader(form.Encode()))
+	reqForm.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", key.ID)
+	reqForm = reqForm.WithContext(context.WithValue(context.WithValue(ctx, userContextKey, owner), chi.RouteCtxKey, rctx))
+	rrForm := httptest.NewRecorder()
+
+	h.EditKey(rrForm, reqForm)
+	if rrForm.Code != http.StatusSeeOther {
+		t.Fatalf("EditKey form returned status %d, want 303", rrForm.Code)
+	}
+
+	updated, err := repo.GetAPIKeyByID(ctx, key.ID)
+	if err != nil || updated == nil {
+		t.Fatalf("GetAPIKeyByID failed: %v", err)
+	}
+	if updated.Name != "Modified Key Name" {
+		t.Errorf("expected Name 'Modified Key Name', got %q", updated.Name)
+	}
+	if updated.RateLimitRPM != 90 {
+		t.Errorf("expected RateLimitRPM 90, got %d", updated.RateLimitRPM)
+	}
+	if updated.MaxTokensLimit != 1500000 {
+		t.Errorf("expected MaxTokensLimit 1500000, got %d", updated.MaxTokensLimit)
+	}
+	if updated.DailyTokenQuota != 75000 {
+		t.Errorf("expected DailyTokenQuota 75000, got %d", updated.DailyTokenQuota)
+	}
+	if updated.AllowedIPs != "192.168.1.100, 10.0.0.0/16" {
+		t.Errorf("expected AllowedIPs '192.168.1.100, 10.0.0.0/16', got %q", updated.AllowedIPs)
+	}
+	if updated.ExpiresAt == nil {
+		t.Errorf("expected ExpiresAt to be non-nil")
+	}
+
+	// 2. Unauthorized user attempts to edit key via JSON API -> 403
+	jsonBody := `{"name": "Hacked Name"}`
+	reqUnauth := httptest.NewRequest(http.MethodPost, "/api/keys/"+key.ID+"/edit", strings.NewReader(jsonBody))
+	reqUnauth.Header.Set("Content-Type", "application/json")
+	reqUnauth.Header.Set("Accept", "application/json")
+	rctxUnauth := chi.NewRouteContext()
+	rctxUnauth.URLParams.Add("id", key.ID)
+	reqUnauth = reqUnauth.WithContext(context.WithValue(context.WithValue(ctx, userContextKey, otherUser), chi.RouteCtxKey, rctxUnauth))
+	rrUnauth := httptest.NewRecorder()
+
+	h.EditKey(rrUnauth, reqUnauth)
+	if rrUnauth.Code != http.StatusForbidden {
+		t.Fatalf("EditKey unauth returned status %d, want 403", rrUnauth.Code)
+	}
+
+	// 3. Admin updates key via JSON API -> 200 OK
+	adminJSON := `{"name": "Admin Managed Key", "rate_limit_rpm": 200, "max_tokens_limit": 5000000, "daily_token_quota": 200000, "allowed_ips": "127.0.0.1"}`
+	reqAdmin := httptest.NewRequest(http.MethodPost, "/api/keys/"+key.ID+"/edit", strings.NewReader(adminJSON))
+	reqAdmin.Header.Set("Content-Type", "application/json")
+	reqAdmin.Header.Set("Accept", "application/json")
+	rctxAdmin := chi.NewRouteContext()
+	rctxAdmin.URLParams.Add("id", key.ID)
+	reqAdmin = reqAdmin.WithContext(context.WithValue(context.WithValue(ctx, userContextKey, adminUser), chi.RouteCtxKey, rctxAdmin))
+	rrAdmin := httptest.NewRecorder()
+
+	h.EditKey(rrAdmin, reqAdmin)
+	if rrAdmin.Code != http.StatusOK {
+		t.Fatalf("EditKey admin returned status %d, want 200", rrAdmin.Code)
+	}
+
+	adminUpdated, _ := repo.GetAPIKeyByID(ctx, key.ID)
+	if adminUpdated.Name != "Admin Managed Key" || adminUpdated.RateLimitRPM != 200 {
+		t.Errorf("expected admin update to succeed, got %+v", adminUpdated)
+	}
+
+	// 4. Non-existent key returns 404
+	req404 := httptest.NewRequest(http.MethodPost, "/api/keys/non-existent-id/edit", strings.NewReader(adminJSON))
+	req404.Header.Set("Content-Type", "application/json")
+	rctx404 := chi.NewRouteContext()
+	rctx404.URLParams.Add("id", "non-existent-id")
+	req404 = req404.WithContext(context.WithValue(context.WithValue(ctx, userContextKey, adminUser), chi.RouteCtxKey, rctx404))
+	rr404 := httptest.NewRecorder()
+
+	h.EditKey(rr404, req404)
+	if rr404.Code != http.StatusNotFound {
+		t.Fatalf("EditKey 404 returned status %d, want 404", rr404.Code)
+	}
+}
+
 func TestResetKeyUsage(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "test_reset_keys.db")
 	db, err := database.InitDB(dbPath)

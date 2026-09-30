@@ -31,9 +31,11 @@ type UserRepository interface {
 // KeyRepository handles API key entity persistence.
 type KeyRepository interface {
 	GetAPIKeyByKey(ctx context.Context, key string) (*entity.APIKey, error)
+	GetAPIKeyByID(ctx context.Context, id string) (*entity.APIKey, error)
 	GetAPIKeysByUserID(ctx context.Context, userID string) ([]entity.APIKey, error)
 	GetAllAPIKeys(ctx context.Context) ([]entity.APIKey, error)
 	CreateAPIKey(ctx context.Context, k *entity.APIKey) error
+	UpdateAPIKey(ctx context.Context, k *entity.APIKey) error
 	ToggleAPIKeyStatus(ctx context.Context, id string, isActive bool) error
 	DeleteAPIKey(ctx context.Context, id string) error
 	UpdateKeyLastUsed(ctx context.Context, id string, ip string) error
@@ -505,6 +507,48 @@ func (r *SQLiteRepo) GetAllAPIKeys(ctx context.Context) ([]entity.APIKey, error)
 		keys = append(keys, k)
 	}
 	return keys, nil
+}
+
+// GetAPIKeyByID returns a single API key by its primary key ID.
+func (r *SQLiteRepo) GetAPIKeyByID(ctx context.Context, id string) (*entity.APIKey, error) {
+	query := `SELECT k.id, k.user_id, k.key, k.name, COALESCE(k.allowed_models, ''), COALESCE(k.allowed_ips, ''), COALESCE(k.rate_limit_rpm, 0), COALESCE(k.max_tokens_limit, 0), COALESCE(k.daily_token_quota, 0), k.is_active, k.created_at, k.last_used_at, k.expires_at, COALESCE(k.tokens_used, 0), COALESCE(k.last_used_ip, ''), u.name
+	          FROM api_keys k
+	          LEFT JOIN users u ON k.user_id = u.id
+	          WHERE k.id = ?`
+	row := r.db.QueryRowContext(ctx, query, id)
+	var k entity.APIKey
+	var lastUsed sql.NullString
+	var expiresAt sql.NullString
+	var userName sql.NullString
+	if err := row.Scan(&k.ID, &k.UserID, &k.Key, &k.Name, &k.AllowedModels, &k.AllowedIPs, &k.RateLimitRPM, &k.MaxTokensLimit, &k.DailyTokenQuota, &k.IsActive, &k.CreatedAt, &lastUsed, &expiresAt, &k.TokenUsage, &k.LastUsedIP, &userName); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if lastUsed.Valid {
+		t := parseTimeFlexible(lastUsed.String)
+		if !t.IsZero() {
+			k.LastUsedAt = &t
+		}
+	}
+	if expiresAt.Valid {
+		t := parseTimeFlexible(expiresAt.String)
+		if !t.IsZero() {
+			k.ExpiresAt = &t
+		}
+	}
+	k.UserName = userName.String
+	return &k, nil
+}
+
+// UpdateAPIKey updates an existing API key's configurable attributes.
+func (r *SQLiteRepo) UpdateAPIKey(ctx context.Context, k *entity.APIKey) error {
+	query := `UPDATE api_keys 
+	          SET name = ?, allowed_models = ?, allowed_ips = ?, rate_limit_rpm = ?, max_tokens_limit = ?, daily_token_quota = ?, expires_at = ?
+	          WHERE id = ?`
+	_, err := r.db.ExecContext(ctx, query, k.Name, k.AllowedModels, k.AllowedIPs, k.RateLimitRPM, k.MaxTokensLimit, k.DailyTokenQuota, formatNullableTime(k.ExpiresAt), k.ID)
+	return err
 }
 
 // CreateAPIKey inserts a new API key record.

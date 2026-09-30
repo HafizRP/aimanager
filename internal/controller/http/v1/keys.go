@@ -156,6 +156,128 @@ func (h *Handler) CreateKey(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirectURL+"?msg="+url.QueryEscape("Key created successfully! Token: "+key.Key), http.StatusSeeOther)
 }
 
+// EditKey updates an existing API key's configuration.
+func (h *Handler) EditKey(w http.ResponseWriter, r *http.Request) {
+	keyID := chi.URLParam(r, "id")
+	ctx := r.Context()
+	currentUser := GetUserFromContext(ctx)
+	if currentUser == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	redirectURL := safeRedirectURL(r.FormValue("redirect"), "")
+	if redirectURL == "" {
+		redirectURL = safeRedirectURL(r.URL.Query().Get("redirect"), "/keys")
+	}
+
+	isJSON := strings.Contains(r.Header.Get("Accept"), "application/json") || strings.HasPrefix(r.URL.Path, "/api/") || strings.Contains(r.Header.Get("Content-Type"), "application/json")
+
+	// Fetch existing key to check ownership
+	key, err := h.repo.GetAPIKeyByID(ctx, keyID)
+	if err != nil || key == nil {
+		if isJSON {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": "API key not found"})
+			return
+		}
+		http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape("API key not found"), http.StatusSeeOther)
+		return
+	}
+
+	// Non-admins can only edit their own keys
+	if !currentUser.IsAdmin() && key.UserID != currentUser.ID {
+		if isJSON {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": "Permission denied"})
+			return
+		}
+		http.Redirect(w, r, redirectURL+"?error=Permission+denied", http.StatusSeeOther)
+		return
+	}
+
+	var in usecase.UpdateKeyInput
+	in.ID = keyID
+
+	if isJSON && strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+		var payload struct {
+			Name            string `json:"name"`
+			AllowedModels   string `json:"allowed_models"`
+			AllowedIPs      string `json:"allowed_ips"`
+			RateLimitRPM    int    `json:"rate_limit_rpm"`
+			MaxTokensLimit  int    `json:"max_tokens_limit"`
+			DailyTokenQuota int    `json:"daily_token_quota"`
+			ExpiresAt       string `json:"expires_at"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": "Invalid request body"})
+			return
+		}
+		in.Name = payload.Name
+		in.AllowedModels = payload.AllowedModels
+		in.AllowedIPs = payload.AllowedIPs
+		in.RateLimitRPM = payload.RateLimitRPM
+		in.MaxTokensLimit = payload.MaxTokensLimit
+		in.DailyTokenQuota = payload.DailyTokenQuota
+		if strings.TrimSpace(payload.ExpiresAt) != "" {
+			parsed, err := parseExpiryInput(payload.ExpiresAt)
+			if err != nil {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": "Invalid expires_at format: " + err.Error()})
+				return
+			}
+			in.ExpiresAt = &parsed
+		}
+	} else {
+		_ = r.ParseForm()
+		in.Name = r.FormValue("name")
+		in.AllowedModels = r.FormValue("allowed_models")
+		in.AllowedIPs = r.FormValue("allowed_ips")
+		in.RateLimitRPM, _ = strconv.Atoi(r.FormValue("rate_limit_rpm"))
+		in.MaxTokensLimit, _ = strconv.Atoi(r.FormValue("max_tokens_limit"))
+		in.DailyTokenQuota, _ = strconv.Atoi(r.FormValue("daily_token_quota"))
+
+		rawExp := strings.TrimSpace(r.FormValue("expires_at"))
+		if rawExp != "" {
+			parsed, err := parseExpiryInput(rawExp)
+			if err != nil {
+				http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape("Invalid expires_at: "+err.Error()), http.StatusSeeOther)
+				return
+			}
+			in.ExpiresAt = &parsed
+		}
+	}
+
+	updated, err := h.keys.UpdateKey(ctx, in)
+	if err != nil {
+		if isJSON {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": err.Error()})
+			return
+		}
+		http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+
+	if isJSON {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"message": "API key updated successfully",
+			"key":     updated,
+		})
+		return
+	}
+
+	http.Redirect(w, r, redirectURL+"?msg="+url.QueryEscape("API key '"+updated.Name+"' updated successfully!"), http.StatusSeeOther)
+}
+
 // ToggleKeyStatus activates/deactivates an API key.
 func (h *Handler) ToggleKeyStatus(w http.ResponseWriter, r *http.Request) {
 	keyID := chi.URLParam(r, "id")
