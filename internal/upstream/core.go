@@ -77,6 +77,10 @@ type CoreClient interface {
 	CoreVersion(ctx context.Context) (map[string]interface{}, error)
 	CoreKeys(ctx context.Context) (map[string]interface{}, error)
 	GetMergedModels(ctx context.Context) (string, []map[string]interface{}, error)
+	InvalidateModelsCache()
+	GetDisabledModels(ctx context.Context) (map[string][]string, error)
+	SetDisabledModels(ctx context.Context, providerAlias string, ids []string) error
+	DeleteDisabledModel(ctx context.Context, providerAlias string, id string) error
 }
 
 // HTTPCoreClient talks to the 9router Core HTTP API.
@@ -897,6 +901,45 @@ func (c *HTTPCoreClient) customModelIDs(ctx context.Context) map[string]bool {
 	return out
 }
 
+// disabledModelIDs reads core kv scope 'disabledModels' (best-effort) and returns
+// the set of disabled model identifiers ("alias/id", raw "id", etc.).
+func (c *HTTPCoreClient) disabledModelIDs(ctx context.Context) map[string]bool {
+	out := map[string]bool{}
+	dsn := fmt.Sprintf("%s?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)", c.cfg.GetNineRouterDBPath())
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return out
+	}
+	defer db.Close()
+	rows, err := db.QueryContext(ctx, "SELECT key, value FROM kv WHERE scope = 'disabledModels'")
+	if err != nil {
+		return out
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var providerAlias, v string
+		if err := rows.Scan(&providerAlias, &v); err != nil {
+			continue
+		}
+		var ids []string
+		if err := json.Unmarshal([]byte(v), &ids); err != nil {
+			continue
+		}
+		for _, id := range ids {
+			out[providerAlias+"/"+id] = true
+			out[id] = true
+		}
+	}
+	return out
+}
+
+func stripModelPrefix(id string) string {
+	if idx := strings.Index(id, "/"); idx != -1 {
+		return id[idx+1:]
+	}
+	return id
+}
+
 // GetMergedModels returns core's /v1/models list merged with catalog models
 // that core filters out of OpenAI exposure (notably oc/* + opencode-go/*
 // OpenCode Zen free tier). Primary merge source is the core DB customModels
@@ -973,6 +1016,21 @@ func (c *HTTPCoreClient) fetchAndCacheMergedModels(ctx context.Context) (string,
 	if v1.Object == "" {
 		v1.Object = "list"
 	}
+
+	disabled := c.disabledModelIDs(ctx)
+	if len(disabled) > 0 {
+		filteredV1 := make([]map[string]interface{}, 0, len(v1.Data))
+		for _, m := range v1.Data {
+			if id, ok := m["id"].(string); ok {
+				if disabled[id] || disabled[stripModelPrefix(id)] {
+					continue
+				}
+			}
+			filteredV1 = append(filteredV1, m)
+		}
+		v1.Data = filteredV1
+	}
+
 	existing := make(map[string]bool, len(v1.Data))
 	for _, m := range v1.Data {
 		if id, ok := m["id"].(string); ok {
@@ -1007,7 +1065,7 @@ func (c *HTTPCoreClient) fetchAndCacheMergedModels(ctx context.Context) (string,
 		if id == "" {
 			id = m.Provider + "/" + m.Model
 		}
-		if existing[id] {
+		if existing[id] || disabled[id] || disabled[m.Model] || disabled[stripModelPrefix(id)] {
 			continue
 		}
 		merge := false
@@ -1064,3 +1122,51 @@ func (c *HTTPCoreClient) cacheMergedResult(obj string, data []map[string]interfa
 	c.cachedModelsAt = time.Now()
 	c.modelsMu.Unlock()
 }
+
+// InvalidateModelsCache purges the cached merged models list.
+func (c *HTTPCoreClient) InvalidateModelsCache() {
+	c.modelsMu.Lock()
+	c.cachedObj = ""
+	c.cachedModels = nil
+	c.cachedModelsAt = time.Time{}
+	c.modelsMu.Unlock()
+}
+
+// GetDisabledModels fetches disabled models per provider from Core.
+func (c *HTTPCoreClient) GetDisabledModels(ctx context.Context) (map[string][]string, error) {
+	data, err := c.doRequest(ctx, http.MethodGet, "/api/models/disabled", nil)
+	if err != nil {
+		return nil, err
+	}
+	var res struct {
+		Disabled map[string][]string `json:"disabled"`
+	}
+	if err := json.Unmarshal(data, &res); err != nil {
+		return nil, err
+	}
+	return res.Disabled, nil
+}
+
+// SetDisabledModels disables models under a provider in Core and invalidates cache.
+func (c *HTTPCoreClient) SetDisabledModels(ctx context.Context, providerAlias string, ids []string) error {
+	payload := map[string]interface{}{
+		"providerAlias": providerAlias,
+		"ids":           ids,
+	}
+	_, err := c.doRequest(ctx, http.MethodPost, "/api/models/disabled", payload)
+	if err == nil {
+		c.InvalidateModelsCache()
+	}
+	return err
+}
+
+// DeleteDisabledModel re-enables a model in Core and invalidates cache.
+func (c *HTTPCoreClient) DeleteDisabledModel(ctx context.Context, providerAlias string, id string) error {
+	path := fmt.Sprintf("/api/models/disabled?providerAlias=%s&id=%s", url.QueryEscape(providerAlias), url.QueryEscape(id))
+	_, err := c.doRequest(ctx, http.MethodDelete, path, nil)
+	if err == nil {
+		c.InvalidateModelsCache()
+	}
+	return err
+}
+
