@@ -49,16 +49,29 @@ func (h *Handler) LogsPage(w http.ResponseWriter, r *http.Request) {
 		users, _ = h.repo.GetAllUsers(ctx)
 	}
 
+	var loginAudits []entity.LoginAudit
+	var totalLoginAudits int
+	if currentUser != nil {
+		loginUser := ""
+		if !currentUser.IsAdmin() {
+			loginUser = currentUser.ID
+		}
+		loginAudits, totalLoginAudits, _ = h.repo.GetFilteredLoginAudits(ctx, loginUser, "", 25, 0)
+	}
+
 	h.render(w, r, "logs.html", "base.html", map[string]interface{}{
-		"ActivePage":   "logs",
-		"Logs":         logs,
-		"Users":        users,
-		"FilterUser":   filterUser,
-		"FilterModel":  filterModel,
-		"FilterStatus": filterStatus,
-		"FilterStart":  r.URL.Query().Get("start_date"),
-		"FilterEnd":    r.URL.Query().Get("end_date"),
-		"PageInfo":     pageInfo,
+		"ActivePage":       "logs",
+		"Logs":             logs,
+		"Users":            users,
+		"FilterUser":       filterUser,
+		"FilterModel":      filterModel,
+		"FilterStatus":     filterStatus,
+		"FilterStart":      r.URL.Query().Get("start_date"),
+		"FilterEnd":        r.URL.Query().Get("end_date"),
+		"PageInfo":         pageInfo,
+		"LoginAudits":      loginAudits,
+		"TotalLoginAudits": totalLoginAudits,
+		"IsAdmin":          currentUser != nil && currentUser.IsAdmin(),
 	})
 }
 

@@ -694,5 +694,22 @@ func TestSQLiteRepo_LoginAudit(t *testing.T) {
 	if userAudits[0].Username != "audituser" || userAudits[0].Status != "success" {
 		t.Errorf("unexpected audit fields: %+v", userAudits[0])
 	}
+
+	// Fetch filtered audits
+	filteredStatus, fTotal, err := repo.GetFilteredLoginAudits(ctx, "", "failed", 10, 0)
+	if err != nil {
+		t.Fatalf("GetFilteredLoginAudits failed: %v", err)
+	}
+	if fTotal != 1 || len(filteredStatus) != 1 || filteredStatus[0].Status != "failed" {
+		t.Errorf("unexpected filteredStatus result: total=%d, len=%d", fTotal, len(filteredStatus))
+	}
+
+	filteredUser, uTotal, err := repo.GetFilteredLoginAudits(ctx, "audit-user-1", "success", 10, 0)
+	if err != nil {
+		t.Fatalf("GetFilteredLoginAudits for user failed: %v", err)
+	}
+	if uTotal != 1 || len(filteredUser) != 1 || filteredUser[0].Username != "audituser" {
+		t.Errorf("unexpected filteredUser result: total=%d, len=%d", uTotal, len(filteredUser))
+	}
 }
 
