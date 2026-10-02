@@ -30,6 +30,7 @@ type UserRepository interface {
 
 // KeyRepository handles API key entity persistence.
 type KeyRepository interface {
+	GetAPIKeyByID(ctx context.Context, id string) (*entity.APIKey, error)
 	GetAPIKeyByKey(ctx context.Context, key string) (*entity.APIKey, error)
 	GetAPIKeysByUserID(ctx context.Context, userID string) ([]entity.APIKey, error)
 	GetAllAPIKeys(ctx context.Context) ([]entity.APIKey, error)
@@ -398,6 +399,36 @@ func (r *SQLiteRepo) DeductTokens(ctx context.Context, userID string, tokens int
 }
 
 // API Key methods
+
+// GetAPIKeyByID looks up an API key by its unique ID.
+func (r *SQLiteRepo) GetAPIKeyByID(ctx context.Context, id string) (*entity.APIKey, error) {
+	query := `SELECT k.id, k.user_id, k.key, k.name, COALESCE(k.allowed_models, ''), COALESCE(k.allowed_ips, ''), COALESCE(k.rate_limit_rpm, 0), COALESCE(k.max_tokens_limit, 0), COALESCE(k.daily_token_quota, 0), k.is_active, k.created_at, k.last_used_at, k.expires_at, COALESCE(k.tokens_used, 0), COALESCE(k.last_used_ip, ''), u.name 
+	          FROM api_keys k 
+	          JOIN users u ON k.user_id = u.id 
+	          WHERE k.id = ?`
+	row := r.db.QueryRowContext(ctx, query, id)
+	var k entity.APIKey
+	var createdAt string
+	var lastUsed sql.NullString
+	var expiresAt sql.NullString
+	if err := row.Scan(&k.ID, &k.UserID, &k.Key, &k.Name, &k.AllowedModels, &k.AllowedIPs, &k.RateLimitRPM, &k.MaxTokensLimit, &k.DailyTokenQuota, &k.IsActive, &createdAt, &lastUsed, &expiresAt, &k.TokenUsage, &k.LastUsedIP, &k.UserName); err != nil {
+		return nil, err
+	}
+	k.CreatedAt = parseTimeFlexible(createdAt)
+	if lastUsed.Valid {
+		t := parseTimeFlexible(lastUsed.String)
+		if !t.IsZero() {
+			k.LastUsedAt = &t
+		}
+	}
+	if expiresAt.Valid {
+		t := parseTimeFlexible(expiresAt.String)
+		if !t.IsZero() {
+			k.ExpiresAt = &t
+		}
+	}
+	return &k, nil
+}
 
 // GetAPIKeyByKey looks up an API key by its raw key string.
 func (r *SQLiteRepo) GetAPIKeyByKey(ctx context.Context, key string) (*entity.APIKey, error) {

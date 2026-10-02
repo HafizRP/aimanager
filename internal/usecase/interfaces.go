@@ -24,6 +24,7 @@ type (
 	}
 
 	APIKeyStore interface {
+		GetAPIKeyByID(ctx context.Context, id string) (*entity.APIKey, error)
 		GetAPIKeyByKey(ctx context.Context, key string) (*entity.APIKey, error)
 		GetAPIKeysByUserID(ctx context.Context, userID string) ([]entity.APIKey, error)
 		GetAllAPIKeys(ctx context.Context) ([]entity.APIKey, error)
