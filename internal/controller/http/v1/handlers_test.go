@@ -1,8 +1,10 @@
 package v1
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -17,6 +19,7 @@ import (
 	"9router-gateway/internal/entity"
 	"9router-gateway/internal/proxy"
 	"9router-gateway/internal/repository"
+	"9router-gateway/internal/upstream"
 )
 
 func TestSafeRedirectURL(t *testing.T) {
@@ -976,6 +979,370 @@ func TestChatPageHandler(t *testing.T) {
 	}
 	if !strings.Contains(body, "exportAllSessionsJSON") {
 		t.Errorf("expected response to contain exportAllSessionsJSON")
+	}
+}
+
+func TestPricingAndCostEstimator(t *testing.T) {
+	tempDir := t.TempDir()
+	db, err := database.InitDB(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("InitDB failed: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+	cfg := &config.Config{
+		SessionSecret: "test-secret-12345678901234567890",
+		Port:          20129,
+	}
+
+	h, err := NewHandler(cfg, repo, nil, nil)
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+	ctx := context.Background()
+
+	// Mock Pricing on CoreClient
+	mockCore := &upstream.MockCoreClient{
+		PricingFunc: func(ctx context.Context) (map[string]interface{}, error) {
+			return map[string]interface{}{
+				"tokenrouter": map[string]interface{}{
+					"anthropic/claude-3-7-sonnet": map[string]interface{}{
+						"input":     3.0,
+						"output":    15.0,
+						"cached":    0.3,
+						"reasoning": 15.0,
+					},
+				},
+				"gh": map[string]interface{}{
+					"gpt-4o": map[string]interface{}{
+						"input":  2.5,
+						"output": 10.0,
+					},
+				},
+			}, nil
+		},
+	}
+	h.coreClient = mockCore
+
+	adminUser := &entity.User{
+		ID:       "admin-1",
+		Username: "admin",
+		Role:     "admin",
+		IsActive: true,
+	}
+
+	// 1. Test PricingPage renders 200 OK and contains calculator elements
+	t.Run("PricingPage Render", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/pricing", nil)
+		req = req.WithContext(context.WithValue(ctx, userContextKey, adminUser))
+		rr := httptest.NewRecorder()
+		h.PricingPage(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected status 200 OK for /pricing, got %d", rr.Code)
+		}
+
+		body := rr.Body.String()
+		if !strings.Contains(body, "Pricing &amp; Cost Calculator") && !strings.Contains(body, "Pricing & Cost Calculator") {
+			t.Errorf("expected response to contain 'Pricing & Cost Calculator'")
+		}
+		if !strings.Contains(body, "Cost Calculator") {
+			t.Errorf("expected response to contain 'Cost Calculator'")
+		}
+		if !strings.Contains(body, "Rate Catalog") {
+			t.Errorf("expected response to contain 'Rate Catalog'")
+		}
+		if !strings.Contains(body, "calculateCost") {
+			t.Errorf("expected response to contain 'calculateCost' function")
+		}
+	})
+
+	// 2. Test APIPricing returns raw pricing map
+	t.Run("APIPricing JSON", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/pricing", nil)
+		req = req.WithContext(context.WithValue(ctx, userContextKey, adminUser))
+		rr := httptest.NewRecorder()
+		h.APIPricing(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected status 200 OK for /api/pricing, got %d", rr.Code)
+		}
+
+		var data map[string]interface{}
+		if err := json.Unmarshal(rr.Body.Bytes(), &data); err != nil {
+			t.Fatalf("invalid json response: %v", err)
+		}
+		if _, ok := data["tokenrouter"]; !ok {
+			t.Errorf("expected 'tokenrouter' key in pricing response")
+		}
+	})
+
+	// 3. Test APIPricingEstimate with catalog model
+	t.Run("APIPricingEstimate Catalog Model", func(t *testing.T) {
+		payload := map[string]interface{}{
+			"source":            "tokenrouter",
+			"model":             "anthropic/claude-3-7-sonnet",
+			"prompt_tokens":     1000,
+			"completion_tokens": 500,
+			"cached_tokens":     200,
+			"reasoning_tokens":  100,
+			"requests":          100,
+			"usd_to_idr":        16000.0,
+		}
+		bodyBytes, _ := json.Marshal(payload)
+		req := httptest.NewRequest(http.MethodPost, "/api/pricing/estimate", bytes.NewReader(bodyBytes))
+		req = req.WithContext(context.WithValue(ctx, userContextKey, adminUser))
+		rr := httptest.NewRecorder()
+		h.APIPricingEstimate(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected status 200 OK for /api/pricing/estimate, got %d: %s", rr.Code, rr.Body.String())
+		}
+
+		var res PricingEstimateResponse
+		if err := json.Unmarshal(rr.Body.Bytes(), &res); err != nil {
+			t.Fatalf("invalid response json: %v", err)
+		}
+
+		if res.Model != "anthropic/claude-3-7-sonnet" {
+			t.Errorf("expected model 'anthropic/claude-3-7-sonnet', got %s", res.Model)
+		}
+
+		// Calculations:
+		// input: 1000 tokens * (3.0 / 1M) = $0.003
+		// output: 500 tokens * (15.0 / 1M) = $0.0075
+		// cached: 200 tokens * (0.3 / 1M) = $0.00006
+		// reasoning: 100 tokens * (15.0 / 1M) = $0.0015
+		// single req = 0.003 + 0.0075 + 0.00006 + 0.0015 = 0.01206
+		// total 100 reqs = 1.206 USD
+		totalCostUSD := res.CostUSD["total_cost"]
+		if totalCostUSD < 1.20 || totalCostUSD > 1.21 {
+			t.Errorf("expected total_cost around 1.206 USD, got %f", totalCostUSD)
+		}
+
+		totalCostIDR := res.CostIDR["total_cost"]
+		expectedIDR := totalCostUSD * 16000.0
+		if totalCostIDR != expectedIDR {
+			t.Errorf("expected total IDR %f, got %f", expectedIDR, totalCostIDR)
+		}
+	})
+
+	// 4. Test APIPricingEstimate with Custom Model
+	t.Run("APIPricingEstimate Custom Rates", func(t *testing.T) {
+		payload := map[string]interface{}{
+			"source":              "custom",
+			"prompt_tokens":       2000,
+			"completion_tokens":   1000,
+			"requests":            50,
+			"usd_to_idr":          16500.0,
+			"custom_input_rate":   1.0,
+			"custom_output_rate":  2.0,
+			"custom_cached_rate":  0.1,
+			"custom_reasoning_rate": 2.0,
+		}
+		bodyBytes, _ := json.Marshal(payload)
+		req := httptest.NewRequest(http.MethodPost, "/api/pricing/estimate", bytes.NewReader(bodyBytes))
+		req = req.WithContext(context.WithValue(ctx, userContextKey, adminUser))
+		rr := httptest.NewRecorder()
+		h.APIPricingEstimate(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected status 200 OK, got %d", rr.Code)
+		}
+
+		var res PricingEstimateResponse
+		if err := json.Unmarshal(rr.Body.Bytes(), &res); err != nil {
+			t.Fatalf("invalid json: %v", err)
+		}
+
+		// Single req:
+		// input: 2000 * (1.0 / 1M) = 0.002
+		// output: 1000 * (2.0 / 1M) = 0.002
+		// single = 0.004
+		// total 50 reqs = 0.20 USD
+		if res.CostUSD["total_cost"] != 0.20 {
+			t.Errorf("expected total_cost 0.20 USD, got %f", res.CostUSD["total_cost"])
+		}
+	})
+
+	// 5. Test APIPricingEstimate Invalid JSON
+	t.Run("APIPricingEstimate Bad Request", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/pricing/estimate", bytes.NewReader([]byte("invalid json")))
+		req = req.WithContext(context.WithValue(ctx, userContextKey, adminUser))
+		rr := httptest.NewRecorder()
+		h.APIPricingEstimate(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected status 400 Bad Request, got %d", rr.Code)
+		}
+	})
+}
+
+func TestLogsPageAndPayloadInspector(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test_logs_inspect.db")
+	db, err := database.InitDB(dbPath)
+	if err != nil {
+		t.Fatalf("InitDB failed: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+	cfg := &config.Config{
+		SessionSecret: "test-secret-12345678901234567890",
+		Port:          20129,
+	}
+
+	h, err := NewHandler(cfg, repo, nil, nil)
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+
+	ctx := context.Background()
+	user1 := &entity.User{
+		ID:            "u-logs-1",
+		Username:      "loguser1",
+		Name:          "Log User 1",
+		PasswordHash:  "hash123",
+		Role:          "user",
+		AllowedModels: `["main"]`,
+		IsActive:      true,
+	}
+	if err := repo.CreateUser(ctx, user1); err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+
+	user2 := &entity.User{
+		ID:            "u-logs-2",
+		Username:      "loguser2",
+		Name:          "Log User 2",
+		PasswordHash:  "hash123",
+		Role:          "user",
+		AllowedModels: `["main"]`,
+		IsActive:      true,
+	}
+	if err := repo.CreateUser(ctx, user2); err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+
+	adminUser := &entity.User{
+		ID:            "u-logs-admin",
+		Username:      "adminlogs",
+		Name:          "Admin Logs",
+		PasswordHash:  "hash123",
+		Role:          "admin",
+		AllowedModels: `["*"]`,
+		IsActive:      true,
+	}
+	if err := repo.CreateUser(ctx, adminUser); err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+
+	key1 := &entity.APIKey{
+		ID:       "k-log-1",
+		UserID:   user1.ID,
+		Key:      "«redacted:sk-…»",
+		Name:     "Test Key 1",
+		IsActive: true,
+	}
+	if err := repo.CreateAPIKey(ctx, key1); err != nil {
+		t.Fatalf("CreateAPIKey failed: %v", err)
+	}
+
+	logEntry := &entity.RequestLog{
+		UserID:           user1.ID,
+		APIKeyID:         key1.ID,
+		Path:             "/v1/chat/completions",
+		Method:           "POST",
+		Model:            "ag/gemini-3.7-flash-high",
+		IsStream:         true,
+		PromptTokens:     42,
+		CompletionTokens: 88,
+		TotalTokens:      130,
+		StatusCode:       200,
+		DurationMs:       650,
+		ClientIP:         "127.0.0.1",
+		RequestBody:      `{"model":"ag/gemini-3.7-flash-high","messages":[{"role":"user","content":"Hello AI"}]}`,
+		ResponseText:     "Hello there! How can I assist you today?",
+	}
+	if err := repo.CreateRequestLog(ctx, logEntry); err != nil {
+		t.Fatalf("CreateRequestLog failed: %v", err)
+	}
+
+	logs, _, err := repo.GetRequestLogs(ctx, 10, 0, user1.ID, "", 0)
+	if err != nil || len(logs) == 0 {
+		t.Fatalf("failed to retrieve inserted log: %v", err)
+	}
+	logID := logs[0].ID
+
+	// 1. LogsPage renders 200 OK and includes inspect modal & table
+	reqLogs := httptest.NewRequest(http.MethodGet, "/logs", nil)
+	reqLogs = reqLogs.WithContext(context.WithValue(ctx, userContextKey, user1))
+	rrLogs := httptest.NewRecorder()
+	h.LogsPage(rrLogs, reqLogs)
+
+	if rrLogs.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for /logs, got %d", rrLogs.Code)
+	}
+	bodyLogs := rrLogs.Body.String()
+	if !strings.Contains(bodyLogs, "Request Audit Logs") {
+		t.Errorf("expected page to contain 'Request Audit Logs'")
+	}
+	if !strings.Contains(bodyLogs, "inspectLogModal") {
+		t.Errorf("expected page to contain 'inspectLogModal'")
+	}
+	if !strings.Contains(bodyLogs, "inspectLog(") {
+		t.Errorf("expected page to contain 'inspectLog(' JS call")
+	}
+
+	// 2. Fetch log payload via APIReplaySource by owner (user1) -> 200 OK
+	reqSource := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/replay/source?id=%d", logID), nil)
+	reqSource = reqSource.WithContext(context.WithValue(ctx, userContextKey, user1))
+	rrSource := httptest.NewRecorder()
+	h.APIReplaySource(rrSource, reqSource)
+
+	if rrSource.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK from APIReplaySource for owner, got %d", rrSource.Code)
+	}
+
+	var payload map[string]interface{}
+	if err := json.NewDecoder(rrSource.Body).Decode(&payload); err != nil {
+		t.Fatalf("failed to decode APIReplaySource response: %v", err)
+	}
+	if payload["model"] != "ag/gemini-3.7-flash-high" {
+		t.Errorf("expected model 'ag/gemini-3.7-flash-high', got %v", payload["model"])
+	}
+	if payload["request_body"] != logEntry.RequestBody {
+		t.Errorf("expected request_body match, got %v", payload["request_body"])
+	}
+	if payload["response_text"] != logEntry.ResponseText {
+		t.Errorf("expected response_text match, got %v", payload["response_text"])
+	}
+	if int(payload["status_code"].(float64)) != 200 {
+		t.Errorf("expected status_code 200, got %v", payload["status_code"])
+	}
+	if int(payload["total_tokens"].(float64)) != 130 {
+		t.Errorf("expected total_tokens 130, got %v", payload["total_tokens"])
+	}
+
+	// 3. User2 (non-admin, not owner) attempts to fetch user1's log -> 404
+	reqForbidden := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/replay/source?id=%d", logID), nil)
+	reqForbidden = reqForbidden.WithContext(context.WithValue(ctx, userContextKey, user2))
+	rrForbidden := httptest.NewRecorder()
+	h.APIReplaySource(rrForbidden, reqForbidden)
+
+	if rrForbidden.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 Not Found for non-owner, got %d", rrForbidden.Code)
+	}
+
+	// 4. Admin attempts to fetch user1's log -> 200 OK
+	reqAdmin := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/replay/source?id=%d", logID), nil)
+	reqAdmin = reqAdmin.WithContext(context.WithValue(ctx, userContextKey, adminUser))
+	rrAdmin := httptest.NewRecorder()
+	h.APIReplaySource(rrAdmin, reqAdmin)
+
+	if rrAdmin.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for admin, got %d", rrAdmin.Code)
 	}
 }
 
