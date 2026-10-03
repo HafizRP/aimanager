@@ -34,6 +34,7 @@ type (
 		UpdateKeyBudgets(ctx context.Context, id string, maxTokensLimit, dailyQuota int) error
 		UpdateKeyRestrictions(ctx context.Context, id string, maxTokensLimit, dailyQuota int, allowedIPs string) error
 		ResetKeyUsage(ctx context.Context, id string) error
+		GetKeyStats(ctx context.Context, keyID string) (*entity.KeyStatsSummary, []entity.HourlyUsagePoint, []entity.KeyModelUsage, []entity.KeyRecentRequest, error)
 	}
 
 	RequestLogStore interface {

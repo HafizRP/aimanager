@@ -696,3 +696,146 @@ func TestSQLiteRepo_LoginAudit(t *testing.T) {
 	}
 }
 
+func TestGetKeyStats(t *testing.T) {
+	repo, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Setup user and API key
+	user := &entity.User{
+		ID:            "u-stat-1",
+		Username:      "statuser",
+		Name:          "Stat User",
+		PasswordHash:  "hash123",
+		Role:          "user",
+		AllowedModels: `["*"]`,
+		IsActive:      true,
+	}
+	if err := repo.CreateUser(ctx, user); err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+
+	key := &entity.APIKey{
+		ID:              "key-stat-1",
+		UserID:          user.ID,
+		Key:             "«redacted:sk-…»",
+		Name:            "Analytics Test Key",
+		RateLimitRPM:    60,
+		MaxTokensLimit:  100000,
+		DailyTokenQuota: 10000,
+		IsActive:        true,
+	}
+	if err := repo.CreateAPIKey(ctx, key); err != nil {
+		t.Fatalf("CreateAPIKey failed: %v", err)
+	}
+
+	// Insert test request logs
+	log1 := &entity.RequestLog{
+		UserID:           user.ID,
+		APIKeyID:         key.ID,
+		Path:             "/v1/chat/completions",
+		Method:           "POST",
+		Model:            "ag/gemini-3.7-flash-high",
+		IsStream:         true,
+		PromptTokens:     100,
+		CompletionTokens: 400,
+		TotalTokens:      500,
+		StatusCode:       200,
+		DurationMs:       150,
+		ClientIP:         "192.168.1.20",
+	}
+	log2 := &entity.RequestLog{
+		UserID:           user.ID,
+		APIKeyID:         key.ID,
+		Path:             "/v1/chat/completions",
+		Method:           "POST",
+		Model:            "ag/gemini-3.7-flash-high",
+		IsStream:         false,
+		PromptTokens:     200,
+		CompletionTokens: 800,
+		TotalTokens:      1000,
+		StatusCode:       200,
+		DurationMs:       250,
+		ClientIP:         "192.168.1.20",
+	}
+	log3 := &entity.RequestLog{
+		UserID:           user.ID,
+		APIKeyID:         key.ID,
+		Path:             "/v1/chat/completions",
+		Method:           "POST",
+		Model:            "kr/glm-5",
+		IsStream:         false,
+		PromptTokens:     50,
+		CompletionTokens: 0,
+		TotalTokens:      50,
+		StatusCode:       500,
+		DurationMs:       400,
+		ClientIP:         "192.168.1.25",
+		ErrorMessage:     "upstream failure",
+	}
+
+	if err := repo.CreateRequestLog(ctx, log1); err != nil {
+		t.Fatalf("CreateRequestLog 1 failed: %v", err)
+	}
+	if err := repo.CreateRequestLog(ctx, log2); err != nil {
+		t.Fatalf("CreateRequestLog 2 failed: %v", err)
+	}
+	if err := repo.CreateRequestLog(ctx, log3); err != nil {
+		t.Fatalf("CreateRequestLog 3 failed: %v", err)
+	}
+
+	summary, hourly, topModels, recent, err := repo.GetKeyStats(ctx, key.ID)
+	if err != nil {
+		t.Fatalf("GetKeyStats failed: %v", err)
+	}
+
+	// Verify Summary
+	if summary.TotalRequests != 3 {
+		t.Errorf("expected 3 total requests, got %d", summary.TotalRequests)
+	}
+	if summary.SuccessRequests != 2 {
+		t.Errorf("expected 2 success requests, got %d", summary.SuccessRequests)
+	}
+	if summary.FailedRequests != 1 {
+		t.Errorf("expected 1 failed request, got %d", summary.FailedRequests)
+	}
+	if summary.TotalTokens != 1550 {
+		t.Errorf("expected 1550 total tokens, got %d", summary.TotalTokens)
+	}
+	if summary.TotalPromptTokens != 350 {
+		t.Errorf("expected 350 prompt tokens, got %d", summary.TotalPromptTokens)
+	}
+	if summary.TotalCompletionTokens != 1200 {
+		t.Errorf("expected 1200 completion tokens, got %d", summary.TotalCompletionTokens)
+	}
+	expectedRate := (2.0 / 3.0) * 100.0
+	if summary.SuccessRate < expectedRate-0.1 || summary.SuccessRate > expectedRate+0.1 {
+		t.Errorf("expected ~66.67%% success rate, got %f", summary.SuccessRate)
+	}
+
+	// Verify Top Models
+	if len(topModels) != 2 {
+		t.Fatalf("expected 2 top models, got %d", len(topModels))
+	}
+	if topModels[0].Model != "ag/gemini-3.7-flash-high" || topModels[0].Tokens != 1500 || topModels[0].Requests != 2 {
+		t.Errorf("unexpected top model 0: %+v", topModels[0])
+	}
+	if topModels[1].Model != "kr/glm-5" || topModels[1].Tokens != 50 || topModels[1].Requests != 1 {
+		t.Errorf("unexpected top model 1: %+v", topModels[1])
+	}
+
+	// Verify Recent Requests
+	if len(recent) != 3 {
+		t.Fatalf("expected 3 recent requests, got %d", len(recent))
+	}
+	if recent[0].StatusCode != 500 || recent[0].ErrorMessage != "upstream failure" {
+		t.Errorf("unexpected recent[0]: %+v", recent[0])
+	}
+
+	// Verify Hourly Breakdown
+	if len(hourly) == 0 {
+		t.Errorf("expected hourly data points, got 0")
+	}
+}
+
