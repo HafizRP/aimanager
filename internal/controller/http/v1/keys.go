@@ -279,6 +279,11 @@ func (h *Handler) EditKey(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirectURL+"?msg="+url.QueryEscape("API key '"+updated.Name+"' updated successfully!"), http.StatusSeeOther)
 }
 
+// UpdateKey is an alias for EditKey supporting PUT/POST updates.
+func (h *Handler) UpdateKey(w http.ResponseWriter, r *http.Request) {
+	h.EditKey(w, r)
+}
+
 // ToggleKeyStatus activates/deactivates an API key.
 func (h *Handler) ToggleKeyStatus(w http.ResponseWriter, r *http.Request) {
 	keyID := chi.URLParam(r, "id")
