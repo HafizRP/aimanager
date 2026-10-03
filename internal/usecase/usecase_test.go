@@ -98,17 +98,17 @@ func (f *fakeStore) DeductTokens(ctx context.Context, id string, tokens int) err
 }
 
 // APIKeyStore
-func (f *fakeStore) GetAPIKeyByKey(ctx context.Context, key string) (*entity.APIKey, error) {
-	for _, k := range f.keys {
-		if k.Key == key {
-			return k, nil
-		}
-	}
-	return nil, nil
-}
 func (f *fakeStore) GetAPIKeyByID(ctx context.Context, id string) (*entity.APIKey, error) {
 	for _, k := range f.keys {
 		if k.ID == id {
+			return k, nil
+		}
+	}
+	return nil, errors.New("not found")
+}
+func (f *fakeStore) GetAPIKeyByKey(ctx context.Context, key string) (*entity.APIKey, error) {
+	for _, k := range f.keys {
+		if k.Key == key {
 			return k, nil
 		}
 	}

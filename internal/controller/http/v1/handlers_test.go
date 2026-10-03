@@ -1765,3 +1765,220 @@ func TestAPIKeyStats(t *testing.T) {
 		t.Fatalf("expected 404 Not Found for non-existent key, got %d", rrD.Code)
 	}
 }
+
+func TestExportKeys(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test_export_keys.db")
+	db, err := database.InitDB(dbPath)
+	if err != nil {
+		t.Fatalf("InitDB failed: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+	cfg := &config.Config{
+		SessionSecret: "test-secret-12345678901234567890",
+	}
+
+	h, err := NewHandler(cfg, repo, nil, nil)
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+
+	ctx := context.Background()
+	adminUser := &entity.User{
+		ID:       "admin-user-1",
+		Username: "admin",
+		Name:     "Admin User",
+		Role:     "admin",
+		IsActive: true,
+	}
+	regularUser := &entity.User{
+		ID:       "reg-user-1",
+		Username: "bob",
+		Name:     "Bob Developer",
+		Role:     "user",
+		IsActive: true,
+	}
+	_ = repo.CreateUser(ctx, adminUser)
+	_ = repo.CreateUser(ctx, regularUser)
+
+	key1 := &entity.APIKey{
+		ID:            "key-1",
+		UserID:        adminUser.ID,
+		Key:           "sk-test-export-admin-key-1",
+		Name:          "Admin Key",
+		AllowedModels: "main",
+		AllowedIPs:    "127.0.0.1",
+		RateLimitRPM:  120,
+		IsActive:      true,
+	}
+	key2 := &entity.APIKey{
+		ID:            "key-2",
+		UserID:        regularUser.ID,
+		Key:           "sk-test-export-bob-key-2",
+		Name:          "Bob Key",
+		AllowedModels: "free-only",
+		IsActive:      true,
+	}
+	if err := repo.CreateAPIKey(ctx, key1); err != nil {
+		t.Fatalf("CreateAPIKey key1 failed: %v", err)
+	}
+	if err := repo.CreateAPIKey(ctx, key2); err != nil {
+		t.Fatalf("CreateAPIKey key2 failed: %v", err)
+	}
+
+	// 1. Admin CSV export (all keys)
+	req := httptest.NewRequest(http.MethodGet, "/api/keys/export?format=csv", nil)
+	req = req.WithContext(context.WithValue(ctx, userContextKey, adminUser))
+	rr := httptest.NewRecorder()
+	h.ExportKeys(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for CSV export, got %d", rr.Code)
+	}
+	csvBody := rr.Body.String()
+	if !strings.Contains(csvBody, "Admin Key") || !strings.Contains(csvBody, "Bob Key") {
+		t.Errorf("expected CSV to contain both keys, got: %s", csvBody)
+	}
+
+	// 2. Regular user CSV export (only Bob's keys)
+	reqUser := httptest.NewRequest(http.MethodGet, "/api/keys/export?format=csv", nil)
+	reqUser = reqUser.WithContext(context.WithValue(ctx, userContextKey, regularUser))
+	rrUser := httptest.NewRecorder()
+	h.ExportKeys(rrUser, reqUser)
+
+	if rrUser.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for regular user export, got %d", rrUser.Code)
+	}
+	userCsv := rrUser.Body.String()
+	if strings.Contains(userCsv, "Admin Key") {
+		t.Errorf("regular user export should not contain Admin Key")
+	}
+	if !strings.Contains(userCsv, "Bob Key") {
+		t.Errorf("regular user export should contain Bob Key")
+	}
+
+	// 3. Admin JSON export
+	reqJSON := httptest.NewRequest(http.MethodGet, "/api/keys/export?format=json", nil)
+	reqJSON = reqJSON.WithContext(context.WithValue(ctx, userContextKey, adminUser))
+	rrJSON := httptest.NewRecorder()
+	h.ExportKeys(rrJSON, reqJSON)
+
+	if rrJSON.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for JSON export, got %d", rrJSON.Code)
+	}
+	if !strings.Contains(rrJSON.Body.String(), "Admin Key") {
+		t.Errorf("expected JSON export to contain Admin Key")
+	}
+}
+
+func TestCloneKey(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test_clone_keys.db")
+	db, err := database.InitDB(dbPath)
+	if err != nil {
+		t.Fatalf("InitDB failed: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+	cfg := &config.Config{
+		SessionSecret: "test-secret-12345678901234567890",
+	}
+
+	h, err := NewHandler(cfg, repo, nil, nil)
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+
+	ctx := context.Background()
+	user := &entity.User{
+		ID:       "user-clone-1",
+		Username: "alice",
+		Name:     "Alice Smith",
+		Role:     "user",
+		IsActive: true,
+	}
+	otherUser := &entity.User{
+		ID:       "user-clone-2",
+		Username: "mallory",
+		Name:     "Mallory",
+		Role:     "user",
+		IsActive: true,
+	}
+	_ = repo.CreateUser(ctx, user)
+	_ = repo.CreateUser(ctx, otherUser)
+
+	sourceKey := &entity.APIKey{
+		ID:              "source-key-1",
+		UserID:          user.ID,
+		Key:             "sk-test-source-key-alice-1",
+		Name:            "Source Agent Key",
+		AllowedModels:   "main,ag/gemini-3.8-flash-high",
+		AllowedIPs:     "192.168.1.100",
+		RateLimitRPM:    90,
+		MaxTokensLimit:  1000000,
+		DailyTokenQuota: 100000,
+		IsActive:        true,
+	}
+	_ = repo.CreateAPIKey(ctx, sourceKey)
+
+	// 1. Successful clone via HTML Form
+	form := url.Values{
+		"name": {"Cloned Secondary Key"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/keys/"+sourceKey.ID+"/clone", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", sourceKey.ID)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	req = req.WithContext(context.WithValue(req.Context(), userContextKey, user))
+	rr := httptest.NewRecorder()
+
+	h.CloneKey(rr, req)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("expected status 303 SeeOther, got %d", rr.Code)
+	}
+
+	keys, err := repo.GetAPIKeysByUserID(ctx, user.ID)
+	if err != nil || len(keys) != 2 {
+		t.Fatalf("expected 2 keys after cloning, got %d (err=%v)", len(keys), err)
+	}
+
+	var clonedKey *entity.APIKey
+	for _, k := range keys {
+		if k.Name == "Cloned Secondary Key" {
+			clonedKey = &k
+			break
+		}
+	}
+	if clonedKey == nil {
+		t.Fatalf("cloned key not found in repository")
+	}
+	if !strings.Contains(clonedKey.AllowedModels, "gemini-3.8-flash-high") {
+		t.Errorf("expected AllowedModels to contain 'gemini-3.8-flash-high', got %q", clonedKey.AllowedModels)
+	}
+	if clonedKey.AllowedIPs != sourceKey.AllowedIPs {
+		t.Errorf("expected AllowedIPs %q, got %q", sourceKey.AllowedIPs, clonedKey.AllowedIPs)
+	}
+	if clonedKey.RateLimitRPM != sourceKey.RateLimitRPM {
+		t.Errorf("expected RateLimitRPM %d, got %d", sourceKey.RateLimitRPM, clonedKey.RateLimitRPM)
+	}
+	if clonedKey.MaxTokensLimit != sourceKey.MaxTokensLimit {
+		t.Errorf("expected MaxTokensLimit %d, got %d", sourceKey.MaxTokensLimit, clonedKey.MaxTokensLimit)
+	}
+	if clonedKey.Key == sourceKey.Key {
+		t.Errorf("cloned key should have a newly generated unique token")
+	}
+
+	// 2. Permission denied when other user tries to clone Alice's key
+	reqMal := httptest.NewRequest(http.MethodPost, "/keys/"+sourceKey.ID+"/clone", strings.NewReader(form.Encode()))
+	reqMal.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	reqMal = reqMal.WithContext(context.WithValue(reqMal.Context(), chi.RouteCtxKey, rctx))
+	reqMal = reqMal.WithContext(context.WithValue(reqMal.Context(), userContextKey, otherUser))
+	rrMal := httptest.NewRecorder()
+
+	h.CloneKey(rrMal, reqMal)
+	if !strings.Contains(rrMal.Header().Get("Location"), "Permission+denied") {
+		t.Errorf("expected redirect with Permission denied, got: %s", rrMal.Header().Get("Location"))
+	}
+}
