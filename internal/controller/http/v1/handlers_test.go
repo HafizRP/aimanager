@@ -978,3 +978,148 @@ func TestChatPageHandler(t *testing.T) {
 		t.Errorf("expected response to contain exportAllSessionsJSON")
 	}
 }
+
+func TestUpdateKeyHandler(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test_update_key.db")
+	db, err := database.InitDB(dbPath)
+	if err != nil {
+		t.Fatalf("InitDB failed: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+	cfg := &config.Config{
+		SessionSecret: "test-secret-12345678901234567890",
+		Port:          20129,
+	}
+
+	h, err := NewHandler(cfg, repo, nil, nil)
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+
+	ctx := context.Background()
+	admin := &entity.User{
+		ID:       "u-admin-1",
+		Username: "admin",
+		Name:     "Admin User",
+		Role:     "admin",
+		IsActive: true,
+	}
+	standardUser := &entity.User{
+		ID:       "u-std-1",
+		Username: "user1",
+		Name:     "Standard User",
+		Role:     "user",
+		IsActive: true,
+	}
+	otherUser := &entity.User{
+		ID:       "u-std-2",
+		Username: "user2",
+		Name:     "Other User",
+		Role:     "user",
+		IsActive: true,
+	}
+	_ = repo.CreateUser(ctx, admin)
+	_ = repo.CreateUser(ctx, standardUser)
+	_ = repo.CreateUser(ctx, otherUser)
+
+	key := &entity.APIKey{
+		ID:              "k-update-test",
+		UserID:          standardUser.ID,
+		Key:             "sk-gw-update-test-key-12345",
+		Name:            "Original Key Name",
+		AllowedModels:   "main",
+		AllowedIPs:      "192.168.1.1",
+		RateLimitRPM:    10,
+		MaxTokensLimit:  1000,
+		DailyTokenQuota: 500,
+		IsActive:        true,
+	}
+	if err := repo.CreateAPIKey(ctx, key); err != nil {
+		t.Fatalf("CreateAPIKey failed: %v", err)
+	}
+
+	// 1. Standard user cannot edit other user's key
+	formForbidden := url.Values{
+		"name": {"Hacked Name"},
+	}
+	reqForbidden := httptest.NewRequest(http.MethodPost, "/keys/"+key.ID+"/edit", strings.NewReader(formForbidden.Encode()))
+	reqForbidden.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rctxForbidden := chi.NewRouteContext()
+	rctxForbidden.URLParams.Add("id", key.ID)
+	reqForbidden = reqForbidden.WithContext(context.WithValue(reqForbidden.Context(), chi.RouteCtxKey, rctxForbidden))
+	reqForbidden = reqForbidden.WithContext(context.WithValue(reqForbidden.Context(), userContextKey, otherUser))
+	rrForbidden := httptest.NewRecorder()
+
+	h.UpdateKey(rrForbidden, reqForbidden)
+	if rrForbidden.Code != http.StatusSeeOther || !strings.Contains(rrForbidden.Header().Get("Location"), "Permission+denied") {
+		t.Errorf("expected 303 redirect with Permission denied, got code %d loc %s", rrForbidden.Code, rrForbidden.Header().Get("Location"))
+	}
+
+	// 2. Standard user edits own key via HTML Form
+	formOwner := url.Values{
+		"name":              {"My Renamed Key"},
+		"allowed_models":    {"main, ag/gemini-3.8-flash"},
+		"allowed_ips":       {"10.0.0.1, 10.0.0.2"},
+		"rate_limit_rpm":    {"30"},
+		"max_tokens_limit":  {"200000"},
+		"daily_token_quota": {"50000"},
+		"expires_at":        {"2028-12-31T23:59"},
+	}
+	reqOwner := httptest.NewRequest(http.MethodPost, "/keys/"+key.ID+"/edit", strings.NewReader(formOwner.Encode()))
+	reqOwner.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rctxOwner := chi.NewRouteContext()
+	rctxOwner.URLParams.Add("id", key.ID)
+	reqOwner = reqOwner.WithContext(context.WithValue(reqOwner.Context(), chi.RouteCtxKey, rctxOwner))
+	reqOwner = reqOwner.WithContext(context.WithValue(reqOwner.Context(), userContextKey, standardUser))
+	rrOwner := httptest.NewRecorder()
+
+	h.UpdateKey(rrOwner, reqOwner)
+	if rrOwner.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 redirect for UpdateKey, got %d", rrOwner.Code)
+	}
+
+	// Verify in DB
+	updated, err := repo.GetAPIKeyByID(ctx, key.ID)
+	if err != nil {
+		t.Fatalf("GetAPIKeyByID failed: %v", err)
+	}
+	if updated.Name != "My Renamed Key" {
+		t.Errorf("expected Name 'My Renamed Key', got %s", updated.Name)
+	}
+	if updated.RateLimitRPM != 30 || updated.MaxTokensLimit != 200000 || updated.DailyTokenQuota != 50000 {
+		t.Errorf("unexpected updated limits: %+v", updated)
+	}
+	if updated.AllowedIPs != "10.0.0.1, 10.0.0.2" {
+		t.Errorf("expected AllowedIPs '10.0.0.1, 10.0.0.2', got %s", updated.AllowedIPs)
+	}
+	if updated.ExpiresAt == nil {
+		t.Errorf("expected non-nil ExpiresAt")
+	}
+
+	// 3. Admin edits key via JSON PUT API
+	bodyJSON := `{"name": "Admin Managed Key", "rate_limit_rpm": 100, "allowed_ips": "0.0.0.0/0"}`
+	reqJSON := httptest.NewRequest(http.MethodPut, "/api/keys/"+key.ID, strings.NewReader(bodyJSON))
+	reqJSON.Header.Set("Content-Type", "application/json")
+	reqJSON.Header.Set("Accept", "application/json")
+	rctxJSON := chi.NewRouteContext()
+	rctxJSON.URLParams.Add("id", key.ID)
+	reqJSON = reqJSON.WithContext(context.WithValue(reqJSON.Context(), chi.RouteCtxKey, rctxJSON))
+	reqJSON = reqJSON.WithContext(context.WithValue(reqJSON.Context(), userContextKey, admin))
+	rrJSON := httptest.NewRecorder()
+
+	h.UpdateKey(rrJSON, reqJSON)
+	if rrJSON.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for JSON UpdateKey, got %d body %s", rrJSON.Code, rrJSON.Body.String())
+	}
+
+	// Verify DB again
+	adminUpdated, err := repo.GetAPIKeyByID(ctx, key.ID)
+	if err != nil {
+		t.Fatalf("GetAPIKeyByID failed: %v", err)
+	}
+	if adminUpdated.Name != "Admin Managed Key" || adminUpdated.RateLimitRPM != 100 || adminUpdated.AllowedIPs != "0.0.0.0/0" {
+		t.Errorf("unexpected admin updated key: %+v", adminUpdated)
+	}
+}

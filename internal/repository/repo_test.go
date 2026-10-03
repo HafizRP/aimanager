@@ -159,12 +159,38 @@ func TestAPIKeyOperations(t *testing.T) {
 	}
 
 	// 2. Get Key
-	fetchedKey, err := repo.GetAPIKeyByKey(ctx, "sk-gw-test-key-12345")
+	fetchedKey, err := repo.GetAPIKeyByKey(ctx, key.Key)
 	if err != nil {
 		t.Fatalf("GetAPIKeyByKey failed: %v", err)
 	}
 	if fetchedKey.Name != "Primary Test Key" || fetchedKey.RateLimitRPM != 60 {
 		t.Errorf("unexpected key data: %+v", fetchedKey)
+	}
+
+	// 2b. Get Key By ID
+	fetchedByID, err := repo.GetAPIKeyByID(ctx, "key-1")
+	if err != nil {
+		t.Fatalf("GetAPIKeyByID failed: %v", err)
+	}
+	if fetchedByID.ID != "key-1" || fetchedByID.Name != "Primary Test Key" {
+		t.Errorf("unexpected key by ID data: %+v", fetchedByID)
+	}
+
+	// 2c. Update API Key
+	fetchedByID.Name = "Updated Test Key"
+	fetchedByID.RateLimitRPM = 120
+	fetchedByID.MaxTokensLimit = 50000
+	fetchedByID.DailyTokenQuota = 10000
+	fetchedByID.AllowedIPs = "192.168.1.100, 10.0.0.0/24"
+	if err := repo.UpdateAPIKey(ctx, fetchedByID); err != nil {
+		t.Fatalf("UpdateAPIKey failed: %v", err)
+	}
+	afterUpdate, err := repo.GetAPIKeyByID(ctx, "key-1")
+	if err != nil {
+		t.Fatalf("GetAPIKeyByID after update failed: %v", err)
+	}
+	if afterUpdate.Name != "Updated Test Key" || afterUpdate.RateLimitRPM != 120 || afterUpdate.MaxTokensLimit != 50000 || afterUpdate.DailyTokenQuota != 10000 || afterUpdate.AllowedIPs != "192.168.1.100, 10.0.0.0/24" {
+		t.Errorf("unexpected updated key data: %+v", afterUpdate)
 	}
 
 	// 3. Get Keys By User

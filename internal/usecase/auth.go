@@ -641,17 +641,86 @@ func (s *KeyService) ResetKeyUsage(ctx context.Context, keyID string) error {
 	return s.store.ResetKeyUsage(ctx, keyID)
 }
 
-func (s *KeyService) getKeyByID(ctx context.Context, keyID string) (*entity.APIKey, error) {
-	keys, err := s.store.GetAllAPIKeys(ctx)
-	if err != nil {
+// UpdateKeyInput is the parsed payload for updating an existing API key.
+type UpdateKeyInput struct {
+	ID              string
+	Name            string
+	AllowedModels   string
+	AllowedIPs      string
+	RateLimitRPM    int
+	MaxTokensLimit  int
+	DailyTokenQuota int
+	ExpiresAt       *time.Time
+}
+
+// UpdateKey updates an API key's metadata, model scope, IP whitelist, limits, and expiration.
+func (s *KeyService) UpdateKey(ctx context.Context, in UpdateKeyInput) (*entity.APIKey, error) {
+	key, err := s.store.GetAPIKeyByID(ctx, in.ID)
+	if err != nil || key == nil {
+		return nil, ErrNotFound
+	}
+
+	name := strings.TrimSpace(in.Name)
+	if name == "" {
+		name = key.Name
+	}
+	if len(name) > 64 {
+		name = name[:64]
+	}
+
+	rateLimitRPM := in.RateLimitRPM
+	if rateLimitRPM < 0 {
+		rateLimitRPM = 0
+	}
+
+	maxTokensLimit := in.MaxTokensLimit
+	if maxTokensLimit < 0 {
+		maxTokensLimit = 0
+	}
+
+	dailyQuota := in.DailyTokenQuota
+	if dailyQuota < 0 {
+		dailyQuota = 0
+	}
+
+	allowedModels := normalizeAllowedModels(in.AllowedModels)
+	allowedIPs := strings.TrimSpace(in.AllowedIPs)
+
+	key.Name = name
+	key.AllowedModels = allowedModels
+	key.AllowedIPs = allowedIPs
+	key.RateLimitRPM = rateLimitRPM
+	key.MaxTokensLimit = maxTokensLimit
+	key.DailyTokenQuota = dailyQuota
+	key.ExpiresAt = in.ExpiresAt
+
+	if err := s.store.UpdateAPIKey(ctx, key); err != nil {
 		return nil, err
 	}
-	for i := range keys {
-		if keys[i].ID == keyID {
-			return &keys[i], nil
+
+	if s.sync != nil {
+		u, _ := s.store.GetUserByID(ctx, key.UserID)
+		uName := ""
+		if u != nil {
+			uName = u.Name
 		}
+		_ = s.sync.SyncKey(key, uName)
 	}
-	return nil, ErrNotFound
+
+	return key, nil
+}
+
+// GetKeyByID looks up an API key by ID.
+func (s *KeyService) GetKeyByID(ctx context.Context, keyID string) (*entity.APIKey, error) {
+	return s.getKeyByID(ctx, keyID)
+}
+
+func (s *KeyService) getKeyByID(ctx context.Context, keyID string) (*entity.APIKey, error) {
+	key, err := s.store.GetAPIKeyByID(ctx, keyID)
+	if err != nil || key == nil {
+		return nil, ErrNotFound
+	}
+	return key, nil
 }
 
 // ---- Shared helpers ----

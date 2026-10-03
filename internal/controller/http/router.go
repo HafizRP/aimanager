@@ -174,6 +174,8 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 		// Keys (Scoped: Admin can manage all, Standard users manage their own)
 		authRouter.Get("/keys", h.KeysPage)
 		authRouter.Post("/keys", h.CreateKey)
+		authRouter.Post("/keys/{id}/edit", h.UpdateKey)
+		authRouter.Put("/api/keys/{id}", h.UpdateKey)
 		authRouter.Post("/keys/{id}/toggle", h.ToggleKeyStatus)
 		authRouter.Post("/keys/{id}/delete", h.DeleteKey)
 		authRouter.Post("/keys/{id}/reset-usage", h.ResetKeyUsage)

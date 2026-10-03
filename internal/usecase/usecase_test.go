@@ -106,6 +106,12 @@ func (f *fakeStore) GetAPIKeyByKey(ctx context.Context, key string) (*entity.API
 	}
 	return nil, errors.New("not found")
 }
+func (f *fakeStore) GetAPIKeyByID(ctx context.Context, id string) (*entity.APIKey, error) {
+	if k, ok := f.keys[id]; ok {
+		return k, nil
+	}
+	return nil, errors.New("not found")
+}
 func (f *fakeStore) GetAPIKeysByUserID(ctx context.Context, userID string) ([]entity.APIKey, error) {
 	out := []entity.APIKey{}
 	for _, k := range f.keys {
@@ -123,6 +129,13 @@ func (f *fakeStore) GetAllAPIKeys(ctx context.Context) ([]entity.APIKey, error) 
 	return out, nil
 }
 func (f *fakeStore) CreateAPIKey(ctx context.Context, k *entity.APIKey) error {
+	f.keys[k.ID] = k
+	return nil
+}
+func (f *fakeStore) UpdateAPIKey(ctx context.Context, k *entity.APIKey) error {
+	if _, ok := f.keys[k.ID]; !ok {
+		return errors.New("not found")
+	}
 	f.keys[k.ID] = k
 	return nil
 }
@@ -464,6 +477,57 @@ func TestKeyService_CreateKey(t *testing.T) {
 	_, err = svc.CreateKey(context.Background(), CreateKeyInput{UserID: "u1", CustomKey: k.Key})
 	if err == nil {
 		t.Fatal("expected duplicate key error")
+	}
+}
+
+func TestKeyService_UpdateKey(t *testing.T) {
+	store := newFakeStore()
+	store.users["u1"] = &entity.User{ID: "u1", Username: "hafiz", Name: "Hafiz"}
+	store.keys["k1"] = &entity.APIKey{
+		ID:              "k1",
+		UserID:          "u1",
+		Key:             "sk-gw-test-key-1",
+		Name:            "Original Key",
+		RateLimitRPM:    10,
+		MaxTokensLimit:  1000,
+		DailyTokenQuota: 500,
+		AllowedModels:   `["main"]`,
+		AllowedIPs:      "192.168.1.1",
+		IsActive:        true,
+	}
+	svc := NewKeyService(store, nil)
+
+	newExp := time.Now().Add(48 * time.Hour)
+	updated, err := svc.UpdateKey(context.Background(), UpdateKeyInput{
+		ID:              "k1",
+		Name:            "Renamed Key",
+		AllowedModels:   "ag/gemini-3.8-flash,ag/claude-sonnet-4-6",
+		AllowedIPs:      "10.0.0.1, 192.168.0.0/16",
+		RateLimitRPM:    30,
+		MaxTokensLimit:  50000,
+		DailyTokenQuota: 10000,
+		ExpiresAt:       &newExp,
+	})
+	if err != nil {
+		t.Fatalf("UpdateKey failed: %v", err)
+	}
+	if updated.Name != "Renamed Key" {
+		t.Errorf("expected Name 'Renamed Key', got %s", updated.Name)
+	}
+	if updated.RateLimitRPM != 30 || updated.MaxTokensLimit != 50000 || updated.DailyTokenQuota != 10000 {
+		t.Errorf("unexpected limits: %+v", updated)
+	}
+	if updated.AllowedIPs != "10.0.0.1, 192.168.0.0/16" {
+		t.Errorf("unexpected AllowedIPs: %s", updated.AllowedIPs)
+	}
+	if updated.ExpiresAt == nil || !updated.ExpiresAt.Equal(newExp) {
+		t.Errorf("unexpected ExpiresAt: %v", updated.ExpiresAt)
+	}
+
+	// Non-existent key
+	_, err = svc.UpdateKey(context.Background(), UpdateKeyInput{ID: "k999"})
+	if err == nil {
+		t.Fatal("expected error for non-existent key")
 	}
 }
 

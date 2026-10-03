@@ -25,9 +25,11 @@ type (
 
 	APIKeyStore interface {
 		GetAPIKeyByKey(ctx context.Context, key string) (*entity.APIKey, error)
+		GetAPIKeyByID(ctx context.Context, id string) (*entity.APIKey, error)
 		GetAPIKeysByUserID(ctx context.Context, userID string) ([]entity.APIKey, error)
 		GetAllAPIKeys(ctx context.Context) ([]entity.APIKey, error)
 		CreateAPIKey(ctx context.Context, k *entity.APIKey) error
+		UpdateAPIKey(ctx context.Context, k *entity.APIKey) error
 		ToggleAPIKeyStatus(ctx context.Context, id string, isActive bool) error
 		DeleteAPIKey(ctx context.Context, id string) error
 		UpdateKeyLastUsed(ctx context.Context, id string, ip string) error

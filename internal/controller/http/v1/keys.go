@@ -169,15 +169,8 @@ func (h *Handler) ToggleKeyStatus(w http.ResponseWriter, r *http.Request) {
 
 	// Ownership enforcement (admin can toggle any key)
 	if currentUser != nil && !currentUser.IsAdmin() {
-		keys, _ := h.repo.GetAllAPIKeys(ctx)
-		owned := false
-		for _, k := range keys {
-			if k.ID == keyID && k.UserID == currentUser.ID {
-				owned = true
-				break
-			}
-		}
-		if !owned {
+		k, err := h.repo.GetAPIKeyByID(ctx, keyID)
+		if err != nil || k == nil || k.UserID != currentUser.ID {
 			http.Redirect(w, r, redirectURL+"?error=Permission+denied", http.StatusSeeOther)
 			return
 		}
@@ -209,15 +202,8 @@ func (h *Handler) DeleteKey(w http.ResponseWriter, r *http.Request) {
 
 	// Ownership enforcement (admin can delete any key)
 	if currentUser != nil && !currentUser.IsAdmin() {
-		keys, _ := h.repo.GetAllAPIKeys(ctx)
-		owned := false
-		for _, k := range keys {
-			if k.ID == keyID && k.UserID == currentUser.ID {
-				owned = true
-				break
-			}
-		}
-		if !owned {
+		k, err := h.repo.GetAPIKeyByID(ctx, keyID)
+		if err != nil || k == nil || k.UserID != currentUser.ID {
 			http.Redirect(w, r, redirectURL+"?error=Permission+denied", http.StatusSeeOther)
 			return
 		}
@@ -245,15 +231,8 @@ func (h *Handler) ResetKeyUsage(w http.ResponseWriter, r *http.Request) {
 
 	// Ownership enforcement (admin can reset any key, standard user can only reset own key)
 	if currentUser != nil && !currentUser.IsAdmin() {
-		keys, _ := h.repo.GetAllAPIKeys(ctx)
-		owned := false
-		for _, k := range keys {
-			if k.ID == keyID && k.UserID == currentUser.ID {
-				owned = true
-				break
-			}
-		}
-		if !owned {
+		k, err := h.repo.GetAPIKeyByID(ctx, keyID)
+		if err != nil || k == nil || k.UserID != currentUser.ID {
 			if isJSON {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusForbidden)
@@ -290,4 +269,139 @@ func (h *Handler) ResetKeyUsage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, redirectURL+"?msg="+url.QueryEscape("API key token usage reset to 0"), http.StatusSeeOther)
+}
+
+// UpdateKey updates an existing API key's name, model scope, allowed IPs, RPM, budgets, or expiry.
+func (h *Handler) UpdateKey(w http.ResponseWriter, r *http.Request) {
+	keyID := chi.URLParam(r, "id")
+	ctx := r.Context()
+	currentUser := GetUserFromContext(ctx)
+
+	isJSON := strings.Contains(r.Header.Get("Accept"), "application/json") || strings.HasPrefix(r.URL.Path, "/api/")
+
+	key, err := h.repo.GetAPIKeyByID(ctx, keyID)
+	if err != nil || key == nil {
+		if isJSON {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": "API key not found"})
+			return
+		}
+		http.Redirect(w, r, "/keys?error="+url.QueryEscape("API key not found"), http.StatusSeeOther)
+		return
+	}
+
+	// Ownership enforcement: standard user can only edit their own keys
+	if currentUser != nil && !currentUser.IsAdmin() && key.UserID != currentUser.ID {
+		if isJSON {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": "Permission denied"})
+			return
+		}
+		http.Redirect(w, r, "/keys?error=Permission+denied", http.StatusSeeOther)
+		return
+	}
+
+	redirectURL := safeRedirectURL(r.FormValue("redirect"), "/keys")
+
+	name := key.Name
+	allowedModels := key.AllowedModels
+	allowedIPs := key.AllowedIPs
+	rateLimitRPM := key.RateLimitRPM
+	maxTokensLimit := key.MaxTokensLimit
+	dailyQuota := key.DailyTokenQuota
+	expiresAt := key.ExpiresAt
+
+	if isJSON && strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+		var req struct {
+			Name            *string    `json:"name"`
+			AllowedModels   *string    `json:"allowed_models"`
+			AllowedIPs      *string    `json:"allowed_ips"`
+			RateLimitRPM    *int       `json:"rate_limit_rpm"`
+			MaxTokensLimit  *int       `json:"max_tokens_limit"`
+			DailyTokenQuota *int       `json:"daily_token_quota"`
+			ExpiresAt       *time.Time `json:"expires_at"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": "Invalid JSON: " + err.Error()})
+			return
+		}
+		if req.Name != nil {
+			name = *req.Name
+		}
+		if req.AllowedModels != nil {
+			allowedModels = *req.AllowedModels
+		}
+		if req.AllowedIPs != nil {
+			allowedIPs = *req.AllowedIPs
+		}
+		if req.RateLimitRPM != nil {
+			rateLimitRPM = *req.RateLimitRPM
+		}
+		if req.MaxTokensLimit != nil {
+			maxTokensLimit = *req.MaxTokensLimit
+		}
+		if req.DailyTokenQuota != nil {
+			dailyQuota = *req.DailyTokenQuota
+		}
+		if req.ExpiresAt != nil {
+			expiresAt = req.ExpiresAt
+		}
+	} else {
+		_ = r.ParseForm()
+		if v := strings.TrimSpace(r.FormValue("name")); v != "" {
+			name = v
+		}
+		allowedModels = strings.TrimSpace(r.FormValue("allowed_models"))
+		allowedIPs = strings.TrimSpace(r.FormValue("allowed_ips"))
+		rateLimitRPM, _ = strconv.Atoi(r.FormValue("rate_limit_rpm"))
+		maxTokensLimit, _ = strconv.Atoi(r.FormValue("max_tokens_limit"))
+		dailyQuota, _ = strconv.Atoi(r.FormValue("daily_token_quota"))
+		if rawExp := strings.TrimSpace(r.FormValue("expires_at")); rawExp != "" {
+			parsed, err := parseExpiryInput(rawExp)
+			if err != nil {
+				http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape("Invalid expires_at: "+err.Error()), http.StatusSeeOther)
+				return
+			}
+			expiresAt = &parsed
+		} else if r.Form.Has("expires_at") {
+			// Explicit empty string removes expiration
+			expiresAt = nil
+		}
+	}
+
+	updatedKey, err := h.keys.UpdateKey(ctx, usecase.UpdateKeyInput{
+		ID:              keyID,
+		Name:            name,
+		AllowedModels:   allowedModels,
+		AllowedIPs:      allowedIPs,
+		RateLimitRPM:    rateLimitRPM,
+		MaxTokensLimit:  maxTokensLimit,
+		DailyTokenQuota: dailyQuota,
+		ExpiresAt:       expiresAt,
+	})
+	if err != nil {
+		if isJSON {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": err.Error()})
+			return
+		}
+		http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+
+	if isJSON {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"key":     updatedKey,
+		})
+		return
+	}
+
+	http.Redirect(w, r, redirectURL+"?msg="+url.QueryEscape("API key '"+updatedKey.Name+"' updated successfully"), http.StatusSeeOther)
 }
