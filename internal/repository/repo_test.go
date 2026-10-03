@@ -235,6 +235,36 @@ func TestAPIKeyOperations(t *testing.T) {
 		t.Errorf("expected reset TokenUsage 0, got %d", resetLoaded.TokenUsage)
 	}
 
+	// 5d. GetAPIKeyByID and UpdateAPIKey
+	byID, err := repo.GetAPIKeyByID(ctx, "key-1")
+	if err != nil {
+		t.Fatalf("GetAPIKeyByID failed: %v", err)
+	}
+	if byID == nil || byID.ID != "key-1" {
+		t.Fatalf("expected key-1 by ID, got %+v", byID)
+	}
+
+	byID.Name = "Renamed Key"
+	byID.AllowedModels = `["main"]`
+	byID.AllowedIPs = "10.0.0.1"
+	byID.RateLimitRPM = 120
+	byID.MaxTokensLimit = 2000000
+	byID.DailyTokenQuota = 100000
+	newExp := time.Now().Add(72 * time.Hour).UTC().Truncate(time.Second)
+	byID.ExpiresAt = &newExp
+
+	if err := repo.UpdateAPIKey(ctx, byID); err != nil {
+		t.Fatalf("UpdateAPIKey failed: %v", err)
+	}
+
+	updatedByID, err := repo.GetAPIKeyByID(ctx, "key-1")
+	if err != nil {
+		t.Fatalf("GetAPIKeyByID after update failed: %v", err)
+	}
+	if updatedByID.Name != "Renamed Key" || updatedByID.RateLimitRPM != 120 || updatedByID.MaxTokensLimit != 2000000 || updatedByID.AllowedIPs != "10.0.0.1" {
+		t.Errorf("unexpected updated key data: %+v", updatedByID)
+	}
+
 	// 6. Delete Key
 	if err := repo.DeleteAPIKey(ctx, "key-1"); err != nil {
 		t.Fatalf("DeleteAPIKey failed: %v", err)

@@ -116,12 +116,25 @@
                 {{ end }}
               </td>
               <td class="text-end">
-                <div class="d-flex justify-content-end gap-1">
+                <div class="d-flex justify-content-end align-items-center gap-1">
                   <!-- Key Analytics & Performance -->
                   <button type="button" class="btn-modern-ghost py-1 px-2 text-cyan btn-key-stats"
                           data-id="{{ .ID }}" data-name="{{ .Name }}"
                           data-bs-toggle="modal" data-bs-target="#keyStatsModal" title="Key Analytics & Performance">
                     <i class="bi bi-graph-up"></i>
+                  </button>
+                  <!-- Edit Key Configuration -->
+                  <button type="button" class="btn-modern-ghost py-1 px-2 text-warning btn-edit-key"
+                          data-id="{{ .ID }}"
+                          data-name="{{ .Name }}"
+                          data-models="{{ .AllowedModels }}"
+                          data-ips="{{ .AllowedIPs }}"
+                          data-rpm="{{ .RateLimitRPM }}"
+                          data-max="{{ .MaxTokensLimit }}"
+                          data-daily="{{ .DailyTokenQuota }}"
+                          data-expires="{{ if .ExpiresAt }}{{ .ExpiresAt.Format "2006-01-02T15:04" }}{{ end }}"
+                          data-bs-toggle="modal" data-bs-target="#editKeyModal" title="Edit API Key Configuration">
+                    <i class="bi bi-pencil-square"></i>
                   </button>
                   <!-- Edit Budgets & Restrictions -->
                   <button type="button" class="btn-modern-ghost py-1 px-2 text-info btn-edit-budget"
@@ -246,43 +259,65 @@
   </div>
 </div>
 
-<!-- Edit Budgets Modal -->
-<div class="modal fade" id="budgetModal" tabindex="-1">
+<!-- Edit API Key Modal -->
+<div class="modal fade" id="editKeyModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content modal-content-modern">
-      <div class="modal-header modal-header-modern">
-        <h5 class="modal-title fw-bold text-light d-flex align-items-center gap-2">
-          <i class="bi bi-shield-lock text-info"></i> Edit Key Budgets & Restrictions
-        </h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body p-4">
-        <div class="mb-3">
-          <label class="form-label small text-muted">Token Budget (Lifetime, 0 = Unlimited)</label>
-          <input type="number" id="budgetMax" class="form-control form-control-modern font-monospace" min="0">
+      <form id="editKeyForm" method="POST" action="/keys">
+        <div class="modal-header modal-header-modern">
+          <h5 class="modal-title fw-bold text-light d-flex align-items-center gap-2">
+            <i class="bi bi-pencil-square text-warning"></i> Edit API Key
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
-        <div class="mb-3">
-          <label class="form-label small text-muted">Daily Budget WIB (0 = Unlimited)</label>
-          <input type="number" id="budgetDaily" class="form-control form-control-modern font-monospace" min="0">
-        </div>
-        <div class="mb-3">
-          <div class="d-flex justify-content-between align-items-center mb-1">
-            <label class="form-label small text-muted mb-0">Allowed IPs / CIDRs (Optional)</label>
-            {{ if .ClientIP }}
-              <button type="button" class="btn btn-sm btn-link p-0 text-cyan text-decoration-none font-monospace" style="font-size: 0.72rem;" onclick="insertIP('budgetIPs', '{{ .ClientIP }}')">
-                <i class="bi bi-geo-alt"></i> + Add My IP ({{ .ClientIP }})
-              </button>
-            {{ end }}
+        <div class="modal-body p-4">
+          <div class="mb-3">
+            <label class="form-label small text-muted">Key Identifier / Purpose</label>
+            <input type="text" id="editKeyName" name="name" class="form-control form-control-modern" required>
           </div>
-          <input type="text" id="budgetIPs" class="form-control form-control-modern font-monospace" placeholder="e.g. 192.168.1.5, 10.0.0.0/24 (Leave blank for any IP)">
-          <div class="text-dim small mt-1">Restrict key usage to specific client IP addresses or CIDR subnets. Comma-separated.</div>
+          <div class="mb-3">
+            <label class="form-label small text-muted">Model Scope (Optional)</label>
+            <input type="text" id="editKeyModels" name="allowed_models" class="form-control form-control-modern font-monospace" placeholder="e.g. main, ag/gemini-3.8-flash-high (Leave blank for all)">
+            <div class="text-dim small mt-1">Restrict this key to specific models. Leave blank to inherit user's whitelist.</div>
+          </div>
+          <div class="mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <label class="form-label small text-muted mb-0">Allowed IPs / CIDRs (Optional)</label>
+              {{ if .ClientIP }}
+                <button type="button" class="btn btn-sm btn-link p-0 text-cyan text-decoration-none font-monospace" style="font-size: 0.72rem;" onclick="insertIP('editKeyIPs', '{{ .ClientIP }}')">
+                  <i class="bi bi-geo-alt"></i> + Add My IP ({{ .ClientIP }})
+                </button>
+              {{ end }}
+            </div>
+            <input type="text" id="editKeyIPs" name="allowed_ips" class="form-control form-control-modern font-monospace" placeholder="e.g. 192.168.1.5, 10.0.0.0/24 (Leave blank for any IP)">
+            <div class="text-dim small mt-1">Restrict key usage to specific client IP addresses or CIDR subnets. Comma-separated.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small text-muted">Rate Limit RPM (Requests / Minute)</label>
+            <input type="number" id="editKeyRPM" name="rate_limit_rpm" class="form-control form-control-modern font-monospace" min="0" max="1000">
+            <div class="text-dim small mt-1">0 = Unlimited.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small text-muted">Token Budget (Lifetime, 0 = Unlimited)</label>
+            <input type="number" id="editKeyMax" name="max_tokens_limit" class="form-control form-control-modern font-monospace" min="0">
+            <div class="text-dim small mt-1">Hard cap on total tokens this key may ever consume.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small text-muted">Daily Budget WIB (0 = Unlimited)</label>
+            <input type="number" id="editKeyDaily" name="daily_token_quota" class="form-control form-control-modern font-monospace" min="0">
+            <div class="text-dim small mt-1">Resets at midnight WIB.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small text-muted">Expires At (Optional)</label>
+            <input type="datetime-local" id="editKeyExpires" name="expires_at" class="form-control form-control-modern font-monospace">
+            <div class="text-dim small mt-1">Leave empty for a permanent key. Timezone: WIB (Asia/Jakarta).</div>
+          </div>
         </div>
-        <div id="budgetMsg"></div>
-      </div>
-      <div class="modal-footer modal-footer-modern">
-        <button type="button" class="btn-modern-ghost" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" class="btn-modern-primary" onclick="saveBudget()"><i class="bi bi-check2"></i> Save</button>
-      </div>
+        <div class="modal-footer modal-footer-modern">
+          <button type="button" class="btn-modern-ghost" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn-modern-primary"><i class="bi bi-check2"></i> Save Changes</button>
+        </div>
+      </form>
     </div>
   </div>
 </div>
@@ -440,16 +475,20 @@ function insertIP(targetId, ip) {
   if (window.showToast) window.showToast('Added IP: ' + ip + ' ✨', '🌐');
 }
 
-let budgetKeyId = null;
-document.querySelectorAll(".btn-edit-budget").forEach(btn => {
+document.querySelectorAll(".btn-edit-key").forEach(btn => {
   btn.addEventListener("click", function() {
-    budgetKeyId = this.getAttribute("data-id");
-    document.getElementById("budgetMax").value = this.getAttribute("data-max") || 0;
-    document.getElementById("budgetDaily").value = this.getAttribute("data-daily") || 0;
-    document.getElementById("budgetIPs").value = this.getAttribute("data-ips") || "";
-    document.getElementById("budgetMsg").innerHTML = "";
+    const keyId = this.getAttribute("data-id");
+    document.getElementById("editKeyForm").action = "/keys/" + keyId + "/edit";
+    document.getElementById("editKeyName").value = this.getAttribute("data-name") || "";
+    document.getElementById("editKeyModels").value = this.getAttribute("data-models") || "";
+    document.getElementById("editKeyIPs").value = this.getAttribute("data-ips") || "";
+    document.getElementById("editKeyRPM").value = this.getAttribute("data-rpm") || 0;
+    document.getElementById("editKeyMax").value = this.getAttribute("data-max") || 0;
+    document.getElementById("editKeyDaily").value = this.getAttribute("data-daily") || 0;
+    document.getElementById("editKeyExpires").value = this.getAttribute("data-expires") || "";
   });
 });
+
 async function saveBudget() {
   const msg = document.getElementById("budgetMsg");
   try {
@@ -645,14 +684,14 @@ document.querySelectorAll(".btn-key-stats").forEach(btn => {
   });
 });
 
-const refreshStatsBtn = document.getElementById("btnRefreshKeyStats");
-if (refreshStatsBtn) {
-  refreshStatsBtn.addEventListener("click", function() {
-    if (currentStatsKeyId) {
-      fetchKeyStats(currentStatsKeyId, currentStatsKeyName);
-    }
-  });
-}
+  const refreshStatsBtn = document.getElementById("btnRefreshKeyStats");
+  if (refreshStatsBtn) {
+    refreshStatsBtn.addEventListener("click", function() {
+      if (currentStatsKeyId) {
+        fetchKeyStats(currentStatsKeyId, currentStatsKeyName);
+      }
+    });
+  }
 </script>
 {{ end }}
 
