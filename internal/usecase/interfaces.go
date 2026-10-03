@@ -87,6 +87,7 @@ type (
 	LoginAuditStore interface {
 		RecordLoginAudit(ctx context.Context, audit *entity.LoginAudit) error
 		GetLoginAudits(ctx context.Context, limit, offset int) ([]entity.LoginAudit, int, error)
+		GetFilteredLoginAudits(ctx context.Context, userID, status string, limit, offset int) ([]entity.LoginAudit, int, error)
 		GetUserLoginAudits(ctx context.Context, userID string, limit int) ([]entity.LoginAudit, error)
 	}
 

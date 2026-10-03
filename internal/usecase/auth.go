@@ -151,6 +151,11 @@ func (s *AuthService) GetLoginAudits(ctx context.Context, limit, offset int) ([]
 	return s.store.GetLoginAudits(ctx, limit, offset)
 }
 
+// GetFilteredLoginAudits retrieves paginated login audit records matching optional filters.
+func (s *AuthService) GetFilteredLoginAudits(ctx context.Context, userID, status string, limit, offset int) ([]entity.LoginAudit, int, error) {
+	return s.store.GetFilteredLoginAudits(ctx, userID, status, limit, offset)
+}
+
 // GetUserLoginAudits retrieves recent login audits for a specific user ID.
 func (s *AuthService) GetUserLoginAudits(ctx context.Context, userID string, limit int) ([]entity.LoginAudit, error) {
 	return s.store.GetUserLoginAudits(ctx, userID, limit)

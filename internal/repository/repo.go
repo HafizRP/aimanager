@@ -105,6 +105,7 @@ type LoginAttemptRepository interface {
 type LoginAuditRepository interface {
 	RecordLoginAudit(ctx context.Context, audit *entity.LoginAudit) error
 	GetLoginAudits(ctx context.Context, limit, offset int) ([]entity.LoginAudit, int, error)
+	GetFilteredLoginAudits(ctx context.Context, userID, status string, limit, offset int) ([]entity.LoginAudit, int, error)
 	GetUserLoginAudits(ctx context.Context, userID string, limit int) ([]entity.LoginAudit, error)
 }
 
@@ -1677,26 +1678,49 @@ func (r *SQLiteRepo) RecordLoginAudit(ctx context.Context, audit *entity.LoginAu
 
 // GetLoginAudits retrieves paginated login audit records.
 func (r *SQLiteRepo) GetLoginAudits(ctx context.Context, limit, offset int) ([]entity.LoginAudit, int, error) {
+	return r.GetFilteredLoginAudits(ctx, "", "", limit, offset)
+}
+
+// GetFilteredLoginAudits retrieves paginated login audit records with optional user and status filters.
+func (r *SQLiteRepo) GetFilteredLoginAudits(ctx context.Context, userID, status string, limit, offset int) ([]entity.LoginAudit, int, error) {
 	if limit <= 0 {
 		limit = 50
 	}
 	if offset < 0 {
 		offset = 0
 	}
+
+	whereClauses := []string{"1=1"}
+	var args []any
+
+	if strings.TrimSpace(userID) != "" {
+		whereClauses = append(whereClauses, "la.user_id = ?")
+		args = append(args, strings.TrimSpace(userID))
+	}
+	if strings.TrimSpace(status) != "" {
+		whereClauses = append(whereClauses, "la.status = ?")
+		args = append(args, strings.TrimSpace(status))
+	}
+
+	whereSQL := strings.Join(whereClauses, " AND ")
+
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM login_audits la WHERE %s", whereSQL)
 	var total int
-	countQuery := `SELECT COUNT(*) FROM login_audits`
-	if err := r.db.QueryRowContext(ctx, countQuery).Scan(&total); err != nil {
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
-	query := `
+	query := fmt.Sprintf(`
 		SELECT la.id, la.user_id, la.username, la.ip, COALESCE(la.user_agent, ''), la.status, COALESCE(la.reason, ''), la.created_at, COALESCE(u.name, '')
 		FROM login_audits la
 		LEFT JOIN users u ON la.user_id = u.id
+		WHERE %s
 		ORDER BY la.id DESC
 		LIMIT ? OFFSET ?
-	`
-	rows, err := r.db.QueryContext(ctx, query, limit, offset)
+	`, whereSQL)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.db.QueryContext(ctx, query, queryArgs...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1705,14 +1729,14 @@ func (r *SQLiteRepo) GetLoginAudits(ctx context.Context, limit, offset int) ([]e
 	var audits []entity.LoginAudit
 	for rows.Next() {
 		var a entity.LoginAudit
-		var userID sql.NullString
+		var uid sql.NullString
 		var createdAtStr string
-		if err := rows.Scan(&a.ID, &userID, &a.Username, &a.IP, &a.UserAgent, &a.Status, &a.Reason, &createdAtStr, &a.UserName); err != nil {
+		if err := rows.Scan(&a.ID, &uid, &a.Username, &a.IP, &a.UserAgent, &a.Status, &a.Reason, &createdAtStr, &a.UserName); err != nil {
 			return nil, 0, err
 		}
-		if userID.Valid {
-			uid := userID.String
-			a.UserID = &uid
+		if uid.Valid {
+			uVal := uid.String
+			a.UserID = &uVal
 		}
 		a.CreatedAt = parseTimeFlexible(createdAtStr)
 		audits = append(audits, a)

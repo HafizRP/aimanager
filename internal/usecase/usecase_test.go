@@ -325,7 +325,22 @@ func (f *fakeStore) RecordLoginAudit(ctx context.Context, audit *entity.LoginAud
 }
 
 func (f *fakeStore) GetLoginAudits(ctx context.Context, limit, offset int) ([]entity.LoginAudit, int, error) {
-	total := len(f.loginAudits)
+	return f.GetFilteredLoginAudits(ctx, "", "", limit, offset)
+}
+
+func (f *fakeStore) GetFilteredLoginAudits(ctx context.Context, userID, status string, limit, offset int) ([]entity.LoginAudit, int, error) {
+	var filtered []entity.LoginAudit
+	for i := len(f.loginAudits) - 1; i >= 0; i-- {
+		a := f.loginAudits[i]
+		if userID != "" && (a.UserID == nil || *a.UserID != userID) {
+			continue
+		}
+		if status != "" && a.Status != status {
+			continue
+		}
+		filtered = append(filtered, a)
+	}
+	total := len(filtered)
 	if offset >= total {
 		return []entity.LoginAudit{}, total, nil
 	}
@@ -333,11 +348,7 @@ func (f *fakeStore) GetLoginAudits(ctx context.Context, limit, offset int) ([]en
 	if end > total {
 		end = total
 	}
-	res := make([]entity.LoginAudit, 0, end-offset)
-	for i := end - 1; i >= offset; i-- {
-		res = append(res, f.loginAudits[i])
-	}
-	return res, total, nil
+	return filtered[offset:end], total, nil
 }
 
 func (f *fakeStore) GetUserLoginAudits(ctx context.Context, userID string, limit int) ([]entity.LoginAudit, error) {
@@ -410,6 +421,14 @@ func TestAuthService_Authenticate(t *testing.T) {
 	userAudits, err := svc.GetUserLoginAudits(ctx, "u1", 10)
 	if err != nil || len(userAudits) != 2 {
 		t.Fatalf("expected 2 user login audits, got %d err=%v", len(userAudits), err)
+	}
+	filteredSuccess, sTotal, err := svc.GetFilteredLoginAudits(ctx, "u1", "success", 10, 0)
+	if err != nil || sTotal != 1 || len(filteredSuccess) != 1 {
+		t.Fatalf("expected 1 success audit, got total=%d err=%v", sTotal, err)
+	}
+	filteredFailed, fTotal, err := svc.GetFilteredLoginAudits(ctx, "", "failed", 10, 0)
+	if err != nil || fTotal != 1 || len(filteredFailed) != 1 {
+		t.Fatalf("expected 1 failed audit, got total=%d err=%v", fTotal, err)
 	}
 }
 

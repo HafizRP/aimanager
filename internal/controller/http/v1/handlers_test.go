@@ -437,7 +437,24 @@ func TestAPILoginAudits(t *testing.T) {
 	h := &Handler{repo: repo}
 	ctx := context.Background()
 
-	// Seed audit
+	adminUser := &entity.User{
+		ID:       "u-admin",
+		Username: "admin",
+		Name:     "Admin User",
+		Role:     "admin",
+		IsActive: true,
+	}
+	regularUser := &entity.User{
+		ID:       "user-audit-test",
+		Username: "audituser",
+		Name:     "Audit User",
+		Role:     "user",
+		IsActive: true,
+	}
+	_ = repo.CreateUser(ctx, adminUser)
+	_ = repo.CreateUser(ctx, regularUser)
+
+	// Seed audits
 	uid := "user-audit-test"
 	_ = repo.RecordLoginAudit(ctx, &entity.LoginAudit{
 		UserID:    &uid,
@@ -447,9 +464,17 @@ func TestAPILoginAudits(t *testing.T) {
 		Status:    "success",
 		Reason:    "auth ok",
 	})
+	_ = repo.RecordLoginAudit(ctx, &entity.LoginAudit{
+		Username:  "baduser",
+		IP:        "10.0.0.88",
+		UserAgent: "curl/8.0",
+		Status:    "failed",
+		Reason:    "user not found",
+	})
 
-	// 1. APILoginAudits (all)
+	// 1. APILoginAudits (all as admin)
 	req := httptest.NewRequest(http.MethodGet, "/api/login-audits?limit=10", nil)
+	req = req.WithContext(context.WithValue(ctx, userContextKey, adminUser))
 	rr := httptest.NewRecorder()
 	h.APILoginAudits(rr, req)
 	if rr.Code != http.StatusOK {
@@ -459,16 +484,47 @@ func TestAPILoginAudits(t *testing.T) {
 	if err := json.NewDecoder(rr.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode failed: %v", err)
 	}
-	if resp["total"].(float64) < 1 {
-		t.Errorf("expected at least 1 audit in total, got %v", resp["total"])
+	if resp["total"].(float64) < 2 {
+		t.Errorf("expected at least 2 audits in total, got %v", resp["total"])
 	}
 
-	// 2. APIUserLoginAudits
+	// 2. APILoginAudits filtered by status as admin
+	reqFilter := httptest.NewRequest(http.MethodGet, "/api/login-audits?status=failed", nil)
+	reqFilter = reqFilter.WithContext(context.WithValue(ctx, userContextKey, adminUser))
+	rrFilter := httptest.NewRecorder()
+	h.APILoginAudits(rrFilter, reqFilter)
+	if rrFilter.Code != http.StatusOK {
+		t.Fatalf("APILoginAudits filtered returned %d", rrFilter.Code)
+	}
+	var filterResp map[string]interface{}
+	if err := json.NewDecoder(rrFilter.Body).Decode(&filterResp); err != nil {
+		t.Fatalf("decode filterResp failed: %v", err)
+	}
+	if filterResp["total"].(float64) != 1 {
+		t.Errorf("expected 1 failed audit, got %v", filterResp["total"])
+	}
+
+	// 3. APILoginAudits as non-admin user (should only see own audits)
+	reqUserSelf := httptest.NewRequest(http.MethodGet, "/api/login-audits", nil)
+	reqUserSelf = reqUserSelf.WithContext(context.WithValue(ctx, userContextKey, regularUser))
+	rrUserSelf := httptest.NewRecorder()
+	h.APILoginAudits(rrUserSelf, reqUserSelf)
+	if rrUserSelf.Code != http.StatusOK {
+		t.Fatalf("APILoginAudits as regular user returned %d", rrUserSelf.Code)
+	}
+	var userSelfResp map[string]interface{}
+	if err := json.NewDecoder(rrUserSelf.Body).Decode(&userSelfResp); err != nil {
+		t.Fatalf("decode userSelfResp failed: %v", err)
+	}
+	if userSelfResp["total"].(float64) != 1 {
+		t.Errorf("expected regular user to only see 1 audit, got %v", userSelfResp["total"])
+	}
+
+	// 4. APIUserLoginAudits
 	reqUser := httptest.NewRequest(http.MethodGet, "/api/users/user-audit-test/login-audits", nil)
-	// Add chi route param context
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", "user-audit-test")
-	reqUser = reqUser.WithContext(context.WithValue(reqUser.Context(), chi.RouteCtxKey, rctx))
+	reqUser = reqUser.WithContext(context.WithValue(context.WithValue(ctx, userContextKey, adminUser), chi.RouteCtxKey, rctx))
 
 	rrUser := httptest.NewRecorder()
 	h.APIUserLoginAudits(rrUser, reqUser)
@@ -481,6 +537,75 @@ func TestAPILoginAudits(t *testing.T) {
 	}
 	if len(userAudits) != 1 || userAudits[0].Username != "audituser" {
 		t.Errorf("unexpected user audits response: %+v", userAudits)
+	}
+
+	// 5. Unauthenticated returns 401
+	reqUnauth := httptest.NewRequest(http.MethodGet, "/api/login-audits", nil)
+	rrUnauth := httptest.NewRecorder()
+	h.APILoginAudits(rrUnauth, reqUnauth)
+	if rrUnauth.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 on unauthenticated APILoginAudits, got %d", rrUnauth.Code)
+	}
+}
+
+func TestExportLoginAudits(t *testing.T) {
+	tempDir := t.TempDir()
+	db, err := database.InitDB(filepath.Join(tempDir, "test_export.db"))
+	if err != nil {
+		t.Fatalf("failed to init db: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+	h := &Handler{repo: repo}
+	ctx := context.Background()
+
+	adminUser := &entity.User{
+		ID:       "u-admin-export",
+		Username: "admin",
+		Name:     "Admin User",
+		Role:     "admin",
+		IsActive: true,
+	}
+	_ = repo.CreateUser(ctx, adminUser)
+
+	uid := "u-admin-export"
+	_ = repo.RecordLoginAudit(ctx, &entity.LoginAudit{
+		UserID:    &uid,
+		Username:  "admin",
+		IP:        "127.0.0.1",
+		UserAgent: "Mozilla/5.0",
+		Status:    "success",
+		Reason:    "auth ok",
+	})
+
+	// 1. Export CSV
+	reqCSV := httptest.NewRequest(http.MethodGet, "/api/login-audits/export?format=csv", nil)
+	reqCSV = reqCSV.WithContext(context.WithValue(ctx, userContextKey, adminUser))
+	rrCSV := httptest.NewRecorder()
+	h.ExportLoginAudits(rrCSV, reqCSV)
+	if rrCSV.Code != http.StatusOK {
+		t.Fatalf("ExportLoginAudits CSV returned %d", rrCSV.Code)
+	}
+	csvBody := rrCSV.Body.String()
+	if !strings.Contains(csvBody, "Timestamp_WIB") || !strings.Contains(csvBody, "admin") {
+		t.Errorf("unexpected CSV export output: %s", csvBody)
+	}
+
+	// 2. Export JSON
+	reqJSON := httptest.NewRequest(http.MethodGet, "/api/login-audits/export?format=json", nil)
+	reqJSON = reqJSON.WithContext(context.WithValue(ctx, userContextKey, adminUser))
+	rrJSON := httptest.NewRecorder()
+	h.ExportLoginAudits(rrJSON, reqJSON)
+	if rrJSON.Code != http.StatusOK {
+		t.Fatalf("ExportLoginAudits JSON returned %d", rrJSON.Code)
+	}
+	var exported []entity.LoginAudit
+	if err := json.NewDecoder(rrJSON.Body).Decode(&exported); err != nil {
+		t.Fatalf("failed to decode exported JSON: %v", err)
+	}
+	if len(exported) != 1 || exported[0].Username != "admin" {
+		t.Errorf("unexpected JSON export data: %+v", exported)
 	}
 }
 
