@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -269,8 +271,21 @@ func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/users?msg=User+and+keys+deleted+successfully", http.StatusSeeOther)
 }
 
-// APILoginAudits returns paginated login audits (admin only).
+// APILoginAudits returns paginated login audits (admin sees all, regular user sees own).
 func (h *Handler) APILoginAudits(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	currentUser := GetUserFromContext(ctx)
+	if currentUser == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	filterUser := r.URL.Query().Get("user_id")
+	if !currentUser.IsAdmin() {
+		filterUser = currentUser.ID
+	}
+	filterStatus := r.URL.Query().Get("status")
+
 	limitStr := r.URL.Query().Get("limit")
 	limit, _ := strconv.Atoi(limitStr)
 	if limit <= 0 {
@@ -282,7 +297,7 @@ func (h *Handler) APILoginAudits(w http.ResponseWriter, r *http.Request) {
 		offset = 0
 	}
 
-	audits, total, err := h.repo.GetLoginAudits(r.Context(), limit, offset)
+	audits, total, err := h.repo.GetFilteredLoginAudits(ctx, filterUser, filterStatus, limit, offset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -293,6 +308,67 @@ func (h *Handler) APILoginAudits(w http.ResponseWriter, r *http.Request) {
 		"limit":  limit,
 		"offset": offset,
 	})
+}
+
+// ExportLoginAudits exports login audit logs as CSV or JSON.
+func (h *Handler) ExportLoginAudits(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	currentUser := GetUserFromContext(ctx)
+	if currentUser == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	filterUser := r.URL.Query().Get("user_id")
+	if !currentUser.IsAdmin() {
+		filterUser = currentUser.ID
+	}
+	filterStatus := r.URL.Query().Get("status")
+	format := strings.ToLower(r.URL.Query().Get("format"))
+	if format != "json" {
+		format = "csv"
+	}
+
+	// Fetch up to 5000 records for export
+	audits, _, err := h.repo.GetFilteredLoginAudits(ctx, filterUser, filterStatus, 5000, 0)
+	if err != nil {
+		http.Error(w, "Failed to retrieve login audits", http.StatusInternalServerError)
+		return
+	}
+
+	timestamp := time.Now().Format("20060102_150405")
+
+	if format == "json" {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=login_audits_%s.json", timestamp))
+		_ = json.NewEncoder(w).Encode(audits)
+		return
+	}
+
+	// CSV format
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=login_audits_%s.csv", timestamp))
+
+	writer := csv.NewWriter(w)
+	defer writer.Flush()
+
+	_ = writer.Write([]string{
+		"ID", "Timestamp_WIB", "Username", "Account_Name", "Status", "Client_IP", "User_Agent", "Reason",
+	})
+
+	for _, a := range audits {
+		timeWIB := a.CreatedAt.Add(7 * time.Hour).Format("2006-01-02 15:04:05")
+		_ = writer.Write([]string{
+			strconv.FormatInt(a.ID, 10),
+			timeWIB,
+			a.Username,
+			a.UserName,
+			a.Status,
+			a.IP,
+			a.UserAgent,
+			a.Reason,
+		})
+	}
 }
 
 // APIUserLoginAudits returns recent login audits for a specific user (admin only).

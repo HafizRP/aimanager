@@ -8,16 +8,72 @@
     </h4>
     <p class="text-dim small mb-0">Generate, revoke, and inspect API credentials used by Cursor, Cline, Hermes, or custom scripts.</p>
   </div>
-  <div>
+  <div class="d-flex align-items-center gap-2">
+    <div class="dropdown">
+      <button class="btn-modern-ghost text-decoration-none d-inline-flex align-items-center gap-2 dropdown-toggle" type="button" data-bs-toggle="dropdown">
+        <i class="bi bi-download"></i> Export
+      </button>
+      <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end" style="background: var(--bg-surface); border: 1px solid var(--border-subtle);">
+        <li><a class="dropdown-item small d-flex align-items-center gap-2" href="#" onclick="exportKeys('csv'); return false;"><i class="bi bi-filetype-csv text-emerald"></i> Export as CSV</a></li>
+        <li><a class="dropdown-item small d-flex align-items-center gap-2" href="#" onclick="exportKeys('json'); return false;"><i class="bi bi-filetype-json text-primary"></i> Export as JSON</a></li>
+      </ul>
+    </div>
     <button class="btn-modern-primary d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#newKeyModal">
       <i class="bi bi-plus-lg"></i> Create API Key
     </button>
   </div>
 </div>
 
+<!-- Search & Filter Card -->
+<div class="card-modern p-3 mb-4">
+  <div class="row g-2 align-items-end" id="keyFilterForm">
+    <div class="col-md-4">
+      <label class="form-label small text-muted mb-1">Search Keys</label>
+      <div class="input-group input-group-sm">
+        <span class="input-group-text bg-transparent border-secondary border-opacity-25 text-muted"><i class="bi bi-search"></i></span>
+        <input type="text" id="keySearchInput" class="form-control form-control-modern form-control-sm" placeholder="Search by name, key, user, or IP...">
+      </div>
+    </div>
+    {{ if .IsAdmin }}
+    <div class="col-md-2">
+      <label class="form-label small text-muted mb-1">Filter by User</label>
+      <select id="keyUserFilter" class="form-select form-select-modern form-select-sm">
+        <option value="">All Users</option>
+        {{ range .Users }}
+          <option value="{{ .Name }}">{{ .Name }}</option>
+        {{ end }}
+      </select>
+    </div>
+    {{ end }}
+    <div class="col-md-2">
+      <label class="form-label small text-muted mb-1">Status</label>
+      <select id="keyStatusFilter" class="form-select form-select-modern form-select-sm">
+        <option value="all">All Statuses</option>
+        <option value="active">Active Only</option>
+        <option value="revoked">Revoked / Inactive</option>
+        <option value="expired">Expired</option>
+        <option value="expiring">Expiring Soon (7d)</option>
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label small text-muted mb-1">Scope</label>
+      <select id="keyScopeFilter" class="form-select form-select-modern form-select-sm">
+        <option value="all">All Scopes</option>
+        <option value="scoped">Scoped Models</option>
+        <option value="ipbound">IP Bound</option>
+      </select>
+    </div>
+    <div class="col-md-2 d-flex gap-2">
+      <button type="button" id="btnResetKeyFilter" class="btn-modern-ghost btn-sm w-100 py-1" onclick="resetKeyFilters()">
+        <i class="bi bi-x-circle"></i> Reset
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="card-modern mb-4">
   <div class="table-responsive">
-    <table class="table table-modern mb-0">
+    <table class="table table-modern mb-0" id="keysTable">
       <thead>
         <tr>
           <th>User</th>
@@ -33,10 +89,10 @@
           <th class="text-end">Actions</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody id="keysTableBody">
         {{ if .Keys }}
           {{ range .Keys }}
-            <tr>
+            <tr data-key-id="{{ .ID }}" data-name="{{ .Name }}" data-user="{{ .UserName }}" data-key="{{ .Key }}" data-ip="{{ .AllowedIPs }}" data-last-ip="{{ .LastUsedIP }}" data-status="{{ if not .IsActive }}revoked{{ else if .IsExpired }}expired{{ else }}active{{ end }}" data-scoped="{{ if and .AllowedModels (ne .AllowedModels "") (ne .AllowedModels "[]") }}true{{ else }}false{{ end }}" data-ipbound="{{ if and .AllowedIPs (ne .AllowedIPs "") }}true{{ else }}false{{ end }}" data-expires="{{ if .ExpiresAt }}{{ .ExpiresAt.Format "2006-01-02T15:04:05Z07:00" }}{{ end }}">
               <td>
                 <span class="fw-bold text-light">{{ .UserName }}</span>
               </td>
@@ -116,16 +172,33 @@
                 {{ end }}
               </td>
               <td class="text-end">
-                <div class="d-flex justify-content-end gap-1">
-                  <!-- Edit Key Details & Scope -->
+                <div class="d-flex justify-content-end align-items-center gap-1">
+                  <!-- Key Analytics & Performance -->
+                  <button type="button" class="btn-modern-ghost py-1 px-2 text-cyan btn-key-stats"
+                          data-id="{{ .ID }}" data-name="{{ .Name }}"
+                          data-bs-toggle="modal" data-bs-target="#keyStatsModal" title="Key Analytics & Performance">
+                    <i class="bi bi-graph-up"></i>
+                  </button>
+                  <!-- Edit Key Configuration -->
                   <button type="button" class="btn-modern-ghost py-1 px-2 text-warning btn-edit-key"
-                          data-id="{{ .ID }}" data-name="{{ .Name }}" data-models="{{ .AllowedModels }}"
-                          data-ips="{{ .AllowedIPs }}" data-rpm="{{ .RateLimitRPM }}" data-max="{{ .MaxTokensLimit }}"
-                          data-daily="{{ .DailyTokenQuota }}" data-expires="{{ if .ExpiresAt }}{{ .ExpiresAt.Format "2006-01-02T15:04" }}{{ end }}"
-                          data-bs-toggle="modal" data-bs-target="#editKeyModal" title="Edit API Key">
+                          data-id="{{ .ID }}"
+                          data-name="{{ .Name }}"
+                          data-models="{{ .AllowedModels }}"
+                          data-ips="{{ .AllowedIPs }}"
+                          data-rpm="{{ .RateLimitRPM }}"
+                          data-max="{{ .MaxTokensLimit }}"
+                          data-daily="{{ .DailyTokenQuota }}"
+                          data-expires="{{ if .ExpiresAt }}{{ .ExpiresAt.Format "2006-01-02T15:04" }}{{ end }}"
+                          data-bs-toggle="modal" data-bs-target="#editKeyModal" title="Edit API Key Configuration">
                     <i class="bi bi-pencil-square"></i>
                   </button>
-
+                  <!-- Clone / Duplicate Key -->
+                  <button type="button" class="btn-modern-ghost py-1 px-2 text-primary btn-clone-key"
+                          data-id="{{ .ID }}" data-name="{{ .Name }}" data-models="{{ .AllowedModels }}" data-ips="{{ .AllowedIPs }}"
+                          data-rpm="{{ .RateLimitRPM }}" data-max="{{ .MaxTokensLimit }}" data-daily="{{ .DailyTokenQuota }}"
+                          data-bs-toggle="modal" data-bs-target="#cloneKeyModal" title="Clone / Duplicate Key">
+                    <i class="bi bi-copy"></i>
+                  </button>
                   <!-- Edit Budgets & Restrictions -->
                   <button type="button" class="btn-modern-ghost py-1 px-2 text-info btn-edit-budget"
                           data-id="{{ .ID }}" data-max="{{ .MaxTokensLimit }}" data-daily="{{ .DailyTokenQuota }}" data-ips="{{ .AllowedIPs }}"
@@ -156,6 +229,12 @@
               </td>
             </tr>
           {{ end }}
+          <tr id="keysFilteredEmptyRow" style="display: none;">
+            <td colspan="11" class="text-center text-dim py-5">
+              <i class="bi bi-search fs-2 d-block mb-2 opacity-50"></i>
+              No API keys match your filter criteria.
+            </td>
+          </tr>
         {{ else }}
           <tr>
             <td colspan="11" class="text-center text-dim py-5">
@@ -249,12 +328,11 @@
   </div>
 </div>
 
-<!-- Modal: Edit API Key -->
+<!-- Edit API Key Modal -->
 <div class="modal fade" id="editKeyModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content modal-content-modern">
-      <form id="editKeyForm" action="/keys" method="POST">
-        <input type="hidden" name="redirect" value="/keys">
+      <form id="editKeyForm" method="POST" action="/keys">
         <div class="modal-header modal-header-modern">
           <h5 class="modal-title fw-bold text-light d-flex align-items-center gap-2">
             <i class="bi bi-pencil-square text-warning"></i> Edit API Key
@@ -264,11 +342,11 @@
         <div class="modal-body p-4">
           <div class="mb-3">
             <label class="form-label small text-muted">Key Identifier / Purpose</label>
-            <input type="text" name="name" id="editKeyName" class="form-control form-control-modern" placeholder="e.g. Cursor Pro, Hermes local" required>
+            <input type="text" id="editKeyName" name="name" class="form-control form-control-modern" required>
           </div>
           <div class="mb-3">
             <label class="form-label small text-muted">Model Scope (Optional)</label>
-            <input type="text" name="allowed_models" id="editKeyModels" class="form-control form-control-modern font-monospace" placeholder="e.g. main, ag/gemini-3.8-flash-high (Leave blank for all)">
+            <input type="text" id="editKeyModels" name="allowed_models" class="form-control form-control-modern font-monospace" placeholder="e.g. main, ag/gemini-3.8-flash-high (Leave blank for all)">
             <div class="text-dim small mt-1">Restrict this key to specific models. Leave blank to inherit user's whitelist.</div>
           </div>
           <div class="mb-3">
@@ -280,28 +358,28 @@
                 </button>
               {{ end }}
             </div>
-            <input type="text" name="allowed_ips" id="editKeyIPs" class="form-control form-control-modern font-monospace" placeholder="e.g. 192.168.1.5, 10.0.0.0/24 (Leave blank for any IP)">
+            <input type="text" id="editKeyIPs" name="allowed_ips" class="form-control form-control-modern font-monospace" placeholder="e.g. 192.168.1.5, 10.0.0.0/24 (Leave blank for any IP)">
             <div class="text-dim small mt-1">Restrict key usage to specific client IP addresses or CIDR subnets. Comma-separated.</div>
           </div>
-          <div class="row g-3 mb-3">
-            <div class="col-6">
-              <label class="form-label small text-muted">Rate Limit RPM (0 = Unlimited)</label>
-              <input type="number" name="rate_limit_rpm" id="editKeyRPM" class="form-control form-control-modern font-monospace" min="0" placeholder="0">
-            </div>
-            <div class="col-6">
-              <label class="form-label small text-muted">Lifetime Tokens (0 = Unlimited)</label>
-              <input type="number" name="max_tokens_limit" id="editKeyMaxTokens" class="form-control form-control-modern font-monospace" min="0" placeholder="0">
-            </div>
+          <div class="mb-3">
+            <label class="form-label small text-muted">Rate Limit RPM (Requests / Minute)</label>
+            <input type="number" id="editKeyRPM" name="rate_limit_rpm" class="form-control form-control-modern font-monospace" min="0" max="1000">
+            <div class="text-dim small mt-1">0 = Unlimited.</div>
           </div>
-          <div class="row g-3 mb-3">
-            <div class="col-6">
-              <label class="form-label small text-muted">Daily Budget WIB (0 = Unlimited)</label>
-              <input type="number" name="daily_token_quota" id="editKeyDailyQuota" class="form-control form-control-modern font-monospace" min="0" placeholder="0">
-            </div>
-            <div class="col-6">
-              <label class="form-label small text-muted">Expiration Date (WIB)</label>
-              <input type="datetime-local" name="expires_at" id="editKeyExpires" class="form-control form-control-modern font-monospace">
-            </div>
+          <div class="mb-3">
+            <label class="form-label small text-muted">Token Budget (Lifetime, 0 = Unlimited)</label>
+            <input type="number" id="editKeyMax" name="max_tokens_limit" class="form-control form-control-modern font-monospace" min="0">
+            <div class="text-dim small mt-1">Hard cap on total tokens this key may ever consume.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small text-muted">Daily Budget WIB (0 = Unlimited)</label>
+            <input type="number" id="editKeyDaily" name="daily_token_quota" class="form-control form-control-modern font-monospace" min="0">
+            <div class="text-dim small mt-1">Resets at midnight WIB.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small text-muted">Expires At (Optional)</label>
+            <input type="datetime-local" id="editKeyExpires" name="expires_at" class="form-control form-control-modern font-monospace">
+            <div class="text-dim small mt-1">Leave empty for a permanent key. Timezone: WIB (Asia/Jakarta).</div>
           </div>
         </div>
         <div class="modal-footer modal-footer-modern">
@@ -313,47 +391,289 @@
   </div>
 </div>
 
-<!-- Edit Budgets Modal -->
-<div class="modal fade" id="budgetModal" tabindex="-1">
-  <div class="modal-dialog">
+<!-- Key Usage Analytics Modal -->
+<div class="modal fade" id="keyStatsModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content modal-content-modern">
       <div class="modal-header modal-header-modern">
-        <h5 class="modal-title fw-bold text-light d-flex align-items-center gap-2">
-          <i class="bi bi-shield-lock text-info"></i> Edit Key Budgets & Restrictions
-        </h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <h5 class="modal-title fw-bold text-light d-flex align-items-center gap-2 mb-0">
+            <i class="bi bi-graph-up-arrow text-cyan"></i> Key Analytics
+          </h5>
+          <span class="badge-modern badge-cyan font-monospace" id="keyStatsModalName">Key</span>
+          <span class="badge-modern badge-zinc font-monospace small" id="keyStatsModalId"></span>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <button type="button" class="btn-modern-ghost py-1 px-2 text-cyan" id="btnRefreshKeyStats" title="Refresh Analytics">
+            <i class="bi bi-arrow-clockwise"></i>
+          </button>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
       </div>
       <div class="modal-body p-4">
-        <div class="mb-3">
-          <label class="form-label small text-muted">Token Budget (Lifetime, 0 = Unlimited)</label>
-          <input type="number" id="budgetMax" class="form-control form-control-modern font-monospace" min="0">
+        <!-- Loading State -->
+        <div id="keyStatsLoading" class="text-center py-5">
+          <div class="spinner-border text-cyan mb-2" role="status"></div>
+          <p class="text-dim small mb-0">Aggregating key performance & token metrics...</p>
         </div>
-        <div class="mb-3">
-          <label class="form-label small text-muted">Daily Budget WIB (0 = Unlimited)</label>
-          <input type="number" id="budgetDaily" class="form-control form-control-modern font-monospace" min="0">
+
+        <!-- Error State -->
+        <div id="keyStatsError" class="alert card-modern border-danger border-opacity-50 text-light d-none">
+          <i class="bi bi-exclamation-triangle-fill text-danger me-2"></i> <span id="keyStatsErrorText">Failed to load statistics.</span>
         </div>
-        <div class="mb-3">
-          <div class="d-flex justify-content-between align-items-center mb-1">
-            <label class="form-label small text-muted mb-0">Allowed IPs / CIDRs (Optional)</label>
-            {{ if .ClientIP }}
-              <button type="button" class="btn btn-sm btn-link p-0 text-cyan text-decoration-none font-monospace" style="font-size: 0.72rem;" onclick="insertIP('budgetIPs', '{{ .ClientIP }}')">
-                <i class="bi bi-geo-alt"></i> + Add My IP ({{ .ClientIP }})
-              </button>
-            {{ end }}
+
+        <!-- Main Content -->
+        <div id="keyStatsContent" class="d-none">
+          <!-- Quick Status Ribbon -->
+          <div class="subcard-modern p-3 mb-3 bg-black bg-opacity-20 d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div class="d-flex align-items-center gap-2 flex-wrap small">
+              <span class="text-dim">Owner:</span> <strong class="text-light" id="keyStatsOwner">-</strong>
+              <span class="text-dim">| Status:</span> <span id="keyStatsStatusBadge"></span>
+              <span class="text-dim">| Rate Limit:</span> <span class="font-monospace text-amber" id="keyStatsRPM">-</span>
+            </div>
+            <div class="small font-monospace text-dim">
+              <i class="bi bi-geo-alt"></i> <span id="keyStatsLastIP">No recent IP</span>
+            </div>
           </div>
-          <input type="text" id="budgetIPs" class="form-control form-control-modern font-monospace" placeholder="e.g. 192.168.1.5, 10.0.0.0/24 (Leave blank for any IP)">
-          <div class="text-dim small mt-1">Restrict key usage to specific client IP addresses or CIDR subnets. Comma-separated.</div>
+
+          <!-- KPI Cards Grid -->
+          <div class="row g-2 mb-3">
+            <div class="col-6 col-md-3">
+              <div class="subcard-modern p-3 text-center h-100">
+                <div class="text-dim small mb-1">Total Requests</div>
+                <div class="fs-4 fw-bold font-monospace text-light" id="keyStatsTotalReqs">0</div>
+                <div class="mt-1" id="keyStatsSuccessBadge"><span class="badge-modern badge-emerald" style="font-size: 0.65rem;">100% OK</span></div>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="subcard-modern p-3 text-center h-100">
+                <div class="text-dim small mb-1">Total Tokens</div>
+                <div class="fs-4 fw-bold font-monospace text-cyan" id="keyStatsTotalTokens">0</div>
+                <div class="text-dim font-monospace" style="font-size: 0.68rem;" id="keyStatsTokenSplit">In: 0 | Out: 0</div>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="subcard-modern p-3 text-center h-100">
+                <div class="text-dim small mb-1">Avg Latency</div>
+                <div class="fs-4 fw-bold font-monospace text-warning" id="keyStatsAvgLatency">0ms</div>
+                <div class="text-dim font-monospace" style="font-size: 0.68rem;" id="keyStatsLatencySpeed">Normal</div>
+              </div>
+            </div>
+            <div class="col-6 col-md-3">
+              <div class="subcard-modern p-3 text-center h-100">
+                <div class="text-dim small mb-1">FinOps Value</div>
+                <div class="fs-4 fw-bold font-monospace text-emerald" id="keyStatsCostUSD">$0.00</div>
+                <div class="text-dim" style="font-size: 0.68rem;">Retail equiv.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 24-Hour Hourly Activity Section -->
+          <div class="card-modern p-3 mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="fw-bold text-light mb-0 small d-flex align-items-center gap-2">
+                <i class="bi bi-clock-history text-cyan"></i> 24-Hour Activity (WIB)
+              </h6>
+              <span class="text-dim font-monospace small" style="font-size: 0.72rem;">Hourly Token Volume</span>
+            </div>
+            <div id="keyStatsHourlyTrack" class="d-flex align-items-end gap-1 pt-2 pb-1 overflow-x-auto" style="min-height: 90px;">
+              <!-- Dynamically populated hourly bars -->
+            </div>
+          </div>
+
+          <!-- Top Models Breakdown -->
+          <div class="card-modern p-3 mb-3">
+            <h6 class="fw-bold text-light mb-2 small d-flex align-items-center gap-2">
+              <i class="bi bi-cpu text-info"></i> Models Utilized
+            </h6>
+            <div id="keyStatsModelsList" class="d-flex flex-column gap-2">
+              <!-- Dynamically populated model rows -->
+            </div>
+          </div>
+
+          <!-- Recent Requests Table (Last 10) -->
+          <div class="card-modern p-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="fw-bold text-light mb-0 small d-flex align-items-center gap-2">
+                <i class="bi bi-list-check text-emerald"></i> Recent Requests
+              </h6>
+              <span class="text-dim small" style="font-size: 0.72rem;">Latest 10 calls</span>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-sm table-modern align-middle mb-0 font-monospace" style="font-size: 0.75rem;">
+                <thead>
+                  <tr class="text-dim">
+                    <th>Time (WIB)</th>
+                    <th>Status</th>
+                    <th>Model</th>
+                    <th>Tokens</th>
+                    <th>Latency</th>
+                    <th>Client IP</th>
+                    <th class="text-end">Replay</th>
+                  </tr>
+                </thead>
+                <tbody id="keyStatsRecentTable">
+                  <!-- Dynamically populated rows -->
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
-        <div id="budgetMsg"></div>
       </div>
-      <div class="modal-footer modal-footer-modern">
-        <button type="button" class="btn-modern-ghost" data-bs-dismiss="modal">Cancel</button>
-        <button type="button" class="btn-modern-primary" onclick="saveBudget()"><i class="bi bi-check2"></i> Save</button>
+      <div class="modal-footer modal-footer-modern justify-content-between">
+        <a href="/logs" class="btn-modern-ghost py-1 px-3 text-cyan" id="keyStatsLogsBtn"><i class="bi bi-journal-text"></i> Open Filtered Logs</a>
+        <button type="button" class="btn-modern-ghost" data-bs-dismiss="modal">Close</button>
       </div>
     </div>
   </div>
 </div>
+
+<!-- Clone Key Modal -->
+<div class="modal fade" id="cloneKeyModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content modal-content-modern">
+      <form id="cloneKeyForm" action="/keys" method="POST">
+        <div class="modal-header modal-header-modern">
+          <h5 class="modal-title fw-bold text-light d-flex align-items-center gap-2">
+            <i class="bi bi-copy text-primary"></i> Clone API Key
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4">
+          <p class="text-dim small mb-3">Duplicate this key's model scopes, IP restrictions, and rate limits with a newly generated token.</p>
+          <div class="mb-3">
+            <label class="form-label small text-muted">New Key Identifier / Purpose</label>
+            <input type="text" name="name" id="cloneKeyName" class="form-control form-control-modern" placeholder="e.g. Cursor Pro (Secondary)" required>
+          </div>
+          <div class="subcard-modern p-3 mb-0" style="background: rgba(16, 20, 32, 0.6);">
+            <div class="text-light small fw-bold mb-2"><i class="bi bi-info-circle text-info me-1"></i> Inherited Configuration:</div>
+            <div class="d-flex flex-column gap-1 text-dim small" style="font-size: 0.78rem;">
+              <div><span class="text-muted">Model Scope:</span> <span id="cloneInfoModels" class="font-monospace text-light">All Models</span></div>
+              <div><span class="text-muted">Allowed IPs:</span> <span id="cloneInfoIPs" class="font-monospace text-light">Any IP</span></div>
+              <div><span class="text-muted">Rate Limit RPM:</span> <span id="cloneInfoRPM" class="font-monospace text-light">Unlimited</span></div>
+              <div><span class="text-muted">Lifetime Budget:</span> <span id="cloneInfoMax" class="font-monospace text-light">Unlimited</span></div>
+              <div><span class="text-muted">Daily Budget:</span> <span id="cloneInfoDaily" class="font-monospace text-light">Unlimited</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer modal-footer-modern">
+          <button type="button" class="btn-modern-ghost" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn-modern-primary"><i class="bi bi-copy"></i> Generate Cloned Key</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
 <script>
+function exportKeys(format) {
+  const params = new URLSearchParams();
+  params.set('format', format);
+  const status = document.getElementById('keyStatusFilter')?.value;
+  if (status && status !== 'all') params.set('status', status);
+  const user = document.getElementById('keyUserFilter')?.value;
+  if (user) params.set('user', user);
+  window.location.href = '/api/keys/export?' + params.toString();
+}
+
+function filterKeys() {
+  const query = (document.getElementById('keySearchInput')?.value || '').toLowerCase().trim();
+  const statusFilter = document.getElementById('keyStatusFilter')?.value || 'all';
+  const scopeFilter = document.getElementById('keyScopeFilter')?.value || 'all';
+  const userFilter = (document.getElementById('keyUserFilter')?.value || '').toLowerCase().trim();
+
+  const rows = document.querySelectorAll('#keysTableBody tr[data-key-id]');
+  let visibleCount = 0;
+  const now = new Date();
+  const soonLimit = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  rows.forEach(row => {
+    const name = (row.dataset.name || '').toLowerCase();
+    const user = (row.dataset.user || '').toLowerCase();
+    const key = (row.dataset.key || '').toLowerCase();
+    const ip = (row.dataset.ip || '').toLowerCase();
+    const lastIp = (row.dataset.lastIp || '').toLowerCase();
+    const status = row.dataset.status || 'active';
+    const isScoped = row.dataset.scoped === 'true';
+    const isIPBound = row.dataset.ipbound === 'true';
+    const expStr = row.dataset.expires;
+
+    let matchesSearch = !query || name.includes(query) || user.includes(query) || key.includes(query) || ip.includes(query) || lastIp.includes(query);
+    let matchesUser = !userFilter || user === userFilter;
+    
+    let matchesStatus = true;
+    if (statusFilter === 'active') {
+      matchesStatus = status === 'active';
+    } else if (statusFilter === 'revoked') {
+      matchesStatus = status === 'revoked';
+    } else if (statusFilter === 'expired') {
+      matchesStatus = status === 'expired';
+    } else if (statusFilter === 'expiring') {
+      if (status === 'active' && expStr) {
+        const expDate = new Date(expStr);
+        matchesStatus = expDate > now && expDate <= soonLimit;
+      } else {
+        matchesStatus = false;
+      }
+    }
+
+    let matchesScope = true;
+    if (scopeFilter === 'scoped') {
+      matchesScope = isScoped;
+    } else if (scopeFilter === 'ipbound') {
+      matchesScope = isIPBound;
+    }
+
+    if (matchesSearch && matchesUser && matchesStatus && matchesScope) {
+      row.style.display = '';
+      visibleCount++;
+    } else {
+      row.style.display = 'none';
+    }
+  });
+
+  const emptyRow = document.getElementById('keysFilteredEmptyRow');
+  if (emptyRow) {
+    emptyRow.style.display = (visibleCount === 0 && rows.length > 0) ? '' : 'none';
+  }
+}
+
+function resetKeyFilters() {
+  if (document.getElementById('keySearchInput')) document.getElementById('keySearchInput').value = '';
+  if (document.getElementById('keyStatusFilter')) document.getElementById('keyStatusFilter').value = 'all';
+  if (document.getElementById('keyScopeFilter')) document.getElementById('keyScopeFilter').value = 'all';
+  if (document.getElementById('keyUserFilter')) document.getElementById('keyUserFilter').value = '';
+  filterKeys();
+}
+
+document.getElementById('keySearchInput')?.addEventListener('input', filterKeys);
+document.getElementById('keyStatusFilter')?.addEventListener('change', filterKeys);
+document.getElementById('keyScopeFilter')?.addEventListener('change', filterKeys);
+document.getElementById('keyUserFilter')?.addEventListener('change', filterKeys);
+
+document.querySelectorAll('.btn-clone-key').forEach(btn => {
+  btn.addEventListener('click', function() {
+    const id = this.dataset.id;
+    const name = this.dataset.name || 'API Key';
+    const models = this.dataset.models || '';
+    const ips = this.dataset.ips || '';
+    const rpm = this.dataset.rpm || '0';
+    const max = this.dataset.max || '0';
+    const daily = this.dataset.daily || '0';
+
+    const form = document.getElementById('cloneKeyForm');
+    if (form) form.action = '/keys/' + id + '/clone';
+    const nameInput = document.getElementById('cloneKeyName');
+    if (nameInput) nameInput.value = name + ' (Copy)';
+
+    document.getElementById('cloneInfoModels').textContent = (models && models !== '[]') ? models : 'All Models';
+    document.getElementById('cloneInfoIPs').textContent = ips || 'Any IP';
+    document.getElementById('cloneInfoRPM').textContent = (rpm > 0) ? rpm + ' RPM' : 'Unlimited';
+    document.getElementById('cloneInfoMax').textContent = (max > 0) ? max + ' tokens' : 'Unlimited';
+    document.getElementById('cloneInfoDaily').textContent = (daily > 0) ? daily + ' tokens' : 'Unlimited';
+  });
+});
+
 function insertIP(targetId, ip) {
   if (!ip) return;
   const el = document.getElementById(targetId);
@@ -370,48 +690,20 @@ function insertIP(targetId, ip) {
   if (window.showToast) window.showToast('Added IP: ' + ip + ' ✨', '🌐');
 }
 
-let budgetKeyId = null;
 document.querySelectorAll(".btn-edit-key").forEach(btn => {
   btn.addEventListener("click", function() {
-    const id = this.getAttribute("data-id");
-    const name = this.getAttribute("data-name") || "";
-    const models = this.getAttribute("data-models") || "";
-    const ips = this.getAttribute("data-ips") || "";
-    const rpm = this.getAttribute("data-rpm") || "0";
-    const maxTokens = this.getAttribute("data-max") || "0";
-    const dailyQuota = this.getAttribute("data-daily") || "0";
-    const expires = this.getAttribute("data-expires") || "";
-
-    const form = document.getElementById("editKeyForm");
-    if (form) {
-      form.action = "/keys/" + id + "/edit";
-    }
-    const elName = document.getElementById("editKeyName");
-    if (elName) elName.value = name;
-    const elModels = document.getElementById("editKeyModels");
-    if (elModels) elModels.value = models;
-    const elIPs = document.getElementById("editKeyIPs");
-    if (elIPs) elIPs.value = ips;
-    const elRPM = document.getElementById("editKeyRPM");
-    if (elRPM) elRPM.value = rpm;
-    const elMax = document.getElementById("editKeyMaxTokens");
-    if (elMax) elMax.value = maxTokens;
-    const elDaily = document.getElementById("editKeyDailyQuota");
-    if (elDaily) elDaily.value = dailyQuota;
-    const elExpires = document.getElementById("editKeyExpires");
-    if (elExpires) elExpires.value = expires;
+    const keyId = this.getAttribute("data-id");
+    document.getElementById("editKeyForm").action = "/keys/" + keyId + "/edit";
+    document.getElementById("editKeyName").value = this.getAttribute("data-name") || "";
+    document.getElementById("editKeyModels").value = this.getAttribute("data-models") || "";
+    document.getElementById("editKeyIPs").value = this.getAttribute("data-ips") || "";
+    document.getElementById("editKeyRPM").value = this.getAttribute("data-rpm") || 0;
+    document.getElementById("editKeyMax").value = this.getAttribute("data-max") || 0;
+    document.getElementById("editKeyDaily").value = this.getAttribute("data-daily") || 0;
+    document.getElementById("editKeyExpires").value = this.getAttribute("data-expires") || "";
   });
 });
 
-document.querySelectorAll(".btn-edit-budget").forEach(btn => {
-  btn.addEventListener("click", function() {
-    budgetKeyId = this.getAttribute("data-id");
-    document.getElementById("budgetMax").value = this.getAttribute("data-max") || 0;
-    document.getElementById("budgetDaily").value = this.getAttribute("data-daily") || 0;
-    document.getElementById("budgetIPs").value = this.getAttribute("data-ips") || "";
-    document.getElementById("budgetMsg").innerHTML = "";
-  });
-});
 async function saveBudget() {
   const msg = document.getElementById("budgetMsg");
   try {
@@ -428,6 +720,193 @@ async function saveBudget() {
     setTimeout(() => location.reload(), 800);
   } catch (e) { msg.innerHTML = '<p class="text-rose small mb-0">Error: ' + e.message + '</p>'; }
 }
+
+let currentStatsKeyId = null;
+let currentStatsKeyName = null;
+
+function esc(s) {
+  if (!s) return "";
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function fmtNum(n) {
+  return Number(n || 0).toLocaleString();
+}
+
+async function fetchKeyStats(keyId, keyName) {
+  currentStatsKeyId = keyId;
+  currentStatsKeyName = keyName;
+
+  const modalName = document.getElementById("keyStatsModalName");
+  const modalId = document.getElementById("keyStatsModalId");
+  const loading = document.getElementById("keyStatsLoading");
+  const errorBox = document.getElementById("keyStatsError");
+  const content = document.getElementById("keyStatsContent");
+  const refreshBtn = document.getElementById("btnRefreshKeyStats");
+
+  if (modalName) modalName.textContent = keyName || "Key";
+  if (modalId) modalId.textContent = keyId.substring(0, 8) + "...";
+  if (loading) loading.classList.remove("d-none");
+  if (errorBox) errorBox.classList.add("d-none");
+  if (content) content.classList.add("d-none");
+  if (refreshBtn) refreshBtn.classList.add("spin");
+
+  try {
+    const res = await fetch(`/api/keys/${keyId}/stats`);
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    renderKeyStats(data);
+    if (loading) loading.classList.add("d-none");
+    if (content) content.classList.remove("d-none");
+  } catch (err) {
+    if (loading) loading.classList.add("d-none");
+    if (errorBox) {
+      document.getElementById("keyStatsErrorText").textContent = "Failed to load key stats: " + err.message;
+      errorBox.classList.remove("d-none");
+    }
+  } finally {
+    if (refreshBtn) refreshBtn.classList.remove("spin");
+  }
+}
+
+function renderKeyStats(data) {
+  const k = data.key || {};
+  const s = data.summary || {};
+  const hourly = data.hourly_usage || [];
+  const models = data.top_models || [];
+  const recent = data.recent_requests || [];
+
+  // 1. Status Ribbon
+  document.getElementById("keyStatsOwner").textContent = k.user_name || k.user_id || "-";
+  const statusBadge = document.getElementById("keyStatsStatusBadge");
+  if (statusBadge) {
+    if (!k.is_active) {
+      statusBadge.innerHTML = '<span class="badge-modern badge-rose"><i class="bi bi-slash-circle"></i> Revoked</span>';
+    } else {
+      statusBadge.innerHTML = '<span class="badge-modern badge-emerald"><i class="bi bi-check-circle"></i> Active</span>';
+    }
+  }
+  document.getElementById("keyStatsRPM").textContent = k.rate_limit_rpm > 0 ? `${k.rate_limit_rpm}/m` : "Unlimited";
+  document.getElementById("keyStatsLastIP").textContent = k.last_used_ip ? `IP: ${k.last_used_ip}` : "No recent IP";
+
+  // 2. KPI Cards
+  document.getElementById("keyStatsTotalReqs").textContent = fmtNum(s.total_requests);
+  const successBadge = document.getElementById("keyStatsSuccessBadge");
+  if (successBadge) {
+    const rate = Math.round(s.success_rate || 0);
+    const badgeClass = rate >= 90 ? "badge-emerald" : (rate >= 70 ? "badge-amber" : "badge-rose");
+    successBadge.innerHTML = `<span class="badge-modern ${badgeClass}" style="font-size: 0.65rem;">${rate}% OK (${fmtNum(s.failed_requests)} err)</span>`;
+  }
+
+  document.getElementById("keyStatsTotalTokens").textContent = fmtNum(s.total_tokens);
+  document.getElementById("keyStatsTokenSplit").textContent = `In: ${fmtNum(s.total_prompt_tokens)} | Out: ${fmtNum(s.total_completion_tokens)}`;
+
+  const lat = Math.round(s.avg_latency_ms || 0);
+  document.getElementById("keyStatsAvgLatency").textContent = `${lat}ms`;
+  const speedLabel = lat < 600 ? "⚡ Fast" : (lat < 2500 ? "🟢 Normal" : "🐢 Heavy");
+  document.getElementById("keyStatsLatencySpeed").textContent = speedLabel;
+
+  document.getElementById("keyStatsCostUSD").textContent = `$${(s.estimated_cost_usd || 0).toFixed(4)}`;
+
+  // 3. Hourly Activity Track
+  const track = document.getElementById("keyStatsHourlyTrack");
+  if (track) {
+    track.innerHTML = "";
+    if (!hourly || hourly.length === 0) {
+      track.innerHTML = '<div class="text-center text-dim small py-3 w-100"><i class="bi bi-moon-stars me-1 opacity-50"></i> No requests in the last 24 hours</div>';
+    } else {
+      let maxTokens = 1;
+      hourly.forEach(pt => { if (pt.tokens > maxTokens) maxTokens = pt.tokens; });
+      hourly.forEach(pt => {
+        const pct = Math.max(12, Math.min(100, Math.round((pt.tokens / maxTokens) * 100)));
+        const barColor = pt.errors > 0 ? "var(--rose, #f43f5e)" : "var(--cyan, #06b6d4)";
+        const barEl = document.createElement("div");
+        barEl.className = "d-flex flex-column align-items-center flex-grow-1";
+        barEl.style.minWidth = "22px";
+        barEl.style.cursor = "pointer";
+        barEl.title = `Time: ${pt.hour_label} WIB\nTokens: ${fmtNum(pt.tokens)}\nRequests: ${pt.requests}\nErrors: ${pt.errors}`;
+        barEl.innerHTML = `
+          <div class="w-100 rounded-1" style="height: ${pct}px; background: ${barColor}; opacity: 0.85; transition: height 0.3s ease;"></div>
+          <span class="text-dim font-monospace mt-1" style="font-size: 0.6rem;">${pt.hour_label.split(' ')[1] || pt.hour_label}</span>
+        `;
+        track.appendChild(barEl);
+      });
+    }
+  }
+
+  // 4. Models Utilized
+  const modelsList = document.getElementById("keyStatsModelsList");
+  if (modelsList) {
+    modelsList.innerHTML = "";
+    if (!models || models.length === 0) {
+      modelsList.innerHTML = '<div class="text-dim small py-2">No model activity recorded.</div>';
+    } else {
+      models.forEach(m => {
+        const pct = (m.percentage || 0).toFixed(1);
+        const row = document.createElement("div");
+        row.className = "subcard-modern p-2";
+        row.innerHTML = `
+          <div class="d-flex justify-content-between align-items-center mb-1 small">
+            <span class="font-monospace text-light fw-bold">${esc(m.model)}</span>
+            <span class="text-dim font-monospace">${fmtNum(m.tokens)} tokens (${fmtNum(m.requests)} calls) &bull; <strong class="text-cyan">${pct}%</strong></span>
+          </div>
+          <div class="progress" style="height: 6px; background: rgba(255,255,255,0.08);">
+            <div class="progress-bar bg-cyan" style="width: ${Math.max(3, pct)}%;"></div>
+          </div>
+        `;
+        modelsList.appendChild(row);
+      });
+    }
+  }
+
+  // 5. Recent Requests Table
+  const recentTable = document.getElementById("keyStatsRecentTable");
+  if (recentTable) {
+    recentTable.innerHTML = "";
+    if (!recent || recent.length === 0) {
+      recentTable.innerHTML = '<tr><td colspan="7" class="text-center text-dim py-3">No recent request logs recorded.</td></tr>';
+    } else {
+      recent.forEach(r => {
+        const statusBadge = r.status_code < 400 
+          ? `<span class="badge-modern badge-emerald">${r.status_code}</span>` 
+          : `<span class="badge-modern badge-rose">${r.status_code}</span>`;
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="text-dim">${esc(r.created_at)}</td>
+          <td>${statusBadge}</td>
+          <td class="text-light">${esc(r.model)}</td>
+          <td class="text-cyan">${fmtNum(r.total_tokens)}</td>
+          <td class="text-warning">${r.duration_ms}ms</td>
+          <td class="text-dim">${esc(r.client_ip || "-")}</td>
+          <td class="text-end">
+            <a href="/replay?log_id=${r.id}" class="btn-modern-ghost py-0 px-2 text-cyan" title="Replay in Lab"><i class="bi bi-play-circle"></i></a>
+          </td>
+        `;
+        recentTable.appendChild(tr);
+      });
+    }
+  }
+}
+
+document.querySelectorAll(".btn-key-stats").forEach(btn => {
+  btn.addEventListener("click", function() {
+    const id = this.getAttribute("data-id");
+    const name = this.getAttribute("data-name");
+    fetchKeyStats(id, name);
+  });
+});
+
+  const refreshStatsBtn = document.getElementById("btnRefreshKeyStats");
+  if (refreshStatsBtn) {
+    refreshStatsBtn.addEventListener("click", function() {
+      if (currentStatsKeyId) {
+        fetchKeyStats(currentStatsKeyId, currentStatsKeyName);
+      }
+    });
+  }
 </script>
 {{ end }}
 

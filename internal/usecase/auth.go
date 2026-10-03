@@ -151,6 +151,11 @@ func (s *AuthService) GetLoginAudits(ctx context.Context, limit, offset int) ([]
 	return s.store.GetLoginAudits(ctx, limit, offset)
 }
 
+// GetFilteredLoginAudits retrieves paginated login audit records matching optional filters.
+func (s *AuthService) GetFilteredLoginAudits(ctx context.Context, userID, status string, limit, offset int) ([]entity.LoginAudit, int, error) {
+	return s.store.GetFilteredLoginAudits(ctx, userID, status, limit, offset)
+}
+
 // GetUserLoginAudits retrieves recent login audits for a specific user ID.
 func (s *AuthService) GetUserLoginAudits(ctx context.Context, userID string, limit int) ([]entity.LoginAudit, error) {
 	return s.store.GetUserLoginAudits(ctx, userID, limit)
@@ -523,6 +528,18 @@ type CreateKeyInput struct {
 	ExpiresAt       *time.Time
 }
 
+// UpdateKeyInput is the parsed payload for updating an existing API key.
+type UpdateKeyInput struct {
+	ID              string
+	Name            string
+	AllowedModels   string
+	AllowedIPs     string
+	RateLimitRPM    int
+	MaxTokensLimit  int
+	DailyTokenQuota int
+	ExpiresAt       *time.Time
+}
+
 // CreateKey creates an API key and syncs it to 9router Core.
 func (s *KeyService) CreateKey(ctx context.Context, in CreateKeyInput) (*entity.APIKey, error) {
 	finalKey := strings.TrimSpace(in.CustomKey)
@@ -592,6 +609,63 @@ func (s *KeyService) CreateKey(ctx context.Context, in CreateKeyInput) (*entity.
 	return key, nil
 }
 
+// UpdateKey updates an API key's configuration and syncs changes to 9router Core.
+func (s *KeyService) UpdateKey(ctx context.Context, in UpdateKeyInput) (*entity.APIKey, error) {
+	key, err := s.store.GetAPIKeyByID(ctx, in.ID)
+	if err != nil {
+		return nil, err
+	}
+	if key == nil {
+		return nil, ErrNotFound
+	}
+
+	name := strings.TrimSpace(in.Name)
+	if name == "" {
+		name = key.Name
+	}
+	if len(name) > 64 {
+		name = name[:64]
+	}
+
+	rateLimitRPM := in.RateLimitRPM
+	if rateLimitRPM < 0 {
+		rateLimitRPM = 0
+	}
+
+	maxTokensLimit := in.MaxTokensLimit
+	if maxTokensLimit < 0 {
+		maxTokensLimit = 0
+	}
+
+	dailyQuota := in.DailyTokenQuota
+	if dailyQuota < 0 {
+		dailyQuota = 0
+	}
+
+	key.Name = name
+	key.AllowedModels = normalizeAllowedModels(in.AllowedModels)
+	key.AllowedIPs = strings.TrimSpace(in.AllowedIPs)
+	key.RateLimitRPM = rateLimitRPM
+	key.MaxTokensLimit = maxTokensLimit
+	key.DailyTokenQuota = dailyQuota
+	key.ExpiresAt = in.ExpiresAt
+
+	if err := s.store.UpdateAPIKey(ctx, key); err != nil {
+		return nil, err
+	}
+
+	if s.sync != nil {
+		u, _ := s.store.GetUserByID(ctx, key.UserID)
+		uName := ""
+		if u != nil {
+			uName = u.Name
+		}
+		_ = s.sync.SyncKey(key, uName)
+	}
+
+	return key, nil
+}
+
 // ToggleKeyStatus flips a key's active flag (ownership enforced by caller).
 func (s *KeyService) ToggleKeyStatus(ctx context.Context, keyID string) (bool, error) {
 	keys, err := s.store.GetAllAPIKeys(ctx)
@@ -641,86 +715,17 @@ func (s *KeyService) ResetKeyUsage(ctx context.Context, keyID string) error {
 	return s.store.ResetKeyUsage(ctx, keyID)
 }
 
-// UpdateKeyInput is the parsed payload for updating an existing API key.
-type UpdateKeyInput struct {
-	ID              string
-	Name            string
-	AllowedModels   string
-	AllowedIPs      string
-	RateLimitRPM    int
-	MaxTokensLimit  int
-	DailyTokenQuota int
-	ExpiresAt       *time.Time
-}
-
-// UpdateKey updates an API key's metadata, model scope, IP whitelist, limits, and expiration.
-func (s *KeyService) UpdateKey(ctx context.Context, in UpdateKeyInput) (*entity.APIKey, error) {
-	key, err := s.store.GetAPIKeyByID(ctx, in.ID)
-	if err != nil || key == nil {
-		return nil, ErrNotFound
-	}
-
-	name := strings.TrimSpace(in.Name)
-	if name == "" {
-		name = key.Name
-	}
-	if len(name) > 64 {
-		name = name[:64]
-	}
-
-	rateLimitRPM := in.RateLimitRPM
-	if rateLimitRPM < 0 {
-		rateLimitRPM = 0
-	}
-
-	maxTokensLimit := in.MaxTokensLimit
-	if maxTokensLimit < 0 {
-		maxTokensLimit = 0
-	}
-
-	dailyQuota := in.DailyTokenQuota
-	if dailyQuota < 0 {
-		dailyQuota = 0
-	}
-
-	allowedModels := normalizeAllowedModels(in.AllowedModels)
-	allowedIPs := strings.TrimSpace(in.AllowedIPs)
-
-	key.Name = name
-	key.AllowedModels = allowedModels
-	key.AllowedIPs = allowedIPs
-	key.RateLimitRPM = rateLimitRPM
-	key.MaxTokensLimit = maxTokensLimit
-	key.DailyTokenQuota = dailyQuota
-	key.ExpiresAt = in.ExpiresAt
-
-	if err := s.store.UpdateAPIKey(ctx, key); err != nil {
+func (s *KeyService) getKeyByID(ctx context.Context, keyID string) (*entity.APIKey, error) {
+	keys, err := s.store.GetAllAPIKeys(ctx)
+	if err != nil {
 		return nil, err
 	}
-
-	if s.sync != nil {
-		u, _ := s.store.GetUserByID(ctx, key.UserID)
-		uName := ""
-		if u != nil {
-			uName = u.Name
+	for i := range keys {
+		if keys[i].ID == keyID {
+			return &keys[i], nil
 		}
-		_ = s.sync.SyncKey(key, uName)
 	}
-
-	return key, nil
-}
-
-// GetKeyByID looks up an API key by ID.
-func (s *KeyService) GetKeyByID(ctx context.Context, keyID string) (*entity.APIKey, error) {
-	return s.getKeyByID(ctx, keyID)
-}
-
-func (s *KeyService) getKeyByID(ctx context.Context, keyID string) (*entity.APIKey, error) {
-	key, err := s.store.GetAPIKeyByID(ctx, keyID)
-	if err != nil || key == nil {
-		return nil, ErrNotFound
-	}
-	return key, nil
+	return nil, ErrNotFound
 }
 
 // ---- Shared helpers ----

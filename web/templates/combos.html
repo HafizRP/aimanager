@@ -44,13 +44,14 @@
             <!-- Fallback Chain Visualizer -->
             <label class="form-label small text-muted mb-2 text-uppercase tracking-wider font-monospace" style="font-size: 0.68rem;">Fallback Sequence</label>
             <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+              {{ $modelCount := len .Models }}
               {{ range $idx, $m := .Models }}
                 <div class="d-flex align-items-center gap-2">
                   <span class="badge-modern badge-gray font-monospace d-flex align-items-center gap-1.5" style="font-size: 0.75rem; padding: 0.35rem 0.6rem;">
                     <span class="text-primary fw-bold" style="font-size: 0.68rem;">#{{ add $idx 1 }}</span>
                     <span>{{ $m }}</span>
                   </span>
-                  {{ if lt (add $idx 1) (len $.Combos) }}
+                  {{ if lt (add $idx 1) $modelCount }}
                     <i class="bi bi-arrow-right text-dim opacity-50 small"></i>
                   {{ end }}
                 </div>

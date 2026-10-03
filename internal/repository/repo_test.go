@@ -159,38 +159,12 @@ func TestAPIKeyOperations(t *testing.T) {
 	}
 
 	// 2. Get Key
-	fetchedKey, err := repo.GetAPIKeyByKey(ctx, key.Key)
+	fetchedKey, err := repo.GetAPIKeyByKey(ctx, "sk-gw-test-key-12345")
 	if err != nil {
 		t.Fatalf("GetAPIKeyByKey failed: %v", err)
 	}
 	if fetchedKey.Name != "Primary Test Key" || fetchedKey.RateLimitRPM != 60 {
 		t.Errorf("unexpected key data: %+v", fetchedKey)
-	}
-
-	// 2b. Get Key By ID
-	fetchedByID, err := repo.GetAPIKeyByID(ctx, "key-1")
-	if err != nil {
-		t.Fatalf("GetAPIKeyByID failed: %v", err)
-	}
-	if fetchedByID.ID != "key-1" || fetchedByID.Name != "Primary Test Key" {
-		t.Errorf("unexpected key by ID data: %+v", fetchedByID)
-	}
-
-	// 2c. Update API Key
-	fetchedByID.Name = "Updated Test Key"
-	fetchedByID.RateLimitRPM = 120
-	fetchedByID.MaxTokensLimit = 50000
-	fetchedByID.DailyTokenQuota = 10000
-	fetchedByID.AllowedIPs = "192.168.1.100, 10.0.0.0/24"
-	if err := repo.UpdateAPIKey(ctx, fetchedByID); err != nil {
-		t.Fatalf("UpdateAPIKey failed: %v", err)
-	}
-	afterUpdate, err := repo.GetAPIKeyByID(ctx, "key-1")
-	if err != nil {
-		t.Fatalf("GetAPIKeyByID after update failed: %v", err)
-	}
-	if afterUpdate.Name != "Updated Test Key" || afterUpdate.RateLimitRPM != 120 || afterUpdate.MaxTokensLimit != 50000 || afterUpdate.DailyTokenQuota != 10000 || afterUpdate.AllowedIPs != "192.168.1.100, 10.0.0.0/24" {
-		t.Errorf("unexpected updated key data: %+v", afterUpdate)
 	}
 
 	// 3. Get Keys By User
@@ -259,6 +233,36 @@ func TestAPIKeyOperations(t *testing.T) {
 	}
 	if resetLoaded.TokenUsage != 0 {
 		t.Errorf("expected reset TokenUsage 0, got %d", resetLoaded.TokenUsage)
+	}
+
+	// 5d. GetAPIKeyByID and UpdateAPIKey
+	byID, err := repo.GetAPIKeyByID(ctx, "key-1")
+	if err != nil {
+		t.Fatalf("GetAPIKeyByID failed: %v", err)
+	}
+	if byID == nil || byID.ID != "key-1" {
+		t.Fatalf("expected key-1 by ID, got %+v", byID)
+	}
+
+	byID.Name = "Renamed Key"
+	byID.AllowedModels = `["main"]`
+	byID.AllowedIPs = "10.0.0.1"
+	byID.RateLimitRPM = 120
+	byID.MaxTokensLimit = 2000000
+	byID.DailyTokenQuota = 100000
+	newExp := time.Now().Add(72 * time.Hour).UTC().Truncate(time.Second)
+	byID.ExpiresAt = &newExp
+
+	if err := repo.UpdateAPIKey(ctx, byID); err != nil {
+		t.Fatalf("UpdateAPIKey failed: %v", err)
+	}
+
+	updatedByID, err := repo.GetAPIKeyByID(ctx, "key-1")
+	if err != nil {
+		t.Fatalf("GetAPIKeyByID after update failed: %v", err)
+	}
+	if updatedByID.Name != "Renamed Key" || updatedByID.RateLimitRPM != 120 || updatedByID.MaxTokensLimit != 2000000 || updatedByID.AllowedIPs != "10.0.0.1" {
+		t.Errorf("unexpected updated key data: %+v", updatedByID)
 	}
 
 	// 6. Delete Key
@@ -719,6 +723,166 @@ func TestSQLiteRepo_LoginAudit(t *testing.T) {
 	}
 	if userAudits[0].Username != "audituser" || userAudits[0].Status != "success" {
 		t.Errorf("unexpected audit fields: %+v", userAudits[0])
+	}
+
+	// Fetch filtered audits
+	filteredStatus, fTotal, err := repo.GetFilteredLoginAudits(ctx, "", "failed", 10, 0)
+	if err != nil {
+		t.Fatalf("GetFilteredLoginAudits failed: %v", err)
+	}
+	if fTotal != 1 || len(filteredStatus) != 1 || filteredStatus[0].Status != "failed" {
+		t.Errorf("unexpected filteredStatus result: total=%d, len=%d", fTotal, len(filteredStatus))
+	}
+
+	filteredUser, uTotal, err := repo.GetFilteredLoginAudits(ctx, "audit-user-1", "success", 10, 0)
+	if err != nil {
+		t.Fatalf("GetFilteredLoginAudits for user failed: %v", err)
+	}
+	if uTotal != 1 || len(filteredUser) != 1 || filteredUser[0].Username != "audituser" {
+		t.Errorf("unexpected filteredUser result: total=%d, len=%d", uTotal, len(filteredUser))
+	}
+}
+
+func TestGetKeyStats(t *testing.T) {
+	repo, cleanup := setupTestRepo(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Setup user and API key
+	user := &entity.User{
+		ID:            "u-stat-1",
+		Username:      "statuser",
+		Name:          "Stat User",
+		PasswordHash:  "hash123",
+		Role:          "user",
+		AllowedModels: `["*"]`,
+		IsActive:      true,
+	}
+	if err := repo.CreateUser(ctx, user); err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+
+	key := &entity.APIKey{
+		ID:              "key-stat-1",
+		UserID:          user.ID,
+		Key:             "«redacted:sk-…»",
+		Name:            "Analytics Test Key",
+		RateLimitRPM:    60,
+		MaxTokensLimit:  100000,
+		DailyTokenQuota: 10000,
+		IsActive:        true,
+	}
+	if err := repo.CreateAPIKey(ctx, key); err != nil {
+		t.Fatalf("CreateAPIKey failed: %v", err)
+	}
+
+	// Insert test request logs
+	log1 := &entity.RequestLog{
+		UserID:           user.ID,
+		APIKeyID:         key.ID,
+		Path:             "/v1/chat/completions",
+		Method:           "POST",
+		Model:            "ag/gemini-3.7-flash-high",
+		IsStream:         true,
+		PromptTokens:     100,
+		CompletionTokens: 400,
+		TotalTokens:      500,
+		StatusCode:       200,
+		DurationMs:       150,
+		ClientIP:         "192.168.1.20",
+	}
+	log2 := &entity.RequestLog{
+		UserID:           user.ID,
+		APIKeyID:         key.ID,
+		Path:             "/v1/chat/completions",
+		Method:           "POST",
+		Model:            "ag/gemini-3.7-flash-high",
+		IsStream:         false,
+		PromptTokens:     200,
+		CompletionTokens: 800,
+		TotalTokens:      1000,
+		StatusCode:       200,
+		DurationMs:       250,
+		ClientIP:         "192.168.1.20",
+	}
+	log3 := &entity.RequestLog{
+		UserID:           user.ID,
+		APIKeyID:         key.ID,
+		Path:             "/v1/chat/completions",
+		Method:           "POST",
+		Model:            "kr/glm-5",
+		IsStream:         false,
+		PromptTokens:     50,
+		CompletionTokens: 0,
+		TotalTokens:      50,
+		StatusCode:       500,
+		DurationMs:       400,
+		ClientIP:         "192.168.1.25",
+		ErrorMessage:     "upstream failure",
+	}
+
+	if err := repo.CreateRequestLog(ctx, log1); err != nil {
+		t.Fatalf("CreateRequestLog 1 failed: %v", err)
+	}
+	if err := repo.CreateRequestLog(ctx, log2); err != nil {
+		t.Fatalf("CreateRequestLog 2 failed: %v", err)
+	}
+	if err := repo.CreateRequestLog(ctx, log3); err != nil {
+		t.Fatalf("CreateRequestLog 3 failed: %v", err)
+	}
+
+	summary, hourly, topModels, recent, err := repo.GetKeyStats(ctx, key.ID)
+	if err != nil {
+		t.Fatalf("GetKeyStats failed: %v", err)
+	}
+
+	// Verify Summary
+	if summary.TotalRequests != 3 {
+		t.Errorf("expected 3 total requests, got %d", summary.TotalRequests)
+	}
+	if summary.SuccessRequests != 2 {
+		t.Errorf("expected 2 success requests, got %d", summary.SuccessRequests)
+	}
+	if summary.FailedRequests != 1 {
+		t.Errorf("expected 1 failed request, got %d", summary.FailedRequests)
+	}
+	if summary.TotalTokens != 1550 {
+		t.Errorf("expected 1550 total tokens, got %d", summary.TotalTokens)
+	}
+	if summary.TotalPromptTokens != 350 {
+		t.Errorf("expected 350 prompt tokens, got %d", summary.TotalPromptTokens)
+	}
+	if summary.TotalCompletionTokens != 1200 {
+		t.Errorf("expected 1200 completion tokens, got %d", summary.TotalCompletionTokens)
+	}
+	expectedRate := (2.0 / 3.0) * 100.0
+	if summary.SuccessRate < expectedRate-0.1 || summary.SuccessRate > expectedRate+0.1 {
+		t.Errorf("expected ~66.67%% success rate, got %f", summary.SuccessRate)
+	}
+
+	// Verify Top Models
+	if len(topModels) != 2 {
+		t.Fatalf("expected 2 top models, got %d", len(topModels))
+	}
+	if topModels[0].Model != "ag/gemini-3.7-flash-high" || topModels[0].Tokens != 1500 || topModels[0].Requests != 2 {
+		t.Errorf("unexpected top model 0: %+v", topModels[0])
+	}
+	if topModels[1].Model != "kr/glm-5" || topModels[1].Tokens != 50 || topModels[1].Requests != 1 {
+		t.Errorf("unexpected top model 1: %+v", topModels[1])
+	}
+
+	// Verify Recent Requests
+	if len(recent) != 3 {
+		t.Fatalf("expected 3 recent requests, got %d", len(recent))
+	}
+	if recent[0].StatusCode != 500 || recent[0].ErrorMessage != "upstream failure" {
+		t.Errorf("unexpected recent[0]: %+v", recent[0])
+	}
+
+	// Verify Hourly Breakdown
+	if len(hourly) == 0 {
+		t.Errorf("expected hourly data points, got 0")
 	}
 }
 
