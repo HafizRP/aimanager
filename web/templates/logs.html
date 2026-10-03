@@ -8,7 +8,7 @@
     </h4>
     <p class="text-dim small mb-0">Transparent real-time audit trail of all upstream LLM proxy calls, tokens, and errors.</p>
   </div>
-  <div class="d-flex flex-wrap align-items-center gap-2">
+  <div class="d-flex flex-wrap align-items-center gap-2" id="proxyHeaderActions">
     <div class="status-pill-live">
       <span class="pulse-dot"></span>
       <span id="liveLogCount">{{ len .Logs }}</span> Requests
@@ -31,161 +31,412 @@
   </div>
 </div>
 
-<!-- Filters Card -->
-<div class="card-modern p-3 mb-4">
-  <form method="GET" action="/logs" class="row g-2 align-items-end" id="logsFilterForm">
-    <div class="col-md-3">
-      <label class="form-label small text-muted mb-1">Filter by User</label>
-      <select name="user_id" class="form-select form-select-modern form-select-sm" id="filterUser">
-        <option value="">All Users</option>
-        {{ range .Users }}
-          <option value="{{ .ID }}" {{ if eq $.FilterUser .ID }}selected{{ end }}>{{ .Name }}</option>
-        {{ end }}
-      </select>
-    </div>
-    <div class="col-md-3">
-      <label class="form-label small text-muted mb-1">Filter by Model</label>
-      <input type="text" name="model" class="form-control form-control-modern form-control-sm" placeholder="e.g. gemini, claude" value="{{ .FilterModel }}" id="filterModel">
-    </div>
-    <div class="col-md-3">
-      <label class="form-label small text-muted mb-1">Status Code</label>
-      <select name="status" class="form-select form-select-modern form-select-sm" id="filterStatus">
-        <option value="0" {{ if eq $.FilterStatus 0 }}selected{{ end }}>All Statuses</option>
-        <option value="200" {{ if eq $.FilterStatus 200 }}selected{{ end }}>200 OK</option>
-        <option value="403" {{ if eq $.FilterStatus 403 }}selected{{ end }}>403 Forbidden (Blocked Model)</option>
-        <option value="429" {{ if eq $.FilterStatus 429 }}selected{{ end }}>429 Too Many Requests (Quota)</option>
-        <option value="502" {{ if eq $.FilterStatus 502 }}selected{{ end }}>502 Bad Gateway</option>
-      </select>
-    </div>
-    <div class="col-md-3">
-      <label class="form-label small text-muted mb-1">From (WIB)</label>
-      <input type="date" name="start_date" class="form-control form-control-modern form-control-sm" value="{{ .FilterStart }}" id="filterStartDate">
-    </div>
-    <div class="col-md-3">
-      <label class="form-label small text-muted mb-1">To (WIB)</label>
-      <input type="date" name="end_date" class="form-control form-control-modern form-control-sm" value="{{ .FilterEnd }}" id="filterEndDate">
-    </div>
-    <div class="col-md-3 d-flex gap-2">
-      <button type="submit" class="btn-modern-primary btn-sm w-100 py-1"><i class="bi bi-funnel"></i> Filter</button>
-      <a href="/logs" class="btn-modern-ghost btn-sm text-decoration-none py-1">Reset</a>
-    </div>
-  </form>
+<!-- Mode Tabs -->
+<div class="mb-4">
+  <ul class="nav nav-pills nav-pills-modern" id="logsModeTabs" role="tablist">
+    <li class="nav-item" role="presentation">
+      <button class="nav-link active d-flex align-items-center gap-2" id="proxy-logs-tab" data-bs-toggle="pill" data-bs-target="#proxy-logs-pane" type="button" role="tab" aria-selected="true">
+        <i class="bi bi-activity text-info"></i> LLM Request Logs
+      </button>
+    </li>
+    <li class="nav-item" role="presentation">
+      <button class="nav-link d-flex align-items-center gap-2" id="auth-logs-tab" data-bs-toggle="pill" data-bs-target="#auth-logs-pane" type="button" role="tab" aria-selected="false">
+        <i class="bi bi-shield-lock text-cyan"></i> Login & Security Audits
+        <span class="badge-modern badge-cyan ms-1 font-monospace" style="font-size: 0.65rem;" id="loginAuditsTabCount">{{ .TotalLoginAudits }}</span>
+      </button>
+    </li>
+  </ul>
 </div>
 
-<!-- Logs Table -->
-<div class="card-modern mb-4">
-  <div class="table-responsive">
-    <table class="table table-modern mb-0" id="logsTable">
-      <thead>
-        <tr>
-          <th>Time</th>
-          <th>User & Key</th>
-          <th>Model</th>
-          <th>Endpoint</th>
-          <th>Type</th>
-          <th>Tokens (In/Out/Total)</th>
-          <th>Status</th>
-          <th>Duration</th>
-          <th>Client IP</th>
-          <th class="text-end"><span class="visually-hidden">Action</span></th>
-        </tr>
-      </thead>
-      <tbody id="logsTableBody">
-        {{ if .Logs }}
-          {{ range .Logs }}
-            <tr data-log-id="{{ .ID }}">
-              <td class="text-dim font-monospace small" style="font-size: 0.78rem;">{{ formatDate .CreatedAt }}</td>
-              <td>
-                <div class="fw-bold text-light small">{{ .UserName }}</div>
-                <span class="badge-modern badge-gray" style="font-size: 0.65rem; padding: 0.05rem 0.35rem;">{{ .KeyName }}</span>
-              </td>
-              <td>
-                {{ if .Model }}
-                  <span class="model-pill">{{ .Model }}</span>
-                {{ else }}
-                  <span class="text-dim small">-</span>
-                {{ end }}
-              </td>
-              <td class="font-monospace small text-dim">
-                <span class="text-info fw-medium">{{ .Method }}</span> {{ .Path }}
-              </td>
-              <td>
-                {{ if .IsStream }}
-                  <span class="badge-modern badge-indigo" style="font-size: 0.68rem;"><i class="bi bi-lightning-charge-fill"></i> Stream</span>
-                {{ else }}
-                  <span class="badge-modern badge-gray" style="font-size: 0.68rem;">JSON</span>
-                {{ end }}
-              </td>
-              <td class="font-monospace small">
-                {{ if gt .TotalTokens 0 }}
-                  <span class="text-dim">{{ .PromptTokens }}</span> <span class="text-dim opacity-50">/</span> 
-                  <span class="text-dim">{{ .CompletionTokens }}</span> <span class="text-dim opacity-50">/</span> 
-                  <span class="text-light fw-bold">{{ formatNumber (toInt64 .TotalTokens) }}</span>
-                {{ else }}
-                  <span class="text-dim">0</span>
-                {{ end }}
-              </td>
-              <td>
-                {{ if eq .StatusCode 200 }}
-                  <span class="badge-modern badge-emerald">200 OK</span>
-                {{ else if eq .StatusCode 403 }}
-                  <span class="badge-modern badge-amber" data-bs-toggle="tooltip" title="{{ .ErrorMessage }}">403 Blocked</span>
-                {{ else if eq .StatusCode 429 }}
-                  <span class="badge-modern badge-rose" data-bs-toggle="tooltip" title="{{ .ErrorMessage }}">429 Quota</span>
-                {{ else }}
-                  <span class="badge-modern badge-rose" data-bs-toggle="tooltip" title="{{ .ErrorMessage }}">{{ .StatusCode }}</span>
-                {{ end }}
-              </td>
-              <td class="text-dim small font-monospace">{{ .DurationMs }}ms</td>
-              <td class="text-dim small font-monospace">{{ .ClientIP }}</td>
-              <td class="text-end">
-                <a href="/replay?log_id={{ .ID }}" class="btn-modern-ghost btn-sm text-decoration-none d-inline-flex align-items-center gap-1" title="Replay this prompt against other models">
-                  <i class="bi bi-repeat"></i> <span class="d-none d-lg-inline">Replay</span>
-                </a>
-              </td>
+<div class="tab-content" id="logsModeContent">
+  <!-- Tab 1: Proxy Request Logs -->
+  <div class="tab-pane fade show active" id="proxy-logs-pane" role="tabpanel" aria-labelledby="proxy-logs-tab">
+    <!-- Filters Card -->
+    <div class="card-modern p-3 mb-4">
+      <form method="GET" action="/logs" class="row g-2 align-items-end" id="logsFilterForm">
+        <div class="col-md-3">
+          <label class="form-label small text-muted mb-1">Filter by User</label>
+          <select name="user_id" class="form-select form-select-modern form-select-sm" id="filterUser">
+            <option value="">All Users</option>
+            {{ range .Users }}
+              <option value="{{ .ID }}" {{ if eq $.FilterUser .ID }}selected{{ end }}>{{ .Name }}</option>
+            {{ end }}
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small text-muted mb-1">Filter by Model</label>
+          <input type="text" name="model" class="form-control form-control-modern form-control-sm" placeholder="e.g. gemini, claude" value="{{ .FilterModel }}" id="filterModel">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small text-muted mb-1">Status Code</label>
+          <select name="status" class="form-select form-select-modern form-select-sm" id="filterStatus">
+            <option value="0" {{ if eq $.FilterStatus 0 }}selected{{ end }}>All Statuses</option>
+            <option value="200" {{ if eq $.FilterStatus 200 }}selected{{ end }}>200 OK</option>
+            <option value="403" {{ if eq $.FilterStatus 403 }}selected{{ end }}>403 Forbidden (Blocked Model)</option>
+            <option value="429" {{ if eq $.FilterStatus 429 }}selected{{ end }}>429 Too Many Requests (Quota)</option>
+            <option value="502" {{ if eq $.FilterStatus 502 }}selected{{ end }}>502 Bad Gateway</option>
+          </select>
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small text-muted mb-1">From (WIB)</label>
+          <input type="date" name="start_date" class="form-control form-control-modern form-control-sm" value="{{ .FilterStart }}" id="filterStartDate">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small text-muted mb-1">To (WIB)</label>
+          <input type="date" name="end_date" class="form-control form-control-modern form-control-sm" value="{{ .FilterEnd }}" id="filterEndDate">
+        </div>
+        <div class="col-md-3 d-flex gap-2">
+          <button type="submit" class="btn-modern-primary btn-sm w-100 py-1"><i class="bi bi-funnel"></i> Filter</button>
+          <a href="/logs" class="btn-modern-ghost btn-sm text-decoration-none py-1">Reset</a>
+        </div>
+      </form>
+    </div>
+
+    <!-- Logs Table -->
+    <div class="card-modern mb-4">
+      <div class="table-responsive">
+        <table class="table table-modern mb-0" id="logsTable">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>User & Key</th>
+              <th>Model</th>
+              <th>Endpoint</th>
+              <th>Type</th>
+              <th>Tokens (In/Out/Total)</th>
+              <th>Status</th>
+              <th>Duration</th>
+              <th>Client IP</th>
+              <th class="text-end"><span class="visually-hidden">Action</span></th>
             </tr>
+          </thead>
+          <tbody id="logsTableBody">
+            {{ if .Logs }}
+              {{ range .Logs }}
+                <tr data-log-id="{{ .ID }}">
+                  <td class="text-dim font-monospace small" style="font-size: 0.78rem;">{{ formatDate .CreatedAt }}</td>
+                  <td>
+                    <div class="fw-bold text-light small">{{ .UserName }}</div>
+                    <span class="badge-modern badge-gray" style="font-size: 0.65rem; padding: 0.05rem 0.35rem;">{{ .KeyName }}</span>
+                  </td>
+                  <td>
+                    {{ if .Model }}
+                      <span class="model-pill">{{ .Model }}</span>
+                    {{ else }}
+                      <span class="text-dim small">-</span>
+                    {{ end }}
+                  </td>
+                  <td class="font-monospace small text-dim">
+                    <span class="text-info fw-medium">{{ .Method }}</span> {{ .Path }}
+                  </td>
+                  <td>
+                    {{ if .IsStream }}
+                      <span class="badge-modern badge-indigo" style="font-size: 0.68rem;"><i class="bi bi-lightning-charge-fill"></i> Stream</span>
+                    {{ else }}
+                      <span class="badge-modern badge-gray" style="font-size: 0.68rem;">JSON</span>
+                    {{ end }}
+                  </td>
+                  <td class="font-monospace small">
+                    {{ if gt .TotalTokens 0 }}
+                      <span class="text-dim">{{ .PromptTokens }}</span> <span class="text-dim opacity-50">/</span> 
+                      <span class="text-dim">{{ .CompletionTokens }}</span> <span class="text-dim opacity-50">/</span> 
+                      <span class="text-light fw-bold">{{ formatNumber (toInt64 .TotalTokens) }}</span>
+                    {{ else }}
+                      <span class="text-dim">0</span>
+                    {{ end }}
+                  </td>
+                  <td>
+                    {{ if eq .StatusCode 200 }}
+                      <span class="badge-modern badge-emerald">200 OK</span>
+                    {{ else if eq .StatusCode 403 }}
+                      <span class="badge-modern badge-amber" data-bs-toggle="tooltip" title="{{ .ErrorMessage }}">403 Blocked</span>
+                    {{ else if eq .StatusCode 429 }}
+                      <span class="badge-modern badge-rose" data-bs-toggle="tooltip" title="{{ .ErrorMessage }}">429 Quota</span>
+                    {{ else }}
+                      <span class="badge-modern badge-rose" data-bs-toggle="tooltip" title="{{ .ErrorMessage }}">{{ .StatusCode }}</span>
+                    {{ end }}
+                  </td>
+                  <td class="text-dim small font-monospace">{{ .DurationMs }}ms</td>
+                  <td class="text-dim small font-monospace">{{ .ClientIP }}</td>
+                  <td class="text-end">
+                    <div class="d-flex justify-content-end align-items-center gap-1">
+                      <button type="button" class="btn-modern-ghost py-1 px-2" onclick="inspectLog({{ .ID }})" title="Inspect Request &amp; Response Payload">
+                        <i class="bi bi-file-earmark-code"></i>
+                      </button>
+                      <a href="/replay?log_id={{ .ID }}" class="btn-modern-ghost btn-sm text-decoration-none d-inline-flex align-items-center gap-1" title="Replay this prompt against other models">
+                        <i class="bi bi-repeat"></i> <span class="d-none d-lg-inline">Replay</span>
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+              {{ end }}
+            {{ else }}
+              <tr id="noLogsRow">
+                <td colspan="10" class="text-center text-dim py-5">
+                  <i class="bi bi-inbox fs-2 d-block mb-2 opacity-50"></i>
+                  No logs matched your criteria.
+                </td>
+              </tr>
+            {{ end }}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Cursor-Based Pagination Controls -->
+      <div class="d-flex flex-column flex-sm-row justify-content-between align-items-center gap-3 p-3 border-top border-secondary border-opacity-10 small text-dim">
+        <div>
+          Showing <span class="text-light fw-medium" id="showingCount">{{ len .Logs }}</span> of approx <span class="text-light fw-medium" id="totalCount">{{ .PageInfo.TotalCount }}</span> requests
+        </div>
+        <div class="d-flex align-items-center gap-2" id="paginationControls">
+          {{ if .PageInfo.HasPrev }}
+            <a href="/logs?cursor={{ .PageInfo.PrevCursor }}&dir=prev&user_id={{ .FilterUser }}&model={{ .FilterModel }}&status={{ .FilterStatus }}" class="btn-modern-ghost btn-sm text-decoration-none" id="prevPageBtn">
+              <i class="bi bi-chevron-left me-1"></i> Newer
+            </a>
+          {{ else }}
+            <button class="btn-modern-ghost btn-sm disabled opacity-40" disabled id="prevPageBtnDisabled">
+              <i class="bi bi-chevron-left me-1"></i> Newer
+            </button>
           {{ end }}
-        {{ else }}
-          <tr id="noLogsRow">
-            <td colspan="10" class="text-center text-dim py-5">
-              <i class="bi bi-inbox fs-2 d-block mb-2 opacity-50"></i>
-              No logs matched your criteria.
-            </td>
-          </tr>
-        {{ end }}
-      </tbody>
-    </table>
+
+          <span class="badge-modern badge-gray px-2 py-1 font-monospace" style="font-size: 0.72rem;">
+            Cursor Sync
+          </span>
+
+          {{ if .PageInfo.HasNext }}
+            <a href="/logs?cursor={{ .PageInfo.NextCursor }}&dir=next&user_id={{ .FilterUser }}&model={{ .FilterModel }}&status={{ .FilterStatus }}" class="btn-modern-ghost btn-sm text-decoration-none" id="nextPageBtn">
+              Older <i class="bi bi-chevron-right ms-1"></i>
+            </a>
+          {{ else }}
+            <button class="btn-modern-ghost btn-sm disabled opacity-40" disabled id="nextPageBtnDisabled">
+              Older <i class="bi bi-chevron-right ms-1"></i>
+            </button>
+          {{ end }}
+        </div>
+      </div>
+    </div>
   </div>
 
-  <!-- Cursor-Based Pagination Controls -->
-  <div class="d-flex flex-column flex-sm-row justify-content-between align-items-center gap-3 p-3 border-top border-secondary border-opacity-10 small text-dim">
-    <div>
-      Showing <span class="text-light fw-medium" id="showingCount">{{ len .Logs }}</span> of approx <span class="text-light fw-medium" id="totalCount">{{ .PageInfo.TotalCount }}</span> requests
+  <!-- Tab 2: Login & Security Audits -->
+  <div class="tab-pane fade" id="auth-logs-pane" role="tabpanel" aria-labelledby="auth-logs-tab">
+    <!-- Auth Filters Card -->
+    <div class="card-modern p-3 mb-4">
+      <div class="row g-2 align-items-end">
+        {{ if .IsAdmin }}
+          <div class="col-md-4">
+            <label class="form-label small text-muted mb-1">Filter by User</label>
+            <select class="form-select form-select-modern form-select-sm" id="authFilterUser">
+              <option value="">All Users</option>
+              {{ range .Users }}
+                <option value="{{ .ID }}">{{ .Name }} (@{{ .Username }})</option>
+              {{ end }}
+            </select>
+          </div>
+        {{ end }}
+        <div class="col-md-{{ if .IsAdmin }}4{{ else }}6{{ end }}">
+          <label class="form-label small text-muted mb-1">Authentication Result</label>
+          <select class="form-select form-select-modern form-select-sm" id="authFilterStatus">
+            <option value="">All Results</option>
+            <option value="success">Success</option>
+            <option value="failed">Failed Password / User</option>
+            <option value="rate_limited">Rate Limited</option>
+            <option value="suspended">Suspended Account</option>
+          </select>
+        </div>
+        <div class="col-md-{{ if .IsAdmin }}4{{ else }}6{{ end }} d-flex gap-2">
+          <button type="button" class="btn-modern-primary btn-sm w-100 py-1" onclick="fetchAuthLogs()"><i class="bi bi-funnel"></i> Apply Filter</button>
+          <div class="dropdown">
+            <button class="btn-modern-ghost btn-sm dropdown-toggle py-1" type="button" data-bs-toggle="dropdown" title="Export Login Audits">
+              <i class="bi bi-download"></i> Export
+            </button>
+            <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end" style="background: var(--bg-surface); border: 1px solid var(--border-subtle);">
+              <li><a class="dropdown-item small d-flex align-items-center gap-2" href="#" onclick="exportLoginAudits('csv'); return false;"><i class="bi bi-filetype-csv text-emerald"></i> Export as CSV</a></li>
+              <li><a class="dropdown-item small d-flex align-items-center gap-2" href="#" onclick="exportLoginAudits('json'); return false;"><i class="bi bi-filetype-json text-primary"></i> Export as JSON</a></li>
+            </ul>
+          </div>
+          <button type="button" class="btn-modern-ghost btn-sm py-1" onclick="fetchAuthLogs()" title="Refresh Login Audits">
+            <i class="bi bi-arrow-clockwise" id="authRefreshIcon"></i>
+          </button>
+        </div>
+      </div>
     </div>
-    <div class="d-flex align-items-center gap-2" id="paginationControls">
-      {{ if .PageInfo.HasPrev }}
-        <a href="/logs?cursor={{ .PageInfo.PrevCursor }}&dir=prev&user_id={{ .FilterUser }}&model={{ .FilterModel }}&status={{ .FilterStatus }}" class="btn-modern-ghost btn-sm text-decoration-none" id="prevPageBtn">
-          <i class="bi bi-chevron-left me-1"></i> Newer
-        </a>
-      {{ else }}
-        <button class="btn-modern-ghost btn-sm disabled opacity-40" disabled id="prevPageBtnDisabled">
-          <i class="bi bi-chevron-left me-1"></i> Newer
-        </button>
-      {{ end }}
 
-      <span class="badge-modern badge-gray px-2 py-1 font-monospace" style="font-size: 0.72rem;">
-        Cursor Sync
-      </span>
+    <!-- Login Audits Table -->
+    <div class="card-modern mb-4">
+      <div class="table-responsive">
+        <table class="table table-modern mb-0" id="authLogsTable">
+          <thead>
+            <tr>
+              <th>Timestamp (WIB)</th>
+              <th>Account / User</th>
+              <th>Status</th>
+              <th>Client IP</th>
+              <th>Browser / Agent</th>
+              <th>Security Reason</th>
+            </tr>
+          </thead>
+          <tbody id="authLogsTableBody">
+            {{ if .LoginAudits }}
+              {{ range .LoginAudits }}
+                <tr>
+                  <td class="text-dim font-monospace small" style="font-size: 0.78rem;">{{ formatDate .CreatedAt }}</td>
+                  <td>
+                    <div class="fw-bold text-light small">{{ if .UserName }}{{ .UserName }}{{ else }}{{ .Username }}{{ end }}</div>
+                    <span class="text-dim font-monospace small" style="font-size: 0.72rem;">@{{ .Username }}</span>
+                  </td>
+                  <td>
+                    {{ if eq .Status "success" }}
+                      <span class="badge-modern badge-emerald"><i class="bi bi-check-circle"></i> Success</span>
+                    {{ else if eq .Status "rate_limited" }}
+                      <span class="badge-modern badge-amber"><i class="bi bi-exclamation-triangle"></i> Rate Limited</span>
+                    {{ else if eq .Status "suspended" }}
+                      <span class="badge-modern badge-rose"><i class="bi bi-slash-circle"></i> Suspended</span>
+                    {{ else }}
+                      <span class="badge-modern badge-rose"><i class="bi bi-x-circle"></i> Failed</span>
+                    {{ end }}
+                  </td>
+                  <td class="text-dim small font-monospace">{{ .IP }}</td>
+                  <td class="text-dim small" style="max-width: 200px;">
+                    <span class="d-inline-block text-truncate w-100" title="{{ .UserAgent }}">{{ if .UserAgent }}{{ .UserAgent }}{{ else }}<span class="opacity-50">-</span>{{ end }}</span>
+                  </td>
+                  <td>
+                    <span class="small {{ if eq .Status "success" }}text-dim{{ else }}text-rose{{ end }}">{{ if .Reason }}{{ .Reason }}{{ else }}-{{ end }}</span>
+                  </td>
+                </tr>
+              {{ end }}
+            {{ else }}
+              <tr id="noAuthLogsRow">
+                <td colspan="6" class="text-center text-dim py-5">
+                  <i class="bi bi-shield-check fs-2 d-block mb-2 opacity-50"></i>
+                  No authentication audit events recorded yet.
+                </td>
+              </tr>
+            {{ end }}
+          </tbody>
+        </table>
+      </div>
 
-      {{ if .PageInfo.HasNext }}
-        <a href="/logs?cursor={{ .PageInfo.NextCursor }}&dir=next&user_id={{ .FilterUser }}&model={{ .FilterModel }}&status={{ .FilterStatus }}" class="btn-modern-ghost btn-sm text-decoration-none" id="nextPageBtn">
-          Older <i class="bi bi-chevron-right ms-1"></i>
+      <!-- Auth Pagination Controls -->
+      <div class="d-flex flex-column flex-sm-row justify-content-between align-items-center gap-3 p-3 border-top border-secondary border-opacity-10 small text-dim">
+        <div>
+          Showing <span class="text-light fw-medium" id="authShowingCount">{{ len .LoginAudits }}</span> of <span class="text-light fw-medium" id="authTotalCount">{{ .TotalLoginAudits }}</span> authentication events
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <button type="button" class="btn-modern-ghost btn-sm disabled opacity-40" id="authPrevBtn" onclick="changeAuthPage(-1)" disabled>
+            <i class="bi bi-chevron-left me-1"></i> Prev
+          </button>
+          <span class="badge-modern badge-gray px-2 py-1 font-monospace" id="authPageBadge" style="font-size: 0.72rem;">Page 1</span>
+          <button type="button" class="btn-modern-ghost btn-sm {{ if le .TotalLoginAudits 25 }}disabled opacity-40{{ end }}" id="authNextBtn" onclick="changeAuthPage(1)" {{ if le .TotalLoginAudits 25 }}disabled{{ end }}>
+            Next <i class="bi bi-chevron-right ms-1"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Inspect Payload Modal -->
+<div class="modal fade" id="inspectLogModal" tabindex="-1" aria-labelledby="inspectLogModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content modal-content-modern">
+      <div class="modal-header modal-header-modern">
+        <div class="d-flex align-items-center gap-2">
+          <i class="bi bi-file-earmark-code text-info fs-5"></i>
+          <div>
+            <h5 class="modal-title fw-bold mb-0 text-light" id="inspectLogModalLabel">Request &amp; Response Payload</h5>
+            <div class="text-dim small font-monospace" id="inspectLogSub">Log ID: <span id="inspectLogId">-</span></div>
+          </div>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body p-3 p-md-4">
+        <!-- Quick Meta Ribbon -->
+        <div class="row g-2 mb-3">
+          <div class="col-6 col-md-3">
+            <div class="p-2 subcard-modern rounded text-center">
+              <div class="text-dim small mb-1" style="font-size: 0.72rem;">Model</div>
+              <div class="fw-bold font-monospace text-light small text-truncate" id="inspectMetaModel">-</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="p-2 subcard-modern rounded text-center">
+              <div class="text-dim small mb-1" style="font-size: 0.72rem;">Status &amp; Latency</div>
+              <div class="d-flex justify-content-center align-items-center gap-2">
+                <span id="inspectMetaStatus" class="badge-modern badge-gray">-</span>
+                <span class="font-monospace text-light small" id="inspectMetaDuration">-</span>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="p-2 subcard-modern rounded text-center">
+              <div class="text-dim small mb-1" style="font-size: 0.72rem;">Tokens (In / Out / Total)</div>
+              <div class="font-monospace text-light small" id="inspectMetaTokens">-</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="p-2 subcard-modern rounded text-center">
+              <div class="text-dim small mb-1" style="font-size: 0.72rem;">Caller &amp; IP</div>
+              <div class="text-light small text-truncate" id="inspectMetaCaller">-</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab Controls -->
+        <ul class="nav nav-pills nav-pills-modern mb-3" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active py-1 px-3 d-flex align-items-center gap-1" id="tab-messages-btn" data-bs-toggle="pill" data-bs-target="#tab-messages-pane" type="button" role="tab">
+              <i class="bi bi-chat-left-text"></i> Messages
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link py-1 px-3 d-flex align-items-center gap-1" id="tab-request-btn" data-bs-toggle="pill" data-bs-target="#tab-request-pane" type="button" role="tab">
+              <i class="bi bi-code-square"></i> Request JSON
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link py-1 px-3 d-flex align-items-center gap-1" id="tab-response-btn" data-bs-toggle="pill" data-bs-target="#tab-response-pane" type="button" role="tab">
+              <i class="bi bi-terminal"></i> Response
+            </button>
+          </li>
+        </ul>
+
+        <!-- Tab Contents -->
+        <div class="tab-content">
+          <!-- Messages Visual Pane -->
+          <div class="tab-pane fade show active" id="tab-messages-pane" role="tabpanel">
+            <div id="inspectMessagesContainer" class="d-flex flex-column gap-2" style="max-height: 460px; overflow-y: auto;">
+              <!-- Chat bubbles rendered here -->
+            </div>
+          </div>
+
+          <!-- Raw Request JSON Pane -->
+          <div class="tab-pane fade" id="tab-request-pane" role="tabpanel">
+            <div class="position-relative">
+              <button type="button" class="btn btn-sm btn-modern-ghost position-absolute top-0 end-0 m-2 py-1 px-2 z-2" onclick="copyInspectRequest()" title="Copy Request JSON">
+                <i class="bi bi-clipboard"></i> Copy
+              </button>
+              <pre class="code-box-modern p-3 rounded font-monospace small mb-0" id="inspectRawRequest" style="max-height: 460px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;"></pre>
+            </div>
+          </div>
+
+          <!-- Response Pane -->
+          <div class="tab-pane fade" id="tab-response-pane" role="tabpanel">
+            <div class="position-relative">
+              <button type="button" class="btn btn-sm btn-modern-ghost position-absolute top-0 end-0 m-2 py-1 px-2 z-2" onclick="copyInspectResponse()" title="Copy Response Text">
+                <i class="bi bi-clipboard"></i> Copy
+              </button>
+              <pre class="code-box-modern p-3 rounded font-monospace small mb-0" id="inspectRawResponse" style="max-height: 460px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;"></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer modal-footer-modern d-flex justify-content-between">
+        <a id="inspectReplayLink" href="#" class="btn-modern-primary btn-sm text-decoration-none d-inline-flex align-items-center gap-2">
+          <i class="bi bi-repeat"></i> Open in Replay Lab
         </a>
-      {{ else }}
-        <button class="btn-modern-ghost btn-sm disabled opacity-40" disabled id="nextPageBtnDisabled">
-          Older <i class="bi bi-chevron-right ms-1"></i>
-        </button>
-      {{ end }}
+        <button type="button" class="btn-modern-ghost btn-sm" data-bs-dismiss="modal">Close</button>
+      </div>
     </div>
   </div>
 </div>
@@ -267,7 +518,16 @@
               <td data-label="Status">${statusBadge}</td>
               <td data-label="Duration" class="text-dim small font-monospace">${log.duration_ms}ms</td>
               <td data-label="Client IP" class="text-dim small font-monospace">${escapeHtml(log.client_ip)}</td>
-              <td data-label="Action" class="text-end"><a href="/replay?log_id=${log.id}" class="btn-modern-ghost btn-sm text-decoration-none d-inline-flex align-items-center gap-1" title="Replay this prompt against other models"><i class="bi bi-repeat"></i> <span class="d-none d-lg-inline">Replay</span></a></td>
+              <td data-label="Actions" class="text-end">
+                <div class="d-flex justify-content-end align-items-center gap-1">
+                  <button type="button" class="btn-modern-ghost py-1 px-2" onclick="inspectLog(${log.id})" title="Inspect Request &amp; Response Payload">
+                    <i class="bi bi-file-earmark-code"></i>
+                  </button>
+                  <a href="/replay?log_id=${log.id}" class="btn-modern-ghost py-1 px-2" title="Replay this prompt against other models">
+                    <i class="bi bi-repeat"></i>
+                  </a>
+                </div>
+              </td>
             </tr>`;
   }
 
@@ -295,14 +555,12 @@
 
       // Prepend new logs (reverse order to show newest first)
       const newLogs = (data.logs || []).reverse();
-      let hasNew = false;
 
       for (const log of newLogs) {
         const logId = String(log.id);
         if (!knownLogIds.has(logId)) {
           knownLogIds.add(logId);
           tbody.insertAdjacentHTML('afterbegin', renderLogRow(log));
-          hasNew = true;
         }
       }
 
@@ -368,6 +626,275 @@ function exportLogs(format) {
   const endDate = document.getElementById('filterEndDate')?.value || '';
   const url = `/api/logs/export?format=${format}&user_id=${encodeURIComponent(user)}&model=${encodeURIComponent(model)}&status=${encodeURIComponent(status)}&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`;
   window.location.href = url;
+}
+
+// Authentication Audits Logic
+let authOffset = 0;
+const AUTH_PAGE_SIZE = 25;
+
+function formatWIBDate(isoStr) {
+  try {
+    const d = new Date(isoStr);
+    return d.toLocaleString('id-ID', {
+      timeZone: 'Asia/Jakarta',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }) + ' WIB';
+  } catch (e) {
+    return isoStr || '-';
+  }
+}
+
+function escapeAuthHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+async function fetchAuthLogs() {
+  const refreshIcon = document.getElementById('authRefreshIcon');
+  if (refreshIcon) refreshIcon.classList.add('spin-animation');
+
+  try {
+    const params = new URLSearchParams();
+    const user = document.getElementById('authFilterUser')?.value || '';
+    const status = document.getElementById('authFilterStatus')?.value || '';
+    if (user) params.set('user_id', user);
+    if (status) params.set('status', status);
+    params.set('limit', String(AUTH_PAGE_SIZE));
+    params.set('offset', String(authOffset));
+
+    const res = await fetch(`/api/login-audits?${params.toString()}`);
+    if (!res.ok) throw new Error('Failed to fetch login audits');
+    const data = await res.json();
+
+    const tbody = document.getElementById('authLogsTableBody');
+    const audits = data.audits || [];
+    const total = data.total || 0;
+
+    if (audits.length === 0) {
+      tbody.innerHTML = `<tr id="noAuthLogsRow">
+        <td colspan="6" class="text-center text-dim py-5">
+          <i class="bi bi-shield-check fs-2 d-block mb-2 opacity-50"></i>
+          No authentication audit events found.
+        </td>
+      </tr>`;
+    } else {
+      tbody.innerHTML = audits.map(a => {
+        let statusBadge = '';
+        if (a.status === 'success') {
+          statusBadge = '<span class="badge-modern badge-emerald"><i class="bi bi-check-circle"></i> Success</span>';
+        } else if (a.status === 'rate_limited') {
+          statusBadge = '<span class="badge-modern badge-amber"><i class="bi bi-exclamation-triangle"></i> Rate Limited</span>';
+        } else if (a.status === 'suspended') {
+          statusBadge = '<span class="badge-modern badge-rose"><i class="bi bi-slash-circle"></i> Suspended</span>';
+        } else {
+          statusBadge = '<span class="badge-modern badge-rose"><i class="bi bi-x-circle"></i> Failed</span>';
+        }
+
+        const reasonColor = a.status === 'success' ? 'text-dim' : 'text-rose';
+        const displayName = escapeAuthHtml(a.user_name || a.username);
+        const username = escapeAuthHtml(a.username);
+        const ua = escapeAuthHtml(a.user_agent || '-');
+        const reason = escapeAuthHtml(a.reason || '-');
+
+        return `<tr>
+          <td data-label="Timestamp (WIB)" class="text-dim font-monospace small" style="font-size: 0.78rem;">${formatWIBDate(a.created_at)}</td>
+          <td data-label="Account / User">
+            <div class="fw-bold text-light small">${displayName}</div>
+            <span class="text-dim font-monospace small" style="font-size: 0.72rem;">@${username}</span>
+          </td>
+          <td data-label="Status">${statusBadge}</td>
+          <td data-label="Client IP" class="text-dim small font-monospace">${escapeAuthHtml(a.ip)}</td>
+          <td data-label="Browser / Agent" class="text-dim small" style="max-width: 200px;">
+            <span class="d-inline-block text-truncate w-100" title="${ua}">${ua}</span>
+          </td>
+          <td data-label="Security Reason">
+            <span class="small ${reasonColor}">${reason}</span>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    // Update pagination counters
+    document.getElementById('authShowingCount').textContent = audits.length;
+    document.getElementById('authTotalCount').textContent = total;
+    const tabCount = document.getElementById('loginAuditsTabCount');
+    if (tabCount) tabCount.textContent = total;
+
+    const curPage = Math.floor(authOffset / AUTH_PAGE_SIZE) + 1;
+    document.getElementById('authPageBadge').textContent = `Page ${curPage}`;
+
+    const prevBtn = document.getElementById('authPrevBtn');
+    const nextBtn = document.getElementById('authNextBtn');
+    if (prevBtn) {
+      prevBtn.disabled = authOffset <= 0;
+      prevBtn.classList.toggle('disabled', authOffset <= 0);
+      prevBtn.classList.toggle('opacity-40', authOffset <= 0);
+    }
+    if (nextBtn) {
+      const hasMore = authOffset + audits.length < total;
+      nextBtn.disabled = !hasMore;
+      nextBtn.classList.toggle('disabled', !hasMore);
+      nextBtn.classList.toggle('opacity-40', !hasMore);
+    }
+  } catch (err) {
+    console.error('Failed to fetch auth logs:', err);
+  } finally {
+    if (refreshIcon) refreshIcon.classList.remove('spin-animation');
+  }
+}
+
+function changeAuthPage(delta) {
+  authOffset = Math.max(0, authOffset + delta * AUTH_PAGE_SIZE);
+  fetchAuthLogs();
+}
+
+function exportLoginAudits(format) {
+  const user = document.getElementById('authFilterUser')?.value || '';
+  const status = document.getElementById('authFilterStatus')?.value || '';
+  const url = `/api/login-audits/export?format=${format}&user_id=${encodeURIComponent(user)}&status=${encodeURIComponent(status)}`;
+  window.location.href = url;
+let currentInspectData = null;
+
+async function inspectLog(id) {
+  const modalEl = document.getElementById('inspectLogModal');
+  if (!modalEl) return;
+  const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+  
+  document.getElementById('inspectLogId').textContent = '#' + id;
+  document.getElementById('inspectMetaModel').textContent = 'Loading...';
+  document.getElementById('inspectMetaStatus').className = 'badge-modern badge-gray';
+  document.getElementById('inspectMetaStatus').textContent = '...';
+  document.getElementById('inspectMetaDuration').textContent = '-';
+  document.getElementById('inspectMetaTokens').textContent = '-';
+  document.getElementById('inspectMetaCaller').textContent = '-';
+  document.getElementById('inspectMessagesContainer').innerHTML = '<div class="text-center text-dim py-4"><i class="bi bi-arrow-clockwise spin fs-3 d-block mb-2"></i> Loading payload...</div>';
+  document.getElementById('inspectRawRequest').textContent = 'Loading...';
+  document.getElementById('inspectRawResponse').textContent = 'Loading...';
+  document.getElementById('inspectReplayLink').href = `/replay?log_id=${id}`;
+
+  modal.show();
+
+  try {
+    const res = await fetch(`/api/replay/source?id=${id}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    currentInspectData = data;
+
+    document.getElementById('inspectMetaModel').textContent = data.model || 'Unknown';
+    const statusSpan = document.getElementById('inspectMetaStatus');
+    if (data.status_code === 200) {
+      statusSpan.className = 'badge-modern badge-emerald';
+      statusSpan.textContent = '200 OK';
+    } else if (data.status_code === 403) {
+      statusSpan.className = 'badge-modern badge-amber';
+      statusSpan.textContent = '403 Blocked';
+    } else if (data.status_code === 429) {
+      statusSpan.className = 'badge-modern badge-rose';
+      statusSpan.textContent = '429 Quota';
+    } else {
+      statusSpan.className = 'badge-modern badge-rose';
+      statusSpan.textContent = `${data.status_code || 'Error'}`;
+    }
+
+    document.getElementById('inspectMetaDuration').textContent = `${data.duration_ms || 0}ms`;
+    document.getElementById('inspectMetaTokens').textContent = `${data.prompt_tokens || 0} / ${data.completion_tokens || 0} / ${data.total_tokens || 0}`;
+    
+    const callerParts = [];
+    if (data.user_name) callerParts.push(data.user_name);
+    if (data.key_name) callerParts.push(`(${data.key_name})`);
+    if (data.client_ip) callerParts.push(`@ ${data.client_ip}`);
+    document.getElementById('inspectMetaCaller').textContent = callerParts.join(' ') || '-';
+
+    // Parse request body
+    let reqObj = null;
+    if (data.request_body) {
+      try {
+        reqObj = JSON.parse(data.request_body);
+        document.getElementById('inspectRawRequest').textContent = JSON.stringify(reqObj, null, 2);
+      } catch (_) {
+        document.getElementById('inspectRawRequest').textContent = data.request_body;
+      }
+    } else {
+      document.getElementById('inspectRawRequest').textContent = '(No request body recorded)';
+    }
+
+    // Render formatted chat messages
+    const msgContainer = document.getElementById('inspectMessagesContainer');
+    if (reqObj && Array.isArray(reqObj.messages) && reqObj.messages.length > 0) {
+      let html = '';
+      reqObj.messages.forEach((msg, idx) => {
+        const role = (msg.role || 'user').toLowerCase();
+        let roleBadge = '<span class="badge-modern badge-primary" style="font-size: 0.68rem;">User</span>';
+        let bgStyle = 'background: rgba(59, 130, 246, 0.05); border-left: 3px solid var(--primary);';
+        if (role === 'system') {
+          roleBadge = '<span class="badge-modern badge-amber" style="font-size: 0.68rem;">System</span>';
+          bgStyle = 'background: rgba(245, 158, 11, 0.05); border-left: 3px solid #f59e0b;';
+        } else if (role === 'assistant') {
+          roleBadge = '<span class="badge-modern badge-emerald" style="font-size: 0.68rem;">Assistant</span>';
+          bgStyle = 'background: rgba(16, 185, 129, 0.05); border-left: 3px solid #10b981;';
+        }
+
+        let contentStr = '';
+        if (typeof msg.content === 'string') {
+          contentStr = msg.content;
+        } else if (Array.isArray(msg.content)) {
+          contentStr = msg.content.map(p => typeof p === 'string' ? p : (p.text || JSON.stringify(p))).join('\n');
+        } else {
+          contentStr = JSON.stringify(msg.content, null, 2);
+        }
+
+        html += `<div class="p-3 subcard-modern rounded" style="${bgStyle}">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="d-flex align-items-center gap-2">${roleBadge} <span class="text-dim small">#${idx + 1}</span></div>
+            <button type="button" class="btn-modern-ghost btn-sm py-0 px-2" onclick="navigator.clipboard.writeText(${JSON.stringify(contentStr)}); if(window.showToast) window.showToast('Copied message content!', '📋');" title="Copy message"><i class="bi bi-clipboard"></i></button>
+          </div>
+          <div class="text-light small font-monospace" style="white-space: pre-wrap; word-break: break-word;">${escapeHtml(contentStr)}</div>
+        </div>`;
+      });
+      msgContainer.innerHTML = html;
+    } else {
+      msgContainer.innerHTML = `<div class="text-center text-dim py-4">
+        <i class="bi bi-chat-square-dots fs-3 d-block mb-2 opacity-50"></i>
+        No structured chat messages found in this request. View <strong>Request JSON</strong> tab for raw payload.
+      </div>`;
+    }
+
+    // Response display
+    if (data.response_text) {
+      document.getElementById('inspectRawResponse').textContent = data.response_text;
+    } else if (data.error_message) {
+      document.getElementById('inspectRawResponse').textContent = `[Error ${data.status_code}]\n${data.error_message}`;
+    } else {
+      document.getElementById('inspectRawResponse').textContent = '(No completion text captured)';
+    }
+
+  } catch (err) {
+    document.getElementById('inspectMessagesContainer').innerHTML = `<div class="alert alert-danger card-modern text-light small mb-0">Failed to load log details: ${escapeHtml(err.message)}</div>`;
+    document.getElementById('inspectRawRequest').textContent = `Error: ${err.message}`;
+    document.getElementById('inspectRawResponse').textContent = `Error: ${err.message}`;
+  }
+}
+
+function copyInspectRequest() {
+  const text = document.getElementById('inspectRawRequest')?.textContent;
+  if (text) {
+    navigator.clipboard.writeText(text);
+    if (window.showToast) window.showToast("Request JSON copied! 📋", "✨");
+  }
+}
+
+function copyInspectResponse() {
+  const text = document.getElementById('inspectRawResponse')?.textContent;
+  if (text) {
+    navigator.clipboard.writeText(text);
+    if (window.showToast) window.showToast("Response copied! 📋", "✨");
+  }
 }
 </script>
 

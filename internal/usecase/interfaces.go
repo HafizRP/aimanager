@@ -29,12 +29,14 @@ type (
 		GetAPIKeysByUserID(ctx context.Context, userID string) ([]entity.APIKey, error)
 		GetAllAPIKeys(ctx context.Context) ([]entity.APIKey, error)
 		CreateAPIKey(ctx context.Context, k *entity.APIKey) error
+		UpdateAPIKey(ctx context.Context, k *entity.APIKey) error
 		ToggleAPIKeyStatus(ctx context.Context, id string, isActive bool) error
 		DeleteAPIKey(ctx context.Context, id string) error
 		UpdateKeyLastUsed(ctx context.Context, id string, ip string) error
 		UpdateKeyBudgets(ctx context.Context, id string, maxTokensLimit, dailyQuota int) error
 		UpdateKeyRestrictions(ctx context.Context, id string, maxTokensLimit, dailyQuota int, allowedIPs string) error
 		ResetKeyUsage(ctx context.Context, id string) error
+		GetKeyStats(ctx context.Context, keyID string) (*entity.KeyStatsSummary, []entity.HourlyUsagePoint, []entity.KeyModelUsage, []entity.KeyRecentRequest, error)
 	}
 
 	RequestLogStore interface {
@@ -85,6 +87,7 @@ type (
 	LoginAuditStore interface {
 		RecordLoginAudit(ctx context.Context, audit *entity.LoginAudit) error
 		GetLoginAudits(ctx context.Context, limit, offset int) ([]entity.LoginAudit, int, error)
+		GetFilteredLoginAudits(ctx context.Context, userID, status string, limit, offset int) ([]entity.LoginAudit, int, error)
 		GetUserLoginAudits(ctx context.Context, userID string, limit int) ([]entity.LoginAudit, error)
 	}
 

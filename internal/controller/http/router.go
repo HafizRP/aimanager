@@ -177,15 +177,20 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 		authRouter.Get("/api/keys/export", h.ExportKeys)
 		authRouter.Post("/keys/{id}/clone", h.CloneKey)
 		authRouter.Post("/api/keys/{id}/clone", h.CloneKey)
+		authRouter.Post("/keys/{id}/edit", h.EditKey)
+		authRouter.Post("/api/keys/{id}/edit", h.EditKey)
 		authRouter.Post("/keys/{id}/toggle", h.ToggleKeyStatus)
 		authRouter.Post("/keys/{id}/delete", h.DeleteKey)
 		authRouter.Post("/keys/{id}/reset-usage", h.ResetKeyUsage)
 		authRouter.Post("/api/keys/{id}/reset-usage", h.ResetKeyUsage)
+		authRouter.Get("/api/keys/{id}/stats", h.APIKeyStats)
 
 		// Logs, Models, Settings
 		authRouter.Get("/logs", h.LogsPage)
 		authRouter.Get("/api/logs", h.APILogs)
 		authRouter.Get("/api/logs/export", h.ExportLogs)
+		authRouter.Get("/api/login-audits", h.APILoginAudits)
+		authRouter.Get("/api/login-audits/export", h.ExportLoginAudits)
 		authRouter.Get("/models", h.ModelsPage)
 		authRouter.Get("/api/models/alias", h.APIModelAliasesGet)
 		authRouter.Get("/settings", h.SettingsPage)
@@ -226,7 +231,6 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 			adminOnly.Get("/users", h.UsersPage)
 			adminOnly.Get("/users/{id}", h.UserDetailPage)
 			adminOnly.Get("/api/users/{id}/login-audits", h.APIUserLoginAudits)
-			adminOnly.Get("/api/login-audits", h.APILoginAudits)
 			adminOnly.Post("/users", h.CreateUser)
 			adminOnly.Post("/users/{id}/edit", h.EditUser)
 			adminOnly.Post("/users/{id}/password", h.ResetPassword)
@@ -318,6 +322,7 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 			// 9router Core: Pricing display
 			adminOnly.Get("/pricing", h.PricingPage)
 			adminOnly.Get("/api/pricing", h.APIPricing)
+			adminOnly.Post("/api/pricing/estimate", h.APIPricingEstimate)
 
 			// 9router Core: system (version, machine keys)
 			adminOnly.Get("/api/version", h.APICoreVersion)

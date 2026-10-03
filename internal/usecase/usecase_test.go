@@ -112,7 +112,7 @@ func (f *fakeStore) GetAPIKeyByKey(ctx context.Context, key string) (*entity.API
 			return k, nil
 		}
 	}
-	return nil, errors.New("not found")
+	return nil, nil
 }
 func (f *fakeStore) GetAPIKeysByUserID(ctx context.Context, userID string) ([]entity.APIKey, error) {
 	out := []entity.APIKey{}
@@ -133,6 +133,19 @@ func (f *fakeStore) GetAllAPIKeys(ctx context.Context) ([]entity.APIKey, error) 
 func (f *fakeStore) CreateAPIKey(ctx context.Context, k *entity.APIKey) error {
 	f.keys[k.ID] = k
 	return nil
+}
+func (f *fakeStore) UpdateAPIKey(ctx context.Context, k *entity.APIKey) error {
+	if existing, ok := f.keys[k.ID]; ok {
+		existing.Name = k.Name
+		existing.AllowedModels = k.AllowedModels
+		existing.AllowedIPs = k.AllowedIPs
+		existing.RateLimitRPM = k.RateLimitRPM
+		existing.MaxTokensLimit = k.MaxTokensLimit
+		existing.DailyTokenQuota = k.DailyTokenQuota
+		existing.ExpiresAt = k.ExpiresAt
+		return nil
+	}
+	return ErrNotFound
 }
 func (f *fakeStore) ToggleAPIKeyStatus(ctx context.Context, id string, active bool) error {
 	if k, ok := f.keys[id]; ok {
@@ -167,6 +180,24 @@ func (f *fakeStore) ResetKeyUsage(ctx context.Context, id string) error {
 		k.TokenUsage = 0
 	}
 	return nil
+}
+func (f *fakeStore) GetKeyStats(ctx context.Context, keyID string) (*entity.KeyStatsSummary, []entity.HourlyUsagePoint, []entity.KeyModelUsage, []entity.KeyRecentRequest, error) {
+	return &entity.KeyStatsSummary{
+		TotalRequests:   10,
+		SuccessRequests: 9,
+		FailedRequests:  1,
+		SuccessRate:     90.0,
+		TotalTokens:     5000,
+		AvgLatencyMs:    150.0,
+	}, []entity.HourlyUsagePoint{
+		{HourLabel: "14:00", Tokens: 2500, Requests: 5, Errors: 0},
+		{HourLabel: "15:00", Tokens: 2500, Requests: 5, Errors: 1},
+	}, []entity.KeyModelUsage{
+		{Model: "ag/gemini-3.7-flash-high", Requests: 8, Tokens: 4000, Percentage: 80.0},
+		{Model: "kr/glm-5", Requests: 2, Tokens: 1000, Percentage: 20.0},
+	}, []entity.KeyRecentRequest{
+		{ID: 1, Path: "/v1/chat/completions", Method: "POST", Model: "ag/gemini-3.7-flash-high", StatusCode: 200, TotalTokens: 500, DurationMs: 120, CreatedAt: "2026-09-28 15:30:00"},
+	}, nil
 }
 
 // RequestLogStore
@@ -294,7 +325,22 @@ func (f *fakeStore) RecordLoginAudit(ctx context.Context, audit *entity.LoginAud
 }
 
 func (f *fakeStore) GetLoginAudits(ctx context.Context, limit, offset int) ([]entity.LoginAudit, int, error) {
-	total := len(f.loginAudits)
+	return f.GetFilteredLoginAudits(ctx, "", "", limit, offset)
+}
+
+func (f *fakeStore) GetFilteredLoginAudits(ctx context.Context, userID, status string, limit, offset int) ([]entity.LoginAudit, int, error) {
+	var filtered []entity.LoginAudit
+	for i := len(f.loginAudits) - 1; i >= 0; i-- {
+		a := f.loginAudits[i]
+		if userID != "" && (a.UserID == nil || *a.UserID != userID) {
+			continue
+		}
+		if status != "" && a.Status != status {
+			continue
+		}
+		filtered = append(filtered, a)
+	}
+	total := len(filtered)
 	if offset >= total {
 		return []entity.LoginAudit{}, total, nil
 	}
@@ -302,11 +348,7 @@ func (f *fakeStore) GetLoginAudits(ctx context.Context, limit, offset int) ([]en
 	if end > total {
 		end = total
 	}
-	res := make([]entity.LoginAudit, 0, end-offset)
-	for i := end - 1; i >= offset; i-- {
-		res = append(res, f.loginAudits[i])
-	}
-	return res, total, nil
+	return filtered[offset:end], total, nil
 }
 
 func (f *fakeStore) GetUserLoginAudits(ctx context.Context, userID string, limit int) ([]entity.LoginAudit, error) {
@@ -379,6 +421,14 @@ func TestAuthService_Authenticate(t *testing.T) {
 	userAudits, err := svc.GetUserLoginAudits(ctx, "u1", 10)
 	if err != nil || len(userAudits) != 2 {
 		t.Fatalf("expected 2 user login audits, got %d err=%v", len(userAudits), err)
+	}
+	filteredSuccess, sTotal, err := svc.GetFilteredLoginAudits(ctx, "u1", "success", 10, 0)
+	if err != nil || sTotal != 1 || len(filteredSuccess) != 1 {
+		t.Fatalf("expected 1 success audit, got total=%d err=%v", sTotal, err)
+	}
+	filteredFailed, fTotal, err := svc.GetFilteredLoginAudits(ctx, "", "failed", 10, 0)
+	if err != nil || fTotal != 1 || len(filteredFailed) != 1 {
+		t.Fatalf("expected 1 failed audit, got total=%d err=%v", fTotal, err)
 	}
 }
 
@@ -472,6 +522,60 @@ func TestKeyService_CreateKey(t *testing.T) {
 	_, err = svc.CreateKey(context.Background(), CreateKeyInput{UserID: "u1", CustomKey: k.Key})
 	if err == nil {
 		t.Fatal("expected duplicate key error")
+	}
+}
+
+func TestKeyService_UpdateKey(t *testing.T) {
+	store := newFakeStore()
+	store.users["u1"] = &entity.User{ID: "u1", Username: "hafiz", Name: "Hafiz"}
+	svc := NewKeyService(store, nil)
+
+	created, err := svc.CreateKey(context.Background(), CreateKeyInput{
+		UserID: "u1",
+		Name:   "Initial Key",
+	})
+	if err != nil {
+		t.Fatalf("CreateKey failed: %v", err)
+	}
+
+	newExpiry := time.Now().Add(48 * time.Hour)
+	updated, err := svc.UpdateKey(context.Background(), UpdateKeyInput{
+		ID:              created.ID,
+		Name:            "Updated Key Label",
+		AllowedModels:   "main, ag/gemini-3.8-flash-high",
+		AllowedIPs:      "192.168.1.50, 10.0.0.0/24",
+		RateLimitRPM:    120,
+		MaxTokensLimit:  1000000,
+		DailyTokenQuota: 50000,
+		ExpiresAt:       &newExpiry,
+	})
+	if err != nil {
+		t.Fatalf("UpdateKey failed: %v", err)
+	}
+
+	if updated.Name != "Updated Key Label" {
+		t.Errorf("expected updated name, got %s", updated.Name)
+	}
+	if updated.RateLimitRPM != 120 {
+		t.Errorf("expected updated RPM 120, got %d", updated.RateLimitRPM)
+	}
+	if updated.MaxTokensLimit != 1000000 {
+		t.Errorf("expected updated MaxTokensLimit 1000000, got %d", updated.MaxTokensLimit)
+	}
+	if updated.DailyTokenQuota != 50000 {
+		t.Errorf("expected updated DailyTokenQuota 50000, got %d", updated.DailyTokenQuota)
+	}
+	if updated.AllowedIPs != "192.168.1.50, 10.0.0.0/24" {
+		t.Errorf("expected updated AllowedIPs, got %s", updated.AllowedIPs)
+	}
+	if updated.ExpiresAt == nil {
+		t.Errorf("expected updated ExpiresAt to be set")
+	}
+
+	// Update with non-existent key returns error
+	_, err = svc.UpdateKey(context.Background(), UpdateKeyInput{ID: "non-existent"})
+	if err == nil {
+		t.Fatal("expected error for non-existent key")
 	}
 }
 
