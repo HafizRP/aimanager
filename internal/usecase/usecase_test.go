@@ -181,6 +181,24 @@ func (f *fakeStore) ResetKeyUsage(ctx context.Context, id string) error {
 	}
 	return nil
 }
+func (f *fakeStore) GetKeyStats(ctx context.Context, keyID string) (*entity.KeyStatsSummary, []entity.HourlyUsagePoint, []entity.KeyModelUsage, []entity.KeyRecentRequest, error) {
+	return &entity.KeyStatsSummary{
+		TotalRequests:   10,
+		SuccessRequests: 9,
+		FailedRequests:  1,
+		SuccessRate:     90.0,
+		TotalTokens:     5000,
+		AvgLatencyMs:    150.0,
+	}, []entity.HourlyUsagePoint{
+		{HourLabel: "14:00", Tokens: 2500, Requests: 5, Errors: 0},
+		{HourLabel: "15:00", Tokens: 2500, Requests: 5, Errors: 1},
+	}, []entity.KeyModelUsage{
+		{Model: "ag/gemini-3.7-flash-high", Requests: 8, Tokens: 4000, Percentage: 80.0},
+		{Model: "kr/glm-5", Requests: 2, Tokens: 1000, Percentage: 20.0},
+	}, []entity.KeyRecentRequest{
+		{ID: 1, Path: "/v1/chat/completions", Method: "POST", Model: "ag/gemini-3.7-flash-high", StatusCode: 200, TotalTokens: 500, DurationMs: 120, CreatedAt: "2026-09-28 15:30:00"},
+	}, nil
+}
 
 // RequestLogStore
 func (f *fakeStore) CreateRequestLog(ctx context.Context, l *entity.RequestLog) error { return nil }

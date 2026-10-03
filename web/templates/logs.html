@@ -87,7 +87,7 @@
           <th>Status</th>
           <th>Duration</th>
           <th>Client IP</th>
-          <th class="text-end"><span class="visually-hidden">Action</span></th>
+          <th class="text-end">Actions</th>
         </tr>
       </thead>
       <tbody id="logsTableBody">
@@ -139,9 +139,14 @@
               <td class="text-dim small font-monospace">{{ .DurationMs }}ms</td>
               <td class="text-dim small font-monospace">{{ .ClientIP }}</td>
               <td class="text-end">
-                <a href="/replay?log_id={{ .ID }}" class="btn-modern-ghost btn-sm text-decoration-none d-inline-flex align-items-center gap-1" title="Replay this prompt against other models">
-                  <i class="bi bi-repeat"></i> <span class="d-none d-lg-inline">Replay</span>
-                </a>
+                <div class="d-flex justify-content-end align-items-center gap-1">
+                  <button type="button" class="btn-modern-ghost py-1 px-2" onclick="inspectLog({{ .ID }})" title="Inspect Request &amp; Response Payload">
+                    <i class="bi bi-file-earmark-code"></i>
+                  </button>
+                  <a href="/replay?log_id={{ .ID }}" class="btn-modern-ghost py-1 px-2" title="Replay this prompt against other models">
+                    <i class="bi bi-repeat"></i>
+                  </a>
+                </div>
               </td>
             </tr>
           {{ end }}
@@ -186,6 +191,113 @@
           Older <i class="bi bi-chevron-right ms-1"></i>
         </button>
       {{ end }}
+    </div>
+  </div>
+</div>
+
+<!-- Inspect Payload Modal -->
+<div class="modal fade" id="inspectLogModal" tabindex="-1" aria-labelledby="inspectLogModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content modal-content-modern">
+      <div class="modal-header modal-header-modern">
+        <div class="d-flex align-items-center gap-2">
+          <i class="bi bi-file-earmark-code text-info fs-5"></i>
+          <div>
+            <h5 class="modal-title fw-bold mb-0 text-light" id="inspectLogModalLabel">Request &amp; Response Payload</h5>
+            <div class="text-dim small font-monospace" id="inspectLogSub">Log ID: <span id="inspectLogId">-</span></div>
+          </div>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <div class="modal-body p-3 p-md-4">
+        <!-- Quick Meta Ribbon -->
+        <div class="row g-2 mb-3">
+          <div class="col-6 col-md-3">
+            <div class="p-2 subcard-modern rounded text-center">
+              <div class="text-dim small mb-1" style="font-size: 0.72rem;">Model</div>
+              <div class="fw-bold font-monospace text-light small text-truncate" id="inspectMetaModel">-</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="p-2 subcard-modern rounded text-center">
+              <div class="text-dim small mb-1" style="font-size: 0.72rem;">Status &amp; Latency</div>
+              <div class="d-flex justify-content-center align-items-center gap-2">
+                <span id="inspectMetaStatus" class="badge-modern badge-gray">-</span>
+                <span class="font-monospace text-light small" id="inspectMetaDuration">-</span>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="p-2 subcard-modern rounded text-center">
+              <div class="text-dim small mb-1" style="font-size: 0.72rem;">Tokens (In / Out / Total)</div>
+              <div class="font-monospace text-light small" id="inspectMetaTokens">-</div>
+            </div>
+          </div>
+          <div class="col-6 col-md-3">
+            <div class="p-2 subcard-modern rounded text-center">
+              <div class="text-dim small mb-1" style="font-size: 0.72rem;">Caller &amp; IP</div>
+              <div class="text-light small text-truncate" id="inspectMetaCaller">-</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab Controls -->
+        <ul class="nav nav-pills nav-pills-modern mb-3" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active py-1 px-3 d-flex align-items-center gap-1" id="tab-messages-btn" data-bs-toggle="pill" data-bs-target="#tab-messages-pane" type="button" role="tab">
+              <i class="bi bi-chat-left-text"></i> Messages
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link py-1 px-3 d-flex align-items-center gap-1" id="tab-request-btn" data-bs-toggle="pill" data-bs-target="#tab-request-pane" type="button" role="tab">
+              <i class="bi bi-code-square"></i> Request JSON
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link py-1 px-3 d-flex align-items-center gap-1" id="tab-response-btn" data-bs-toggle="pill" data-bs-target="#tab-response-pane" type="button" role="tab">
+              <i class="bi bi-terminal"></i> Response
+            </button>
+          </li>
+        </ul>
+
+        <!-- Tab Contents -->
+        <div class="tab-content">
+          <!-- Messages Visual Pane -->
+          <div class="tab-pane fade show active" id="tab-messages-pane" role="tabpanel">
+            <div id="inspectMessagesContainer" class="d-flex flex-column gap-2" style="max-height: 460px; overflow-y: auto;">
+              <!-- Chat bubbles rendered here -->
+            </div>
+          </div>
+
+          <!-- Raw Request JSON Pane -->
+          <div class="tab-pane fade" id="tab-request-pane" role="tabpanel">
+            <div class="position-relative">
+              <button type="button" class="btn btn-sm btn-modern-ghost position-absolute top-0 end-0 m-2 py-1 px-2 z-2" onclick="copyInspectRequest()" title="Copy Request JSON">
+                <i class="bi bi-clipboard"></i> Copy
+              </button>
+              <pre class="code-box-modern p-3 rounded font-monospace small mb-0" id="inspectRawRequest" style="max-height: 460px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;"></pre>
+            </div>
+          </div>
+
+          <!-- Response Pane -->
+          <div class="tab-pane fade" id="tab-response-pane" role="tabpanel">
+            <div class="position-relative">
+              <button type="button" class="btn btn-sm btn-modern-ghost position-absolute top-0 end-0 m-2 py-1 px-2 z-2" onclick="copyInspectResponse()" title="Copy Response Text">
+                <i class="bi bi-clipboard"></i> Copy
+              </button>
+              <pre class="code-box-modern p-3 rounded font-monospace small mb-0" id="inspectRawResponse" style="max-height: 460px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;"></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer modal-footer-modern d-flex justify-content-between">
+        <a id="inspectReplayLink" href="#" class="btn-modern-primary btn-sm text-decoration-none d-inline-flex align-items-center gap-2">
+          <i class="bi bi-repeat"></i> Open in Replay Lab
+        </a>
+        <button type="button" class="btn-modern-ghost btn-sm" data-bs-dismiss="modal">Close</button>
+      </div>
     </div>
   </div>
 </div>
@@ -267,7 +379,16 @@
               <td data-label="Status">${statusBadge}</td>
               <td data-label="Duration" class="text-dim small font-monospace">${log.duration_ms}ms</td>
               <td data-label="Client IP" class="text-dim small font-monospace">${escapeHtml(log.client_ip)}</td>
-              <td data-label="Action" class="text-end"><a href="/replay?log_id=${log.id}" class="btn-modern-ghost btn-sm text-decoration-none d-inline-flex align-items-center gap-1" title="Replay this prompt against other models"><i class="bi bi-repeat"></i> <span class="d-none d-lg-inline">Replay</span></a></td>
+              <td data-label="Actions" class="text-end">
+                <div class="d-flex justify-content-end align-items-center gap-1">
+                  <button type="button" class="btn-modern-ghost py-1 px-2" onclick="inspectLog(${log.id})" title="Inspect Request &amp; Response Payload">
+                    <i class="bi bi-file-earmark-code"></i>
+                  </button>
+                  <a href="/replay?log_id=${log.id}" class="btn-modern-ghost py-1 px-2" title="Replay this prompt against other models">
+                    <i class="bi bi-repeat"></i>
+                  </a>
+                </div>
+              </td>
             </tr>`;
   }
 
@@ -368,6 +489,144 @@ function exportLogs(format) {
   const endDate = document.getElementById('filterEndDate')?.value || '';
   const url = `/api/logs/export?format=${format}&user_id=${encodeURIComponent(user)}&model=${encodeURIComponent(model)}&status=${encodeURIComponent(status)}&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}`;
   window.location.href = url;
+}
+
+let currentInspectData = null;
+
+async function inspectLog(id) {
+  const modalEl = document.getElementById('inspectLogModal');
+  if (!modalEl) return;
+  const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+  
+  document.getElementById('inspectLogId').textContent = '#' + id;
+  document.getElementById('inspectMetaModel').textContent = 'Loading...';
+  document.getElementById('inspectMetaStatus').className = 'badge-modern badge-gray';
+  document.getElementById('inspectMetaStatus').textContent = '...';
+  document.getElementById('inspectMetaDuration').textContent = '-';
+  document.getElementById('inspectMetaTokens').textContent = '-';
+  document.getElementById('inspectMetaCaller').textContent = '-';
+  document.getElementById('inspectMessagesContainer').innerHTML = '<div class="text-center text-dim py-4"><i class="bi bi-arrow-clockwise spin fs-3 d-block mb-2"></i> Loading payload...</div>';
+  document.getElementById('inspectRawRequest').textContent = 'Loading...';
+  document.getElementById('inspectRawResponse').textContent = 'Loading...';
+  document.getElementById('inspectReplayLink').href = `/replay?log_id=${id}`;
+
+  modal.show();
+
+  try {
+    const res = await fetch(`/api/replay/source?id=${id}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    currentInspectData = data;
+
+    document.getElementById('inspectMetaModel').textContent = data.model || 'Unknown';
+    const statusSpan = document.getElementById('inspectMetaStatus');
+    if (data.status_code === 200) {
+      statusSpan.className = 'badge-modern badge-emerald';
+      statusSpan.textContent = '200 OK';
+    } else if (data.status_code === 403) {
+      statusSpan.className = 'badge-modern badge-amber';
+      statusSpan.textContent = '403 Blocked';
+    } else if (data.status_code === 429) {
+      statusSpan.className = 'badge-modern badge-rose';
+      statusSpan.textContent = '429 Quota';
+    } else {
+      statusSpan.className = 'badge-modern badge-rose';
+      statusSpan.textContent = `${data.status_code || 'Error'}`;
+    }
+
+    document.getElementById('inspectMetaDuration').textContent = `${data.duration_ms || 0}ms`;
+    document.getElementById('inspectMetaTokens').textContent = `${data.prompt_tokens || 0} / ${data.completion_tokens || 0} / ${data.total_tokens || 0}`;
+    
+    const callerParts = [];
+    if (data.user_name) callerParts.push(data.user_name);
+    if (data.key_name) callerParts.push(`(${data.key_name})`);
+    if (data.client_ip) callerParts.push(`@ ${data.client_ip}`);
+    document.getElementById('inspectMetaCaller').textContent = callerParts.join(' ') || '-';
+
+    // Parse request body
+    let reqObj = null;
+    if (data.request_body) {
+      try {
+        reqObj = JSON.parse(data.request_body);
+        document.getElementById('inspectRawRequest').textContent = JSON.stringify(reqObj, null, 2);
+      } catch (_) {
+        document.getElementById('inspectRawRequest').textContent = data.request_body;
+      }
+    } else {
+      document.getElementById('inspectRawRequest').textContent = '(No request body recorded)';
+    }
+
+    // Render formatted chat messages
+    const msgContainer = document.getElementById('inspectMessagesContainer');
+    if (reqObj && Array.isArray(reqObj.messages) && reqObj.messages.length > 0) {
+      let html = '';
+      reqObj.messages.forEach((msg, idx) => {
+        const role = (msg.role || 'user').toLowerCase();
+        let roleBadge = '<span class="badge-modern badge-primary" style="font-size: 0.68rem;">User</span>';
+        let bgStyle = 'background: rgba(59, 130, 246, 0.05); border-left: 3px solid var(--primary);';
+        if (role === 'system') {
+          roleBadge = '<span class="badge-modern badge-amber" style="font-size: 0.68rem;">System</span>';
+          bgStyle = 'background: rgba(245, 158, 11, 0.05); border-left: 3px solid #f59e0b;';
+        } else if (role === 'assistant') {
+          roleBadge = '<span class="badge-modern badge-emerald" style="font-size: 0.68rem;">Assistant</span>';
+          bgStyle = 'background: rgba(16, 185, 129, 0.05); border-left: 3px solid #10b981;';
+        }
+
+        let contentStr = '';
+        if (typeof msg.content === 'string') {
+          contentStr = msg.content;
+        } else if (Array.isArray(msg.content)) {
+          contentStr = msg.content.map(p => typeof p === 'string' ? p : (p.text || JSON.stringify(p))).join('\n');
+        } else {
+          contentStr = JSON.stringify(msg.content, null, 2);
+        }
+
+        html += `<div class="p-3 subcard-modern rounded" style="${bgStyle}">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="d-flex align-items-center gap-2">${roleBadge} <span class="text-dim small">#${idx + 1}</span></div>
+            <button type="button" class="btn-modern-ghost btn-sm py-0 px-2" onclick="navigator.clipboard.writeText(${JSON.stringify(contentStr)}); if(window.showToast) window.showToast('Copied message content!', '📋');" title="Copy message"><i class="bi bi-clipboard"></i></button>
+          </div>
+          <div class="text-light small font-monospace" style="white-space: pre-wrap; word-break: break-word;">${escapeHtml(contentStr)}</div>
+        </div>`;
+      });
+      msgContainer.innerHTML = html;
+    } else {
+      msgContainer.innerHTML = `<div class="text-center text-dim py-4">
+        <i class="bi bi-chat-square-dots fs-3 d-block mb-2 opacity-50"></i>
+        No structured chat messages found in this request. View <strong>Request JSON</strong> tab for raw payload.
+      </div>`;
+    }
+
+    // Response display
+    if (data.response_text) {
+      document.getElementById('inspectRawResponse').textContent = data.response_text;
+    } else if (data.error_message) {
+      document.getElementById('inspectRawResponse').textContent = `[Error ${data.status_code}]\n${data.error_message}`;
+    } else {
+      document.getElementById('inspectRawResponse').textContent = '(No completion text captured)';
+    }
+
+  } catch (err) {
+    document.getElementById('inspectMessagesContainer').innerHTML = `<div class="alert alert-danger card-modern text-light small mb-0">Failed to load log details: ${escapeHtml(err.message)}</div>`;
+    document.getElementById('inspectRawRequest').textContent = `Error: ${err.message}`;
+    document.getElementById('inspectRawResponse').textContent = `Error: ${err.message}`;
+  }
+}
+
+function copyInspectRequest() {
+  const text = document.getElementById('inspectRawRequest')?.textContent;
+  if (text) {
+    navigator.clipboard.writeText(text);
+    if (window.showToast) window.showToast("Request JSON copied! 📋", "✨");
+  }
+}
+
+function copyInspectResponse() {
+  const text = document.getElementById('inspectRawResponse')?.textContent;
+  if (text) {
+    navigator.clipboard.writeText(text);
+    if (window.showToast) window.showToast("Response copied! 📋", "✨");
+  }
 }
 </script>
 

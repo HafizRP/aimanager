@@ -58,6 +58,10 @@ type MockCoreClient struct {
 	CoreVersionFunc          func(ctx context.Context) (map[string]interface{}, error)
 	CoreKeysFunc             func(ctx context.Context) (map[string]interface{}, error)
 	GetMergedModelsFunc      func(ctx context.Context) (string, []map[string]interface{}, error)
+	InvalidateModelsCacheFunc func()
+	GetDisabledModelsFunc    func(ctx context.Context) (map[string][]string, error)
+	SetDisabledModelsFunc    func(ctx context.Context, providerAlias string, ids []string) error
+	DeleteDisabledModelFunc  func(ctx context.Context, providerAlias string, id string) error
 }
 
 var _ CoreClient = (*MockCoreClient)(nil)
@@ -424,3 +428,31 @@ func (m *MockCoreClient) GetMergedModels(ctx context.Context) (string, []map[str
 	}
 	return "list", []map[string]interface{}{}, nil
 }
+
+func (m *MockCoreClient) InvalidateModelsCache() {
+	if m.InvalidateModelsCacheFunc != nil {
+		m.InvalidateModelsCacheFunc()
+	}
+}
+
+func (m *MockCoreClient) GetDisabledModels(ctx context.Context) (map[string][]string, error) {
+	if m.GetDisabledModelsFunc != nil {
+		return m.GetDisabledModelsFunc(ctx)
+	}
+	return map[string][]string{}, nil
+}
+
+func (m *MockCoreClient) SetDisabledModels(ctx context.Context, providerAlias string, ids []string) error {
+	if m.SetDisabledModelsFunc != nil {
+		return m.SetDisabledModelsFunc(ctx, providerAlias, ids)
+	}
+	return nil
+}
+
+func (m *MockCoreClient) DeleteDisabledModel(ctx context.Context, providerAlias string, id string) error {
+	if m.DeleteDisabledModelFunc != nil {
+		return m.DeleteDisabledModelFunc(ctx, providerAlias, id)
+	}
+	return nil
+}
+

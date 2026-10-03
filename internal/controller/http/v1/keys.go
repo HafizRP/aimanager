@@ -413,3 +413,67 @@ func (h *Handler) ResetKeyUsage(w http.ResponseWriter, r *http.Request) {
 
 	http.Redirect(w, r, redirectURL+"?msg="+url.QueryEscape("API key token usage reset to 0"), http.StatusSeeOther)
 }
+
+// APIKeyStats returns performance metrics, hourly token breakdown, top models, and recent requests for an API key.
+func (h *Handler) APIKeyStats(w http.ResponseWriter, r *http.Request) {
+	keyID := chi.URLParam(r, "id")
+	ctx := r.Context()
+	currentUser := GetUserFromContext(ctx)
+
+	// Fetch all keys to check existence and ownership
+	var targetKey *entity.APIKey
+	allKeys, err := h.repo.GetAllAPIKeys(ctx)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": "Failed to fetch keys"})
+		return
+	}
+	for i := range allKeys {
+		if allKeys[i].ID == keyID {
+			targetKey = &allKeys[i]
+			break
+		}
+	}
+
+	if targetKey == nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": "API key not found"})
+		return
+	}
+
+	// Security: Standard user can only inspect their own keys (HTTP 404 to avoid oracle)
+	if currentUser != nil && !currentUser.IsAdmin() && targetKey.UserID != currentUser.ID {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": "API key not found"})
+		return
+	}
+
+	// Enrich key user name if empty
+	if targetKey.UserName == "" {
+		if u, _ := h.repo.GetUserByID(ctx, targetKey.UserID); u != nil {
+			targetKey.UserName = u.Name
+		}
+	}
+
+	summary, hourly, topModels, recent, err := h.repo.GetKeyStats(ctx, keyID)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": err.Error()})
+		return
+	}
+
+	resp := entity.KeyStatsResponse{
+		Key:            *targetKey,
+		Summary:        *summary,
+		HourlyUsage:    hourly,
+		TopModels:      topModels,
+		RecentRequests: recent,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
+}
