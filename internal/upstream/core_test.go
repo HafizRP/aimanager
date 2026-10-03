@@ -69,3 +69,30 @@ func TestGetMergedModelsCache(t *testing.T) {
 	}
 }
 
+func TestInvalidateModelsCache(t *testing.T) {
+	client := &HTTPCoreClient{
+		cachedObj: "list",
+		cachedModels: []map[string]interface{}{
+			{"id": "ag/gemini-3.7-flash-high"},
+		},
+		cachedModelsAt: time.Now(),
+	}
+
+	client.InvalidateModelsCache()
+	client.modelsMu.RLock()
+	defer client.modelsMu.RUnlock()
+	if client.cachedModels != nil || client.cachedObj != "" {
+		t.Fatalf("expected cached models to be nil, got %v", client.cachedModels)
+	}
+}
+
+func TestStripModelPrefix(t *testing.T) {
+	if stripModelPrefix("ag/gemini-3.5-flash-high") != "gemini-3.5-flash-high" {
+		t.Errorf("expected gemini-3.5-flash-high, got %s", stripModelPrefix("ag/gemini-3.5-flash-high"))
+	}
+	if stripModelPrefix("standalone-model") != "standalone-model" {
+		t.Errorf("expected standalone-model, got %s", stripModelPrefix("standalone-model"))
+	}
+}
+
+

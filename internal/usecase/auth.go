@@ -641,21 +641,17 @@ func (s *KeyService) ResetKeyUsage(ctx context.Context, keyID string) error {
 	return s.store.ResetKeyUsage(ctx, keyID)
 }
 
-// GetKeyStats retrieves aggregated usage statistics and model activity for an API key.
-func (s *KeyService) GetKeyStats(ctx context.Context, keyID string) (*entity.KeyStats, error) {
-	if _, err := s.GetKeyByID(ctx, keyID); err != nil {
+func (s *KeyService) getKeyByID(ctx context.Context, keyID string) (*entity.APIKey, error) {
+	keys, err := s.store.GetAllAPIKeys(ctx)
+	if err != nil {
 		return nil, err
 	}
-	return s.store.GetAPIKeyStats(ctx, keyID)
-}
-
-// GetKeyByID looks up an API key by ID.
-func (s *KeyService) GetKeyByID(ctx context.Context, keyID string) (*entity.APIKey, error) {
-	return s.store.GetAPIKeyByID(ctx, keyID)
-}
-
-func (s *KeyService) getKeyByID(ctx context.Context, keyID string) (*entity.APIKey, error) {
-	return s.store.GetAPIKeyByID(ctx, keyID)
+	for i := range keys {
+		if keys[i].ID == keyID {
+			return &keys[i], nil
+		}
+	}
+	return nil, ErrNotFound
 }
 
 // ---- Shared helpers ----

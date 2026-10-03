@@ -178,7 +178,7 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 		authRouter.Post("/keys/{id}/delete", h.DeleteKey)
 		authRouter.Post("/keys/{id}/reset-usage", h.ResetKeyUsage)
 		authRouter.Post("/api/keys/{id}/reset-usage", h.ResetKeyUsage)
-		authRouter.Get("/api/keys/{id}/stats", h.GetKeyStats)
+		authRouter.Get("/api/keys/{id}/stats", h.APIKeyStats)
 
 		// Logs, Models, Settings
 		authRouter.Get("/logs", h.LogsPage)
@@ -316,6 +316,7 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 			// 9router Core: Pricing display
 			adminOnly.Get("/pricing", h.PricingPage)
 			adminOnly.Get("/api/pricing", h.APIPricing)
+			adminOnly.Post("/api/pricing/estimate", h.APIPricingEstimate)
 
 			// 9router Core: system (version, machine keys)
 			adminOnly.Get("/api/version", h.APICoreVersion)

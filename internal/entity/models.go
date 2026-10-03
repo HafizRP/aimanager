@@ -208,51 +208,6 @@ type TopModelStat struct {
 	TotalTokens int64  `json:"total_tokens"`
 }
 
-// KeyModelUsage represents model-level aggregation for an API key.
-type KeyModelUsage struct {
-	Model            string `json:"model"`
-	Requests         int    `json:"requests"`
-	TotalTokens      int64  `json:"total_tokens"`
-	PromptTokens     int64  `json:"prompt_tokens"`
-	CompletionTokens int64  `json:"completion_tokens"`
-}
-
-// KeyRecentActivity represents recent request logs for an API key.
-type KeyRecentActivity struct {
-	ID          int64     `json:"id"`
-	Model       string    `json:"model"`
-	StatusCode  int       `json:"status_code"`
-	DurationMs  int64     `json:"duration_ms"`
-	TotalTokens int       `json:"total_tokens"`
-	ClientIP    string    `json:"client_ip"`
-	CreatedAt   time.Time `json:"created_at"`
-}
-
-// KeyStats provides consolidated analytics for an API key.
-type KeyStats struct {
-	KeyID           string              `json:"key_id"`
-	KeyName         string              `json:"key_name"`
-	UserID          string              `json:"user_id"`
-	UserName        string              `json:"user_name"`
-	IsActive        bool                `json:"is_active"`
-	AllowedModels   string              `json:"allowed_models"`
-	AllowedIPs      string              `json:"allowed_ips"`
-	RateLimitRPM    int                 `json:"rate_limit_rpm"`
-	MaxTokensLimit  int                 `json:"max_tokens_limit"`
-	DailyTokenQuota int                 `json:"daily_token_quota"`
-	TokenUsage      int64               `json:"token_usage"`
-	TotalTokens     int64               `json:"total_tokens"`
-	TotalRequests   int                 `json:"total_requests"`
-	TodayTokens     int64               `json:"today_tokens"`
-	TodayRequests   int                 `json:"today_requests"`
-	AvgDurationMs   int64               `json:"avg_duration_ms"`
-	LastUsedAt      *time.Time          `json:"last_used_at,omitempty"`
-	LastUsedIP      string              `json:"last_used_ip,omitempty"`
-	CreatedAt       time.Time           `json:"created_at"`
-	TopModels       []KeyModelUsage     `json:"top_models"`
-	RecentRequests  []KeyRecentActivity `json:"recent_requests"`
-}
-
 // DashboardStats is the aggregate statistics payload for the dashboard.
 type DashboardStats struct {
 	TotalRequests  int64          `json:"total_requests"`
@@ -381,4 +336,57 @@ type LoginAudit struct {
 
 	// Virtual fields for UI
 	UserName string `json:"user_name,omitempty"`
+}
+
+// KeyStatsSummary aggregates high-level performance and usage metrics for an API key.
+type KeyStatsSummary struct {
+	TotalRequests         int     `json:"total_requests"`
+	SuccessRequests       int     `json:"success_requests"`
+	FailedRequests        int     `json:"failed_requests"`
+	SuccessRate           float64 `json:"success_rate"`
+	TotalPromptTokens     int64   `json:"total_prompt_tokens"`
+	TotalCompletionTokens int64   `json:"total_completion_tokens"`
+	TotalTokens           int64   `json:"total_tokens"`
+	AvgLatencyMs          float64 `json:"avg_latency_ms"`
+	EstimatedCostUSD      float64 `json:"estimated_cost_usd"`
+}
+
+// HourlyUsagePoint represents token and request volume in a specific 1-hour window.
+type HourlyUsagePoint struct {
+	HourLabel string `json:"hour_label"` // e.g. "14:00"
+	Tokens    int64  `json:"tokens"`
+	Requests  int    `json:"requests"`
+	Errors    int    `json:"errors"`
+}
+
+// KeyModelUsage represents usage metrics for a specific model called by a key.
+type KeyModelUsage struct {
+	Model      string  `json:"model"`
+	Requests   int     `json:"requests"`
+	Tokens     int64   `json:"tokens"`
+	Percentage float64 `json:"percentage"`
+}
+
+// KeyRecentRequest captures recent request entries for key detail inspection.
+type KeyRecentRequest struct {
+	ID           int64  `json:"id"`
+	Path         string `json:"path"`
+	Method       string `json:"method"`
+	Model        string `json:"model"`
+	IsStream     bool   `json:"is_stream"`
+	TotalTokens  int    `json:"total_tokens"`
+	StatusCode   int    `json:"status_code"`
+	DurationMs   int64  `json:"duration_ms"`
+	ClientIP     string `json:"client_ip"`
+	ErrorMessage string `json:"error_message,omitempty"`
+	CreatedAt    string `json:"created_at"`
+}
+
+// KeyStatsResponse encapsulates full analytics and breakdown data for a single API key.
+type KeyStatsResponse struct {
+	Key            APIKey             `json:"key"`
+	Summary        KeyStatsSummary    `json:"summary"`
+	HourlyUsage    []HourlyUsagePoint `json:"hourly_usage"`
+	TopModels      []KeyModelUsage    `json:"top_models"`
+	RecentRequests []KeyRecentRequest `json:"recent_requests"`
 }

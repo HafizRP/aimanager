@@ -30,7 +30,6 @@ type UserRepository interface {
 
 // KeyRepository handles API key entity persistence.
 type KeyRepository interface {
-	GetAPIKeyByID(ctx context.Context, id string) (*entity.APIKey, error)
 	GetAPIKeyByKey(ctx context.Context, key string) (*entity.APIKey, error)
 	GetAPIKeysByUserID(ctx context.Context, userID string) ([]entity.APIKey, error)
 	GetAllAPIKeys(ctx context.Context) ([]entity.APIKey, error)
@@ -44,9 +43,9 @@ type KeyRepository interface {
 	UpdateKeyRestrictions(ctx context.Context, id string, maxTokensLimit, dailyQuota int, allowedIPs string) error
 	ResetKeyUsage(ctx context.Context, id string) error
 	GetTodayTokenUsageByKey(ctx context.Context, keyID string) (int64, error)
-	GetAPIKeyStats(ctx context.Context, keyID string) (*entity.KeyStats, error)
 	GetKeyWindowStats(ctx context.Context, since time.Time) ([]KeyWindowStats, error)
 	GetKeyBaselineTokens(ctx context.Context, days int) (map[string]float64, error)
+	GetKeyStats(ctx context.Context, keyID string) (*entity.KeyStatsSummary, []entity.HourlyUsagePoint, []entity.KeyModelUsage, []entity.KeyRecentRequest, error)
 }
 
 // AuditLogRepository handles request logs and security event audit trails.
@@ -401,38 +400,6 @@ func (r *SQLiteRepo) DeductTokens(ctx context.Context, userID string, tokens int
 
 // API Key methods
 
-// GetAPIKeyByID looks up an API key by its unique ID.
-func (r *SQLiteRepo) GetAPIKeyByID(ctx context.Context, id string) (*entity.APIKey, error) {
-	query := `SELECT k.id, k.user_id, k.key, k.name, COALESCE(k.allowed_models, ''), COALESCE(k.allowed_ips, ''), COALESCE(k.rate_limit_rpm, 0), COALESCE(k.max_tokens_limit, 0), COALESCE(k.daily_token_quota, 0), k.is_active, k.created_at, k.last_used_at, k.expires_at, COALESCE(k.tokens_used, 0), COALESCE(k.last_used_ip, ''), u.name 
-	          FROM api_keys k 
-	          JOIN users u ON k.user_id = u.id 
-	          WHERE k.id = ?`
-	var k entity.APIKey
-	var createdAt string
-	var lastUsed sql.NullString
-	var expiresAt sql.NullString
-	err := r.db.QueryRowContext(ctx, query, id).Scan(
-		&k.ID, &k.UserID, &k.Key, &k.Name, &k.AllowedModels, &k.AllowedIPs, &k.RateLimitRPM, &k.MaxTokensLimit, &k.DailyTokenQuota, &k.IsActive, &createdAt, &lastUsed, &expiresAt, &k.TokenUsage, &k.LastUsedIP, &k.UserName,
-	)
-	if err != nil {
-		return nil, err
-	}
-	k.CreatedAt = parseTimeFlexible(createdAt)
-	if lastUsed.Valid {
-		t := parseTimeFlexible(lastUsed.String)
-		if !t.IsZero() {
-			k.LastUsedAt = &t
-		}
-	}
-	if expiresAt.Valid {
-		t := parseTimeFlexible(expiresAt.String)
-		if !t.IsZero() {
-			k.ExpiresAt = &t
-		}
-	}
-	return &k, nil
-}
-
 // GetAPIKeyByKey looks up an API key by its raw key string.
 func (r *SQLiteRepo) GetAPIKeyByKey(ctx context.Context, key string) (*entity.APIKey, error) {
 	query := `SELECT k.id, k.user_id, k.key, k.name, COALESCE(k.allowed_models, ''), COALESCE(k.allowed_ips, ''), COALESCE(k.rate_limit_rpm, 0), COALESCE(k.max_tokens_limit, 0), COALESCE(k.daily_token_quota, 0), k.is_active, k.created_at, k.last_used_at, k.expires_at, COALESCE(k.tokens_used, 0), COALESCE(k.last_used_ip, ''), u.name 
@@ -633,82 +600,6 @@ func (r *SQLiteRepo) GetTodayTokenUsageByKey(ctx context.Context, keyID string) 
 	return total, err
 }
 
-// GetAPIKeyStats aggregates overall usage, model breakdown, and recent activity for an API key.
-func (r *SQLiteRepo) GetAPIKeyStats(ctx context.Context, keyID string) (*entity.KeyStats, error) {
-	key, err := r.GetAPIKeyByID(ctx, keyID)
-	if err != nil {
-		return nil, err
-	}
-
-	stats := &entity.KeyStats{
-		KeyID:           key.ID,
-		KeyName:         key.Name,
-		UserID:          key.UserID,
-		UserName:        key.UserName,
-		IsActive:        key.IsActive,
-		AllowedModels:   key.AllowedModels,
-		AllowedIPs:      key.AllowedIPs,
-		RateLimitRPM:    key.RateLimitRPM,
-		MaxTokensLimit:  key.MaxTokensLimit,
-		DailyTokenQuota: key.DailyTokenQuota,
-		TokenUsage:      key.TokenUsage,
-		LastUsedAt:      key.LastUsedAt,
-		LastUsedIP:      key.LastUsedIP,
-		CreatedAt:       key.CreatedAt,
-		TopModels:       []entity.KeyModelUsage{},
-		RecentRequests:  []entity.KeyRecentActivity{},
-	}
-
-	// 1. Total tokens, total requests, avg duration
-	_ = r.db.QueryRowContext(ctx, `
-		SELECT COUNT(*), COALESCE(SUM(total_tokens), 0), COALESCE(AVG(duration_ms), 0)
-		FROM request_logs WHERE api_key_id = ?`, keyID).Scan(&stats.TotalRequests, &stats.TotalTokens, &stats.AvgDurationMs)
-
-	// 2. Today tokens, today requests (WIB)
-	_ = r.db.QueryRowContext(ctx, `
-		SELECT COUNT(*), COALESCE(SUM(total_tokens), 0)
-		FROM request_logs WHERE api_key_id = ? AND `+wibDayExpr, keyID).Scan(&stats.TodayRequests, &stats.TodayTokens)
-
-	// 3. Top models breakdown
-	modelRows, err := r.db.QueryContext(ctx, `
-		SELECT COALESCE(model, 'unknown'), COUNT(*), COALESCE(SUM(total_tokens), 0), COALESCE(SUM(prompt_tokens), 0), COALESCE(SUM(completion_tokens), 0)
-		FROM request_logs
-		WHERE api_key_id = ?
-		GROUP BY model
-		ORDER BY SUM(total_tokens) DESC, COUNT(*) DESC
-		LIMIT 10`, keyID)
-	if err == nil {
-		defer modelRows.Close()
-		for modelRows.Next() {
-			var m entity.KeyModelUsage
-			if err := modelRows.Scan(&m.Model, &m.Requests, &m.TotalTokens, &m.PromptTokens, &m.CompletionTokens); err == nil {
-				stats.TopModels = append(stats.TopModels, m)
-			}
-		}
-	}
-
-	// 4. Recent requests
-	recentRows, err := r.db.QueryContext(ctx, `
-		SELECT id, COALESCE(model, ''), status_code, duration_ms, total_tokens, COALESCE(client_ip, ''), created_at
-		FROM request_logs
-		WHERE api_key_id = ?
-		ORDER BY id DESC
-		LIMIT 10`, keyID)
-	if err == nil {
-		defer recentRows.Close()
-		for recentRows.Next() {
-			var req entity.KeyRecentActivity
-			var createdAtStr string
-			if err := recentRows.Scan(&req.ID, &req.Model, &req.StatusCode, &req.DurationMs, &req.TotalTokens, &req.ClientIP, &createdAtStr); err == nil {
-				req.CreatedAt = parseTimeFlexible(createdAtStr)
-				stats.RecentRequests = append(stats.RecentRequests, req)
-			}
-		}
-	}
-
-	return stats, nil
-}
-
 // CreateSecurityEvent records an anomaly/self-heal/budget finding.
 func (r *SQLiteRepo) CreateSecurityEvent(ctx context.Context, ev *entity.SecurityEvent) error {
 	_, err := r.db.ExecContext(ctx, `INSERT INTO security_events (kind, user_id, api_key_id, detail, action, created_at) VALUES (?, ?, ?, ?, ?, datetime('now'))`,
@@ -792,6 +683,137 @@ func (r *SQLiteRepo) GetKeyBaselineTokens(ctx context.Context, days int) (map[st
 		out[id] = avg
 	}
 	return out, rows.Err()
+}
+
+// GetKeyStats computes comprehensive usage summary, 24h hourly activity, top models, and recent requests for an API key.
+func (r *SQLiteRepo) GetKeyStats(ctx context.Context, keyID string) (*entity.KeyStatsSummary, []entity.HourlyUsagePoint, []entity.KeyModelUsage, []entity.KeyRecentRequest, error) {
+	summary := &entity.KeyStatsSummary{}
+
+	// 1. Overall Summary
+	summaryQuery := `
+		SELECT 
+			COUNT(*),
+			COALESCE(SUM(CASE WHEN status_code < 400 THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(CASE WHEN status_code >= 400 THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(prompt_tokens), 0),
+			COALESCE(SUM(completion_tokens), 0),
+			COALESCE(SUM(total_tokens), 0),
+			COALESCE(AVG(duration_ms), 0)
+		FROM request_logs
+		WHERE api_key_id = ?`
+
+	var avgDuration float64
+	err := r.db.QueryRowContext(ctx, summaryQuery, keyID).Scan(
+		&summary.TotalRequests,
+		&summary.SuccessRequests,
+		&summary.FailedRequests,
+		&summary.TotalPromptTokens,
+		&summary.TotalCompletionTokens,
+		&summary.TotalTokens,
+		&avgDuration,
+	)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, nil, nil, nil, fmt.Errorf("failed to fetch key summary: %w", err)
+	}
+	summary.AvgLatencyMs = avgDuration
+	if summary.TotalRequests > 0 {
+		summary.SuccessRate = float64(summary.SuccessRequests) / float64(summary.TotalRequests) * 100.0
+	} else {
+		summary.SuccessRate = 100.0
+	}
+	// Retail FinOps benchmark estimate: $5 / 1M tokens ($0.000005 per token)
+	summary.EstimatedCostUSD = float64(summary.TotalTokens) * 0.000005
+
+	// 2. 24-Hour Hourly Breakdown in WIB (+7 hours)
+	hourlyQuery := `
+		SELECT 
+			strftime('%H:00', datetime(created_at, '+7 hours')) as hr,
+			COALESCE(SUM(total_tokens), 0),
+			COUNT(*),
+			COALESCE(SUM(CASE WHEN status_code >= 400 THEN 1 ELSE 0 END), 0)
+		FROM request_logs
+		WHERE api_key_id = ? AND created_at >= datetime('now', '-24 hours')
+		GROUP BY hr
+		ORDER BY datetime(created_at, '+7 hours') ASC`
+
+	hourlyRows, err := r.db.QueryContext(ctx, hourlyQuery, keyID)
+	var hourly []entity.HourlyUsagePoint
+	if err == nil {
+		defer hourlyRows.Close()
+		for hourlyRows.Next() {
+			var pt entity.HourlyUsagePoint
+			if err := hourlyRows.Scan(&pt.HourLabel, &pt.Tokens, &pt.Requests, &pt.Errors); err == nil {
+				hourly = append(hourly, pt)
+			}
+		}
+	}
+	if hourly == nil {
+		hourly = []entity.HourlyUsagePoint{}
+	}
+
+	// 3. Top Models for this key
+	modelsQuery := `
+		SELECT 
+			model,
+			COUNT(*),
+			COALESCE(SUM(total_tokens), 0)
+		FROM request_logs
+		WHERE api_key_id = ?
+		GROUP BY model
+		ORDER BY SUM(total_tokens) DESC, COUNT(*) DESC
+		LIMIT 8`
+
+	modelRows, err := r.db.QueryContext(ctx, modelsQuery, keyID)
+	var topModels []entity.KeyModelUsage
+	if err == nil {
+		defer modelRows.Close()
+		for modelRows.Next() {
+			var km entity.KeyModelUsage
+			if err := modelRows.Scan(&km.Model, &km.Requests, &km.Tokens); err == nil {
+				if summary.TotalTokens > 0 {
+					km.Percentage = float64(km.Tokens) / float64(summary.TotalTokens) * 100.0
+				}
+				topModels = append(topModels, km)
+			}
+		}
+	}
+	if topModels == nil {
+		topModels = []entity.KeyModelUsage{}
+	}
+
+	// 4. Recent 10 requests for this key
+	recentQuery := `
+		SELECT 
+			id, path, method, model, is_stream, total_tokens, status_code, duration_ms, 
+			COALESCE(client_ip, ''), COALESCE(error_message, ''),
+			strftime('%Y-%m-%d %H:%M:%S', datetime(created_at, '+7 hours'))
+		FROM request_logs
+		WHERE api_key_id = ?
+		ORDER BY id DESC
+		LIMIT 10`
+
+	recentRows, err := r.db.QueryContext(ctx, recentQuery, keyID)
+	var recent []entity.KeyRecentRequest
+	if err == nil {
+		defer recentRows.Close()
+		for recentRows.Next() {
+			var req entity.KeyRecentRequest
+			var isStreamInt int
+			if err := recentRows.Scan(
+				&req.ID, &req.Path, &req.Method, &req.Model, &isStreamInt,
+				&req.TotalTokens, &req.StatusCode, &req.DurationMs,
+				&req.ClientIP, &req.ErrorMessage, &req.CreatedAt,
+			); err == nil {
+				req.IsStream = isStreamInt == 1
+				recent = append(recent, req)
+			}
+		}
+	}
+	if recent == nil {
+		recent = []entity.KeyRecentRequest{}
+	}
+
+	return summary, hourly, topModels, recent, nil
 }
 
 // Request logs
