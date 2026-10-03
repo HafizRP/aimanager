@@ -528,6 +528,18 @@ type CreateKeyInput struct {
 	ExpiresAt       *time.Time
 }
 
+// UpdateKeyInput is the parsed payload for updating an existing API key.
+type UpdateKeyInput struct {
+	ID              string
+	Name            string
+	AllowedModels   string
+	AllowedIPs     string
+	RateLimitRPM    int
+	MaxTokensLimit  int
+	DailyTokenQuota int
+	ExpiresAt       *time.Time
+}
+
 // CreateKey creates an API key and syncs it to 9router Core.
 func (s *KeyService) CreateKey(ctx context.Context, in CreateKeyInput) (*entity.APIKey, error) {
 	finalKey := strings.TrimSpace(in.CustomKey)
@@ -594,6 +606,63 @@ func (s *KeyService) CreateKey(ctx context.Context, in CreateKeyInput) (*entity.
 		}
 		_ = s.sync.SyncKey(key, uName)
 	}
+	return key, nil
+}
+
+// UpdateKey updates an API key's configuration and syncs changes to 9router Core.
+func (s *KeyService) UpdateKey(ctx context.Context, in UpdateKeyInput) (*entity.APIKey, error) {
+	key, err := s.store.GetAPIKeyByID(ctx, in.ID)
+	if err != nil {
+		return nil, err
+	}
+	if key == nil {
+		return nil, ErrNotFound
+	}
+
+	name := strings.TrimSpace(in.Name)
+	if name == "" {
+		name = key.Name
+	}
+	if len(name) > 64 {
+		name = name[:64]
+	}
+
+	rateLimitRPM := in.RateLimitRPM
+	if rateLimitRPM < 0 {
+		rateLimitRPM = 0
+	}
+
+	maxTokensLimit := in.MaxTokensLimit
+	if maxTokensLimit < 0 {
+		maxTokensLimit = 0
+	}
+
+	dailyQuota := in.DailyTokenQuota
+	if dailyQuota < 0 {
+		dailyQuota = 0
+	}
+
+	key.Name = name
+	key.AllowedModels = normalizeAllowedModels(in.AllowedModels)
+	key.AllowedIPs = strings.TrimSpace(in.AllowedIPs)
+	key.RateLimitRPM = rateLimitRPM
+	key.MaxTokensLimit = maxTokensLimit
+	key.DailyTokenQuota = dailyQuota
+	key.ExpiresAt = in.ExpiresAt
+
+	if err := s.store.UpdateAPIKey(ctx, key); err != nil {
+		return nil, err
+	}
+
+	if s.sync != nil {
+		u, _ := s.store.GetUserByID(ctx, key.UserID)
+		uName := ""
+		if u != nil {
+			uName = u.Name
+		}
+		_ = s.sync.SyncKey(key, uName)
+	}
+
 	return key, nil
 }
 
