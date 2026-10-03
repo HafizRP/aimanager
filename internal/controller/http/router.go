@@ -315,6 +315,7 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 			// 9router Core: Pricing display
 			adminOnly.Get("/pricing", h.PricingPage)
 			adminOnly.Get("/api/pricing", h.APIPricing)
+			adminOnly.Post("/api/pricing/estimate", h.APIPricingEstimate)
 
 			// 9router Core: system (version, machine keys)
 			adminOnly.Get("/api/version", h.APICoreVersion)
