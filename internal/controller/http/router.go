@@ -174,6 +174,8 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 		// Keys (Scoped: Admin can manage all, Standard users manage their own)
 		authRouter.Get("/keys", h.KeysPage)
 		authRouter.Post("/keys", h.CreateKey)
+		authRouter.Post("/keys/bulk", h.BulkKeysAction)
+		authRouter.Post("/api/keys/bulk", h.BulkKeysAction)
 		authRouter.Get("/api/keys/export", h.ExportKeys)
 		authRouter.Post("/keys/{id}/clone", h.CloneKey)
 		authRouter.Post("/api/keys/{id}/clone", h.CloneKey)

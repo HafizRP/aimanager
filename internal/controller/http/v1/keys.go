@@ -681,3 +681,168 @@ func (h *Handler) APIKeyStats(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
 }
+
+// BulkKeysRequest represents the request payload for bulk API key operations.
+type BulkKeysRequest struct {
+	Action      string   `json:"action"` // "activate", "revoke", "delete", "reset_usage"
+	IDs         []string `json:"ids"`
+	RedirectURL string   `json:"redirect"`
+}
+
+// BulkKeysAction handles batch activation, revocation, deletion, and usage reset for multiple API keys.
+func (h *Handler) BulkKeysAction(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	currentUser := GetUserFromContext(ctx)
+	if currentUser == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	isJSONReq := strings.Contains(r.Header.Get("Accept"), "application/json") ||
+		strings.HasPrefix(r.URL.Path, "/api/") ||
+		strings.Contains(r.Header.Get("Content-Type"), "application/json")
+
+	var req BulkKeysRequest
+
+	if strings.Contains(r.Header.Get("Content-Type"), "application/json") {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			if isJSONReq {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": "Invalid request JSON: " + err.Error()})
+				return
+			}
+			http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+	} else {
+		_ = r.ParseForm()
+		req.Action = r.FormValue("action")
+		req.RedirectURL = r.FormValue("redirect")
+
+		// IDs can be multiple "ids" form fields or a comma-separated string
+		rawIDs := r.Form["ids"]
+		if len(rawIDs) == 1 && strings.Contains(rawIDs[0], ",") {
+			req.IDs = strings.Split(rawIDs[0], ",")
+		} else {
+			req.IDs = rawIDs
+		}
+		if len(req.IDs) == 0 && r.FormValue("ids") != "" {
+			req.IDs = strings.Split(r.FormValue("ids"), ",")
+		}
+	}
+
+	redirectURL := safeRedirectURL(req.RedirectURL, "/keys")
+
+	// Filter and clean IDs
+	cleanIDs := make([]string, 0, len(req.IDs))
+	for _, id := range req.IDs {
+		trimmed := strings.TrimSpace(id)
+		if trimmed != "" {
+			cleanIDs = append(cleanIDs, trimmed)
+		}
+	}
+
+	if len(cleanIDs) == 0 {
+		if isJSONReq {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": "No API key IDs provided"})
+			return
+		}
+		http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape("No API key IDs provided"), http.StatusSeeOther)
+		return
+	}
+
+	action := strings.ToLower(strings.TrimSpace(req.Action))
+	if action == "" {
+		action = "activate"
+	}
+
+	var processedCount int
+	var skippedCount int
+	var errMessages []string
+
+	for _, id := range cleanIDs {
+		key, err := h.repo.GetAPIKeyByID(ctx, id)
+		if err != nil || key == nil {
+			skippedCount++
+			continue
+		}
+
+		// Security: Non-admin users can only modify their own keys
+		if !currentUser.IsAdmin() && key.UserID != currentUser.ID {
+			skippedCount++
+			continue
+		}
+
+		switch action {
+		case "activate":
+			if err := h.repo.ToggleAPIKeyStatus(ctx, id, true); err != nil {
+				errMessages = append(errMessages, fmt.Sprintf("Key %s: %v", id, err))
+				continue
+			}
+			if h.syncer != nil {
+				_ = h.syncer.ToggleKey(id, true)
+			}
+			processedCount++
+
+		case "revoke", "deactivate", "suspend":
+			if err := h.repo.ToggleAPIKeyStatus(ctx, id, false); err != nil {
+				errMessages = append(errMessages, fmt.Sprintf("Key %s: %v", id, err))
+				continue
+			}
+			if h.syncer != nil {
+				_ = h.syncer.ToggleKey(id, false)
+			}
+			processedCount++
+
+		case "delete":
+			if err := h.repo.DeleteAPIKey(ctx, id); err != nil {
+				errMessages = append(errMessages, fmt.Sprintf("Key %s: %v", id, err))
+				continue
+			}
+			if h.syncer != nil {
+				_ = h.syncer.DeleteKey(id)
+			}
+			processedCount++
+
+		case "reset_usage":
+			if err := h.repo.ResetKeyUsage(ctx, id); err != nil {
+				errMessages = append(errMessages, fmt.Sprintf("Key %s: %v", id, err))
+				continue
+			}
+			processedCount++
+
+		default:
+			if isJSONReq {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": "Unsupported bulk action: " + action})
+				return
+			}
+			http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape("Unsupported bulk action: "+action), http.StatusSeeOther)
+			return
+		}
+	}
+
+	msg := fmt.Sprintf("Successfully processed %d API key(s)", processedCount)
+	if skippedCount > 0 {
+		msg += fmt.Sprintf(" (%d skipped)", skippedCount)
+	}
+
+	if isJSONReq {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success":   true,
+			"action":    action,
+			"processed": processedCount,
+			"skipped":   skippedCount,
+			"errors":    errMessages,
+			"message":   msg,
+		})
+		return
+	}
+
+	http.Redirect(w, r, redirectURL+"?msg="+url.QueryEscape(msg), http.StatusSeeOther)
+}
