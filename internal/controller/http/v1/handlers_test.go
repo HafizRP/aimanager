@@ -1982,3 +1982,102 @@ func TestCloneKey(t *testing.T) {
 		t.Errorf("expected redirect with Permission denied, got: %s", rrMal.Header().Get("Location"))
 	}
 }
+
+func TestExportUsers(t *testing.T) {
+	tempDir := t.TempDir()
+	db, err := database.InitDB(filepath.Join(tempDir, "test_export_users.db"))
+	if err != nil {
+		t.Fatalf("failed to init db: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+	h := &Handler{repo: repo}
+	ctx := context.Background()
+
+	adminUser := &entity.User{
+		ID:         "u-admin-1",
+		Username:   "admin",
+		Name:       "Admin User",
+		Role:       "admin",
+		TokenQuota: 0,
+		TokensUsed: 5000,
+		IsActive:   true,
+	}
+	normalUser := &entity.User{
+		ID:         "u-client-1",
+		Username:   "alice",
+		Name:       "Alice Client",
+		Role:       "user",
+		TokenQuota: 1000000,
+		TokensUsed: 950000,
+		IsActive:   true,
+	}
+	suspendedUser := &entity.User{
+		ID:         "u-client-2",
+		Username:   "bob",
+		Name:       "Bob Suspended",
+		Role:       "user",
+		TokenQuota: 500000,
+		TokensUsed: 500000,
+		IsActive:   false,
+	}
+
+	_ = repo.CreateUser(ctx, adminUser)
+	_ = repo.CreateUser(ctx, normalUser)
+	_ = repo.CreateUser(ctx, suspendedUser)
+
+	// 1. Forbidden for standard user
+	reqUser := httptest.NewRequest(http.MethodGet, "/api/users/export?format=csv", nil)
+	reqUser = reqUser.WithContext(context.WithValue(ctx, userContextKey, normalUser))
+	rrUser := httptest.NewRecorder()
+	h.ExportUsers(rrUser, reqUser)
+	if rrUser.Code != http.StatusForbidden {
+		t.Errorf("expected 403 Forbidden for normal user, got %d", rrUser.Code)
+	}
+
+	// 2. Export All as CSV
+	reqCSV := httptest.NewRequest(http.MethodGet, "/api/users/export?format=csv", nil)
+	reqCSV = reqCSV.WithContext(context.WithValue(ctx, userContextKey, adminUser))
+	rrCSV := httptest.NewRecorder()
+	h.ExportUsers(rrCSV, reqCSV)
+	if rrCSV.Code != http.StatusOK {
+		t.Fatalf("ExportUsers CSV returned %d", rrCSV.Code)
+	}
+	csvBody := rrCSV.Body.String()
+	if !strings.Contains(csvBody, "Username") || !strings.Contains(csvBody, "alice") || !strings.Contains(csvBody, "bob") || !strings.Contains(csvBody, "admin") {
+		t.Errorf("unexpected CSV content: %s", csvBody)
+	}
+
+	// 3. Export JSON with filter (role=user & status=active)
+	reqJSON := httptest.NewRequest(http.MethodGet, "/api/users/export?format=json&role=user&status=active", nil)
+	reqJSON = reqJSON.WithContext(context.WithValue(ctx, userContextKey, adminUser))
+	rrJSON := httptest.NewRecorder()
+	h.ExportUsers(rrJSON, reqJSON)
+	if rrJSON.Code != http.StatusOK {
+		t.Fatalf("ExportUsers JSON returned %d", rrJSON.Code)
+	}
+	var exported []entity.User
+	if err := json.NewDecoder(rrJSON.Body).Decode(&exported); err != nil {
+		t.Fatalf("failed to decode exported JSON: %v", err)
+	}
+	if len(exported) != 1 || exported[0].Username != "alice" {
+		t.Errorf("expected only alice in filtered JSON export, got %+v", exported)
+	}
+
+	// 4. Export JSON with near_limit quota filter
+	reqNearLimit := httptest.NewRequest(http.MethodGet, "/api/users/export?format=json&quota=near_limit", nil)
+	reqNearLimit = reqNearLimit.WithContext(context.WithValue(ctx, userContextKey, adminUser))
+	rrNearLimit := httptest.NewRecorder()
+	h.ExportUsers(rrNearLimit, reqNearLimit)
+	if rrNearLimit.Code != http.StatusOK {
+		t.Fatalf("ExportUsers near_limit returned %d", rrNearLimit.Code)
+	}
+	var exportedNear []entity.User
+	if err := json.NewDecoder(rrNearLimit.Body).Decode(&exportedNear); err != nil {
+		t.Fatalf("failed to decode near_limit JSON: %v", err)
+	}
+	if len(exportedNear) != 1 || exportedNear[0].Username != "alice" {
+		t.Errorf("expected alice (95%% used) in near_limit export, got %+v", exportedNear)
+	}
+}
