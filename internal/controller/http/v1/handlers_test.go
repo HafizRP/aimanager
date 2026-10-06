@@ -1983,6 +1983,194 @@ func TestCloneKey(t *testing.T) {
 	}
 }
 
+func TestBulkKeysAction(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test_bulk_keys.db")
+	db, err := database.InitDB(dbPath)
+	if err != nil {
+		t.Fatalf("InitDB failed: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+	cfg := &config.Config{
+		SessionSecret: "test-secret-12345678901234567890",
+	}
+
+	h, err := NewHandler(cfg, repo, nil, nil)
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+
+	ctx := context.Background()
+	admin := &entity.User{
+		ID:       "u-admin-bulk",
+		Username: "admin",
+		Name:     "Admin User",
+		Role:     "admin",
+		IsActive: true,
+	}
+	userAlice := &entity.User{
+		ID:       "u-alice-bulk",
+		Username: "alice",
+		Name:     "Alice",
+		Role:     "user",
+		IsActive: true,
+	}
+	userBob := &entity.User{
+		ID:       "u-bob-bulk",
+		Username: "bob",
+		Name:     "Bob",
+		Role:     "user",
+		IsActive: true,
+	}
+	_ = repo.CreateUser(ctx, admin)
+	_ = repo.CreateUser(ctx, userAlice)
+	_ = repo.CreateUser(ctx, userBob)
+
+	key1 := &entity.APIKey{
+		ID:         "key-alice-1",
+		UserID:     userAlice.ID,
+		Key:        "sk-bulk-alice-1-abcdef1234567890",
+		Name:       "Alice Key 1",
+		IsActive:   true,
+		TokenUsage: 5000,
+	}
+	key2 := &entity.APIKey{
+		ID:         "key-alice-2",
+		UserID:     userAlice.ID,
+		Key:        "sk-bulk-alice-2-abcdef1234567890",
+		Name:       "Alice Key 2",
+		IsActive:   true,
+		TokenUsage: 12000,
+	}
+	key3 := &entity.APIKey{
+		ID:         "key-bob-1",
+		UserID:     userBob.ID,
+		Key:        "sk-bulk-bob-1-abcdef1234567890",
+		Name:       "Bob Key 1",
+		IsActive:   true,
+		TokenUsage: 2500,
+	}
+	_ = repo.CreateAPIKey(ctx, key1)
+	_ = repo.CreateAPIKey(ctx, key2)
+	_ = repo.CreateAPIKey(ctx, key3)
+	_ = repo.UpdateKeyTokenUsage(ctx, key1.ID, 5000)
+	_ = repo.UpdateKeyTokenUsage(ctx, key2.ID, 12000)
+	_ = repo.UpdateKeyTokenUsage(ctx, key3.ID, 2500)
+
+	// 1. JSON Bulk Revoke Alice's keys as Alice
+	revokeBody := `{"action":"revoke","ids":["key-alice-1","key-alice-2"]}`
+	req := httptest.NewRequest(http.MethodPost, "/api/keys/bulk", strings.NewReader(revokeBody))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(context.WithValue(req.Context(), userContextKey, userAlice))
+	rr := httptest.NewRecorder()
+
+	h.BulkKeysAction(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for bulk revoke, got %d (body: %s)", rr.Code, rr.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode json response failed: %v", err)
+	}
+	if resp["processed"] != float64(2) {
+		t.Errorf("expected 2 keys processed, got %v", resp["processed"])
+	}
+
+	// Verify keys are now inactive
+	k1, _ := repo.GetAPIKeyByID(ctx, key1.ID)
+	k2, _ := repo.GetAPIKeyByID(ctx, key2.ID)
+	if k1.IsActive || k2.IsActive {
+		t.Errorf("expected keys to be inactive after bulk revoke")
+	}
+
+	// 2. Non-admin trying to bulk revoke Bob's key should skip it
+	attackBody := `{"action":"revoke","ids":["key-bob-1"]}`
+	reqAttack := httptest.NewRequest(http.MethodPost, "/api/keys/bulk", strings.NewReader(attackBody))
+	reqAttack.Header.Set("Content-Type", "application/json")
+	reqAttack = reqAttack.WithContext(context.WithValue(reqAttack.Context(), userContextKey, userAlice))
+	rrAttack := httptest.NewRecorder()
+
+	h.BulkKeysAction(rrAttack, reqAttack)
+	if rrAttack.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", rrAttack.Code)
+	}
+	var attackResp map[string]interface{}
+	_ = json.Unmarshal(rrAttack.Body.Bytes(), &attackResp)
+	if attackResp["skipped"] != float64(1) || attackResp["processed"] != float64(0) {
+		t.Errorf("expected 1 skipped key, got %v", attackResp)
+	}
+
+	// 3. Admin bulk activate all keys
+	activateBody := `{"action":"activate","ids":["key-alice-1","key-alice-2"]}`
+	reqAdmin := httptest.NewRequest(http.MethodPost, "/api/keys/bulk", strings.NewReader(activateBody))
+	reqAdmin.Header.Set("Content-Type", "application/json")
+	reqAdmin = reqAdmin.WithContext(context.WithValue(reqAdmin.Context(), userContextKey, admin))
+	rrAdmin := httptest.NewRecorder()
+
+	h.BulkKeysAction(rrAdmin, reqAdmin)
+	if rrAdmin.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for admin bulk activate, got %d", rrAdmin.Code)
+	}
+	k1, _ = repo.GetAPIKeyByID(ctx, key1.ID)
+	if !k1.IsActive {
+		t.Errorf("expected key1 to be reactivated")
+	}
+
+	// 4. Bulk reset_usage
+	resetBody := `{"action":"reset_usage","ids":["key-alice-1","key-alice-2"]}`
+	reqReset := httptest.NewRequest(http.MethodPost, "/api/keys/bulk", strings.NewReader(resetBody))
+	reqReset.Header.Set("Content-Type", "application/json")
+	reqReset = reqReset.WithContext(context.WithValue(reqReset.Context(), userContextKey, userAlice))
+	rrReset := httptest.NewRecorder()
+
+	h.BulkKeysAction(rrReset, reqReset)
+	if rrReset.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for bulk reset_usage, got %d", rrReset.Code)
+	}
+	usage1, _ := repo.GetAPIKeyTokenUsage(ctx, key1.ID)
+	if usage1 != 0 {
+		t.Errorf("expected usage1 to be 0, got %d", usage1)
+	}
+
+	// 5. HTML Form bulk delete
+	form := url.Values{
+		"action":   {"delete"},
+		"ids":      {"key-alice-1,key-alice-2"},
+		"redirect": {"/keys"},
+	}
+	reqForm := httptest.NewRequest(http.MethodPost, "/keys/bulk", strings.NewReader(form.Encode()))
+	reqForm.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	reqForm = reqForm.WithContext(context.WithValue(reqForm.Context(), userContextKey, userAlice))
+	rrForm := httptest.NewRecorder()
+
+	h.BulkKeysAction(rrForm, reqForm)
+	if rrForm.Code != http.StatusSeeOther {
+		t.Fatalf("expected 303 SeeOther, got %d", rrForm.Code)
+	}
+	if !strings.Contains(rrForm.Header().Get("Location"), "Successfully+processed+2") {
+		t.Errorf("unexpected redirect location: %s", rrForm.Header().Get("Location"))
+	}
+
+	// Verify deleted
+	k1Deleted, _ := repo.GetAPIKeyByID(ctx, key1.ID)
+	if k1Deleted != nil {
+		t.Errorf("expected key1 to be deleted from repository")
+	}
+
+	// 6. Empty IDs error validation
+	reqEmpty := httptest.NewRequest(http.MethodPost, "/api/keys/bulk", strings.NewReader(`{"action":"activate","ids":[]}`))
+	reqEmpty.Header.Set("Content-Type", "application/json")
+	reqEmpty = reqEmpty.WithContext(context.WithValue(reqEmpty.Context(), userContextKey, admin))
+	rrEmpty := httptest.NewRecorder()
+
+	h.BulkKeysAction(rrEmpty, reqEmpty)
+	if rrEmpty.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 Bad Request for empty IDs, got %d", rrEmpty.Code)
+	}
+}
+
 func TestExportUsers(t *testing.T) {
 	tempDir := t.TempDir()
 	db, err := database.InitDB(filepath.Join(tempDir, "test_export_users.db"))
