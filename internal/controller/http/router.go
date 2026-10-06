@@ -195,6 +195,7 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 		authRouter.Get("/api/login-audits", h.APILoginAudits)
 		authRouter.Get("/api/login-audits/export", h.ExportLoginAudits)
 		authRouter.Get("/models", h.ModelsPage)
+		authRouter.Get("/api/models/export", h.ExportModels)
 		authRouter.Get("/api/models/alias", h.APIModelAliasesGet)
 		authRouter.Get("/settings", h.SettingsPage)
 		authRouter.Post("/settings/password", h.UpdatePasswordPost)

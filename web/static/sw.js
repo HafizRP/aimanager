@@ -1,8 +1,8 @@
 /* AI Manager service worker: offline shell for static assets, network-first for pages/API. */
-const CACHE = 'aimanager-static-v9';
+const CACHE = 'aimanager-static-v10';
 const CORE = [
   '/',
-  '/static/css/custom.css?v=23',
+  '/static/css/custom.css?v=24',
   '/manifest.webmanifest',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',

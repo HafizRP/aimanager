@@ -217,6 +217,9 @@ func NewHandler(cfg *config.Config, repo repository.Repository, sync *syncer.Syn
 			}
 			return na - nb
 		},
+		"hasPrefix": func(s, prefix string) bool {
+			return strings.HasPrefix(s, prefix)
+		},
 		"formatFloat1": func(v float64) string {
 			return fmt.Sprintf("%.1f", v)
 		},
@@ -677,6 +680,10 @@ func (h *Handler) refreshUpstreamModels(ctx context.Context) ([]UpstreamModelIte
 			h.modelsMu.Unlock()
 			return items, nil
 		}
+	}
+
+	if h.cfg == nil {
+		return nil, fmt.Errorf("config is nil")
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, h.cfg.GetUpstreamURL()+"/v1/models", nil)

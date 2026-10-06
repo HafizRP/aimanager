@@ -6,12 +6,17 @@
     <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
       <i class="bi bi-cpu text-primary"></i> Upstream Model Catalog
     </h4>
-    <p class="text-dim small mb-0">Live models & remaining quota allowances synchronized from upstream 9router (<code>{{ if .UpstreamURL }}{{ .UpstreamURL }}{{ else }}http://127.0.0.1:20128{{ end }}</code>).</p>
+    <p class="text-dim small mb-0">Live models &amp; remaining quota allowances synchronized from upstream 9router (<code>{{ if .UpstreamURL }}{{ .UpstreamURL }}{{ else }}http://127.0.0.1:20128{{ end }}</code>).</p>
   </div>
-  <div class="d-flex align-items-center gap-2">
-    <div class="status-pill-live">
-      <span class="pulse-dot"></span>
-      <span>{{ len .Models }} Models Online</span>
+  <div class="d-flex flex-wrap align-items-center gap-2">
+    <div class="dropdown">
+      <button class="btn-modern-ghost py-1 px-3 dropdown-toggle d-inline-flex align-items-center gap-1.5 text-light" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Export model catalog data">
+        <i class="bi bi-download text-primary"></i> Export
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end dropdown-menu-dark">
+        <li><a class="dropdown-item d-flex align-items-center gap-2" href="/api/models/export?format=csv"><i class="bi bi-filetype-csv text-success"></i> Export CSV</a></li>
+        <li><a class="dropdown-item d-flex align-items-center gap-2" href="/api/models/export?format=json"><i class="bi bi-filetype-json text-warning"></i> Export JSON</a></li>
+      </ul>
     </div>
     <a href="/models?refresh=true" class="btn-modern-ghost text-decoration-none d-inline-flex align-items-center gap-2" title="Force refresh quotas and model list from upstream">
       <i class="bi bi-arrow-clockwise"></i> Refresh Quotas
@@ -19,11 +24,84 @@
   </div>
 </div>
 
+<!-- Quick Metric Summary Cards -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card-modern p-3 h-100">
+      <div class="d-flex align-items-center justify-content-between mb-1">
+        <span class="text-dim small font-monospace">Total Models</span>
+        <i class="bi bi-cpu text-primary fs-5"></i>
+      </div>
+      <div class="fs-4 fw-bold text-light" id="kpiTotalModels">{{ len .Models }}</div>
+      <div class="text-dim small mt-1" style="font-size: 0.72rem;">Available endpoints</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card-modern p-3 h-100">
+      <div class="d-flex align-items-center justify-content-between mb-1">
+        <span class="text-dim small font-monospace">Ready / 100%</span>
+        <i class="bi bi-check-circle-fill text-emerald fs-5"></i>
+      </div>
+      <div class="fs-4 fw-bold text-emerald" id="kpiReadyModels">0</div>
+      <div class="text-dim small mt-1" style="font-size: 0.72rem;">Full quota capacity</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card-modern p-3 h-100">
+      <div class="d-flex align-items-center justify-content-between mb-1">
+        <span class="text-dim small font-monospace">Partial / Limited</span>
+        <i class="bi bi-exclamation-triangle-fill text-amber fs-5"></i>
+      </div>
+      <div class="fs-4 fw-bold text-warning" id="kpiPartialModels">0</div>
+      <div class="text-dim small mt-1" style="font-size: 0.72rem;">Accounts partially limited</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card-modern p-3 h-100">
+      <div class="d-flex align-items-center justify-content-between mb-1">
+        <span class="text-dim small font-monospace">Standard / Passthrough</span>
+        <i class="bi bi-infinity text-cyan fs-5"></i>
+      </div>
+      <div class="fs-4 fw-bold text-cyan" id="kpiUncappedModels">0</div>
+      <div class="text-dim small mt-1" style="font-size: 0.72rem;">Custom / standard nodes</div>
+    </div>
+  </div>
+</div>
+
 <div class="card-modern mb-4">
-  <div class="p-3 border-bottom border-secondary border-opacity-10">
-    <div class="input-group">
+  <div class="p-3 border-bottom border-secondary border-opacity-10 d-flex flex-column flex-lg-row align-items-stretch align-items-lg-center justify-content-between gap-3">
+    <!-- Search Bar -->
+    <div class="input-group" style="max-width: 460px;">
       <span class="input-group-text bg-transparent border-0 text-muted"><i class="bi bi-search"></i></span>
-      <input type="text" id="modelFilterInput" class="form-control form-control-modern border-0" placeholder="Search models by name or provider (e.g. gemini, claude, deepseek, minimax)...">
+      <input type="text" id="modelFilterInput" class="form-control form-control-modern border-0" placeholder="Search by model ID, provider, or status...">
+      <button class="btn btn-sm btn-link text-dim border-0 text-decoration-none d-none" id="clearSearchBtn" type="button" onclick="clearModelSearch()"><i class="bi bi-x-circle-fill"></i></button>
+    </div>
+
+    <!-- Filter Chips -->
+    <div class="d-flex flex-wrap align-items-center gap-1.5" id="providerChipsContainer">
+      <span class="text-dim small me-1 d-none d-xl-inline"><i class="bi bi-funnel"></i> Provider:</span>
+      <button type="button" class="btn-modern-ghost btn-sm py-1 px-2.5 active provider-chip" data-provider="all">All</button>
+      <button type="button" class="btn-modern-ghost btn-sm py-1 px-2.5 provider-chip" data-provider="ag">Google</button>
+      <button type="button" class="btn-modern-ghost btn-sm py-1 px-2.5 provider-chip" data-provider="kr">Kiro</button>
+      <button type="button" class="btn-modern-ghost btn-sm py-1 px-2.5 provider-chip" data-provider="oc">OpenCode</button>
+      <button type="button" class="btn-modern-ghost btn-sm py-1 px-2.5 provider-chip" data-provider="node">Nodes</button>
+      <button type="button" class="btn-modern-ghost btn-sm py-1 px-2.5 provider-chip" data-provider="uncapped">Standard</button>
+    </div>
+  </div>
+
+  <div class="px-3 py-2 bg-black bg-opacity-15 border-bottom border-secondary border-opacity-10 d-flex flex-wrap align-items-center justify-content-between text-dim small" style="font-size: 0.75rem;">
+    <div id="filterCountNotice">
+      Showing <span class="text-light fw-bold" id="visibleCount">{{ len .Models }}</span> of <span class="text-light fw-bold">{{ len .Models }}</span> models
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <span>Status Filter:</span>
+      <select id="statusFilterSelect" class="form-select form-select-sm form-select-modern py-0 ps-2 pe-4" style="font-size: 0.72rem; width: auto;">
+        <option value="all">All Statuses</option>
+        <option value="ready">Ready (100%)</option>
+        <option value="partial">Partial / Limited</option>
+        <option value="exhausted">Limit Reached</option>
+        <option value="uncapped">Standard / Uncapped</option>
+      </select>
     </div>
   </div>
 
@@ -34,15 +112,31 @@
           <th>Model Identifier</th>
           <th>Provider / Group</th>
           <th>Status</th>
-          <th>Remaining Quota & Reset</th>
+          <th>Remaining Quota &amp; Reset</th>
           <th>Whitelisted Access</th>
-          <th class="text-end">Quick Action</th>
+          <th class="text-end">Actions</th>
         </tr>
       </thead>
       <tbody>
         {{ if .Models }}
           {{ range .Models }}
-            <tr class="model-row">
+            {{ $providerKey := "uncapped" }}
+            {{ if .Quota.HasQuota }}
+              {{ $providerKey = .Quota.Provider }}
+            {{ else }}
+              {{ if or (hasPrefix .ID "ag/") (hasPrefix .ID "google/") }}{{ $providerKey = "ag" }}
+              {{ else if or (hasPrefix .ID "kr/") (hasPrefix .ID "kiro/") }}{{ $providerKey = "kr" }}
+              {{ else if or (hasPrefix .ID "oc/") (hasPrefix .ID "opencode/") }}{{ $providerKey = "oc" }}
+              {{ else if or (hasPrefix .ID "z.ai/") (hasPrefix .ID "openai-compatible") (hasPrefix .ID "anthropic-compatible") }}{{ $providerKey = "node" }}
+              {{ else }}{{ $providerKey = "uncapped" }}{{ end }}
+            {{ end }}
+
+            {{ $statusKey := "uncapped" }}
+            {{ if .Quota.HasQuota }}
+              {{ $statusKey = .Quota.Status }}
+            {{ end }}
+
+            <tr class="model-row" data-id="{{ .ID }}" data-provider="{{ $providerKey }}" data-status="{{ $statusKey }}" data-ownedby="{{ .OwnedBy }}">
               <td>
                 <span class="font-monospace text-light fw-medium model-id">{{ .ID }}</span>
               </td>
@@ -110,9 +204,14 @@
                 {{ end }}
               </td>
               <td class="text-end">
-                <button type="button" class="btn-modern-ghost btn-sm py-1 px-2 copy-btn" data-copy="{{ .ID }}" title="Copy model ID">
-                  <i class="bi bi-clipboard"></i> Copy ID
-                </button>
+                <div class="d-flex justify-content-end align-items-center gap-1">
+                  <a href="/chat?model={{ .ID }}" class="btn-modern-ghost btn-sm py-1 px-2 text-primary" title="Test model in Playground">
+                    <i class="bi bi-play-circle"></i> <span class="d-none d-sm-inline">Test</span>
+                  </a>
+                  <button type="button" class="btn-modern-ghost btn-sm py-1 px-2 copy-btn" data-copy="{{ .ID }}" title="Copy model ID">
+                    <i class="bi bi-clipboard"></i> <span class="d-none d-sm-inline">Copy</span>
+                  </button>
+                </div>
               </td>
             </tr>
           {{ end }}
@@ -134,7 +233,7 @@
   <div class="p-3 border-bottom border-secondary border-opacity-10 d-flex flex-wrap align-items-center justify-content-between gap-3">
     <div>
       <h6 class="fw-bold text-light mb-0 d-flex align-items-center gap-2">
-        <i class="bi bi-shuffle text-indigo"></i> Model Aliases & Route Rewriting
+        <i class="bi bi-shuffle text-indigo"></i> Model Aliases &amp; Route Rewriting
       </h6>
       <span class="text-dim small" style="font-size: 0.72rem;">Map standard client model names (e.g. <code>gpt-4o</code>, <code>claude-3-5-sonnet</code>) to specific 9router models or combos.</span>
     </div>
@@ -150,7 +249,7 @@
           <th>Requested Model (Alias)</th>
           <th><span class="visually-hidden">Status</span></th>
           <th>Upstream Target Model / Combo</th>
-          <th class="text-end">Action</th>
+          <th class="text-end">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -167,9 +266,11 @@
                 <span class="font-monospace text-light fw-medium">{{ $target }}</span>
               </td>
               <td class="text-end">
-                <button type="button" class="btn-modern-ghost btn-sm text-danger border-0 p-1" onclick="deleteAlias('{{ $alias }}')" title="Delete Alias">
-                  <i class="bi bi-trash"></i>
-                </button>
+                <div class="d-flex justify-content-end align-items-center gap-1">
+                  <button type="button" class="btn-modern-ghost btn-sm text-danger border-0 p-1" onclick="deleteAlias('{{ $alias }}')" title="Delete Alias">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </div>
               </td>
             </tr>
           {{ end }}
@@ -225,11 +326,116 @@
 
 {{ define "scripts" }}
 <script>
-  document.getElementById("modelFilterInput")?.addEventListener("input", function() {
-    const q = this.value.toLowerCase();
-    document.querySelectorAll(".model-row").forEach(row => {
-      const id = row.querySelector(".model-id").textContent.toLowerCase();
-      row.style.display = id.includes(q) ? "" : "none";
+  let activeProviderFilter = "all";
+  let activeStatusFilter = "all";
+
+  // Calculate and populate KPI summary cards
+  function updateModelKPIs() {
+    const rows = document.querySelectorAll(".model-row");
+    let ready = 0, partial = 0, uncapped = 0;
+
+    rows.forEach(r => {
+      const status = r.dataset.status || "uncapped";
+      if (status === "exhausted") {
+        partial++;
+      } else if (status === "partial") {
+        partial++;
+      } else if (status === "ready") {
+        ready++;
+      } else {
+        uncapped++;
+      }
+    });
+
+    const readyEl = document.getElementById("kpiReadyModels");
+    if (readyEl) readyEl.textContent = ready;
+    const partialEl = document.getElementById("kpiPartialModels");
+    if (partialEl) partialEl.textContent = partial;
+    const uncappedEl = document.getElementById("kpiUncappedModels");
+    if (uncappedEl) uncappedEl.textContent = uncapped;
+  }
+
+  function filterModelRows() {
+    const q = (document.getElementById("modelFilterInput")?.value || "").toLowerCase().trim();
+    const clearBtn = document.getElementById("clearSearchBtn");
+    if (clearBtn) {
+      if (q) clearBtn.classList.remove("d-none");
+      else clearBtn.classList.add("d-none");
+    }
+
+    const rows = document.querySelectorAll(".model-row");
+    let visible = 0;
+
+    rows.forEach(row => {
+      const id = (row.dataset.id || "").toLowerCase();
+      const provider = (row.dataset.provider || "").toLowerCase();
+      const owned = (row.dataset.ownedby || "").toLowerCase();
+      const status = (row.dataset.status || "").toLowerCase();
+
+      // Search match
+      const textMatch = !q || id.includes(q) || provider.includes(q) || owned.includes(q) || status.includes(q);
+
+      // Provider filter
+      let providerMatch = true;
+      if (activeProviderFilter !== "all") {
+        if (activeProviderFilter === "node") {
+          providerMatch = provider === "node" || id.startsWith("z.ai/") || id.includes("compatible");
+        } else if (activeProviderFilter === "uncapped") {
+          providerMatch = provider === "uncapped" || status === "uncapped";
+        } else {
+          providerMatch = provider === activeProviderFilter || id.startsWith(activeProviderFilter + "/") || owned.includes(activeProviderFilter);
+        }
+      }
+
+      // Status filter
+      let statusMatch = true;
+      if (activeStatusFilter !== "all") {
+        if (activeStatusFilter === "ready") {
+          statusMatch = status === "ready";
+        } else if (activeStatusFilter === "partial") {
+          statusMatch = status === "partial";
+        } else if (activeStatusFilter === "exhausted") {
+          statusMatch = status === "exhausted";
+        } else if (activeStatusFilter === "uncapped") {
+          statusMatch = status === "uncapped";
+        }
+      }
+
+      const show = textMatch && providerMatch && statusMatch;
+      row.style.display = show ? "" : "none";
+      if (show) visible++;
+    });
+
+    const visibleCountEl = document.getElementById("visibleCount");
+    if (visibleCountEl) visibleCountEl.textContent = visible;
+  }
+
+  function clearModelSearch() {
+    const input = document.getElementById("modelFilterInput");
+    if (input) {
+      input.value = "";
+      input.focus();
+      filterModelRows();
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", function() {
+    updateModelKPIs();
+
+    document.getElementById("modelFilterInput")?.addEventListener("input", filterModelRows);
+
+    document.getElementById("statusFilterSelect")?.addEventListener("change", function() {
+      activeStatusFilter = this.value;
+      filterModelRows();
+    });
+
+    document.querySelectorAll(".provider-chip").forEach(chip => {
+      chip.addEventListener("click", function() {
+        document.querySelectorAll(".provider-chip").forEach(c => c.classList.remove("active"));
+        this.classList.add("active");
+        activeProviderFilter = this.dataset.provider || "all";
+        filterModelRows();
+      });
     });
   });
 
