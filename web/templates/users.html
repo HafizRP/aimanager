@@ -8,16 +8,72 @@
     </h4>
     <p class="text-dim small mb-0">Manage client accounts, credentials, role permissions, and token budgets.</p>
   </div>
-  <div>
+  <div class="d-flex align-items-center gap-2">
+    <div class="dropdown">
+      <button class="btn-modern-ghost text-decoration-none d-inline-flex align-items-center gap-2 dropdown-toggle" type="button" data-bs-toggle="dropdown">
+        <i class="bi bi-download"></i> Export
+      </button>
+      <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end" style="background: var(--bg-surface); border: 1px solid var(--border-subtle);">
+        <li><a class="dropdown-item small d-flex align-items-center gap-2" href="#" onclick="exportUsers('csv'); return false;"><i class="bi bi-filetype-csv text-emerald"></i> Export as CSV</a></li>
+        <li><a class="dropdown-item small d-flex align-items-center gap-2" href="#" onclick="exportUsers('json'); return false;"><i class="bi bi-filetype-json text-primary"></i> Export as JSON</a></li>
+      </ul>
+    </div>
     <button class="btn-modern-primary d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#createUserModal">
       <i class="bi bi-person-plus-fill"></i> Add User
     </button>
   </div>
 </div>
 
+<!-- Search & Filter Card -->
+<div class="card-modern p-3 mb-4">
+  <div class="row g-2 align-items-end" id="userFilterForm">
+    <div class="col-md-4">
+      <label class="form-label small text-muted mb-1">Search Users</label>
+      <div class="input-group input-group-sm">
+        <span class="input-group-text bg-transparent border-secondary border-opacity-25 text-muted"><i class="bi bi-search"></i></span>
+        <input type="text" id="userSearchInput" class="form-control form-control-modern form-control-sm" placeholder="Search by name, username, ID, or models...">
+      </div>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label small text-muted mb-1">Role</label>
+      <select id="userRoleFilter" class="form-select form-select-modern form-select-sm">
+        <option value="all">All Roles</option>
+        <option value="admin">Admin Only</option>
+        <option value="user">User Only</option>
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label small text-muted mb-1">Status</label>
+      <select id="userStatusFilter" class="form-select form-select-modern form-select-sm">
+        <option value="all">All Statuses</option>
+        <option value="active">Active Only</option>
+        <option value="suspended">Suspended Only</option>
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label small text-muted mb-1">Quota Type</label>
+      <select id="userQuotaFilter" class="form-select form-select-modern form-select-sm">
+        <option value="all">All Quotas</option>
+        <option value="unlimited">Unlimited</option>
+        <option value="limited">Limited Quota</option>
+        <option value="near_limit">Near Limit (&gt;80%)</option>
+        <option value="exhausted">Exhausted (100%)</option>
+      </select>
+    </div>
+    <div class="col-md-2 d-flex gap-2">
+      <button type="button" id="btnResetUserFilter" class="btn-modern-ghost btn-sm w-100 py-1" onclick="resetUserFilters()">
+        <i class="bi bi-x-circle"></i> Reset
+      </button>
+    </div>
+  </div>
+  <div class="d-flex justify-content-between align-items-center mt-2 pt-2 border-top border-secondary border-opacity-10 text-dim small">
+    <span id="userFilterCount">Showing {{ len .Users }} of {{ len .Users }} users</span>
+  </div>
+</div>
+
 <div class="card-modern mb-4">
   <div class="table-responsive">
-    <table class="table table-modern mb-0">
+    <table class="table table-modern mb-0" id="usersTable">
       <thead>
         <tr>
           <th>User Account</th>
@@ -30,10 +86,10 @@
           <th class="text-end">Actions</th>
         </tr>
       </thead>
-      <tbody>
+      <tbody id="usersTableBody">
         {{ if .Users }}
           {{ range .Users }}
-            <tr>
+            <tr data-user-id="{{ .ID }}" data-name="{{ .Name }}" data-username="{{ .Username }}" data-role="{{ .Role }}" data-status="{{ if .IsActive }}active{{ else }}suspended{{ end }}" data-quota="{{ .TokenQuota }}" data-used="{{ .TokensUsed }}" data-daily-quota="{{ .DailyTokenQuota }}" data-models="{{ .AllowedModels }}">
               <td>
                 <div class="d-flex align-items-center gap-2">
                   <div class="kpi-icon {{ if .IsAdmin }}kpi-icon-indigo{{ else }}kpi-icon-cyan{{ end }}" style="width: 36px; height: 36px; font-size: 1rem;">
@@ -110,6 +166,14 @@
                     <i class="bi bi-plus-circle"></i>
                   </button>
 
+                  <!-- Clone User Profile Button -->
+                  <button class="btn-modern-ghost py-1 px-2 text-primary btn-clone-user" 
+                          data-name="{{ .Name }}" data-role="{{ .Role }}" data-quota="{{ .TokenQuota }}" 
+                          data-daily-quota="{{ .DailyTokenQuota }}" data-models="{{ .AllowedModels }}" 
+                          title="Clone Permissions & Quota to New User">
+                    <i class="bi bi-copy"></i>
+                  </button>
+
                   <!-- Edit Button -->
                   <button class="btn-modern-ghost py-1 px-2 btn-edit-user" 
                           data-id="{{ .ID }}" data-name="{{ .Name }}" data-username="{{ .Username }}" data-role="{{ .Role }}"
@@ -156,6 +220,12 @@
             </td>
           </tr>
         {{ end }}
+        <tr id="noUsersMatchRow" style="display: none;">
+          <td colspan="8" class="text-center text-dim py-5">
+            <i class="bi bi-funnel fs-2 d-block mb-2 opacity-50"></i>
+            No users match the search and filter criteria.
+          </td>
+        </tr>
       </tbody>
     </table>
   </div>
@@ -176,11 +246,11 @@
           <div class="row g-3 mb-3">
             <div class="col-md-6">
               <label class="form-label small text-muted">Display Name</label>
-              <input type="text" name="name" class="form-control form-control-modern" placeholder="e.g. Client Alpha, John Doe" required>
+              <input type="text" name="name" id="createNameInput" class="form-control form-control-modern" placeholder="e.g. Client Alpha, John Doe" required>
             </div>
             <div class="col-md-6">
               <label class="form-label small text-muted">Login Username</label>
-              <input type="text" name="username" class="form-control form-control-modern font-monospace" placeholder="e.g. clientalpha" required>
+              <input type="text" name="username" id="createUsernameInput" class="form-control form-control-modern font-monospace" placeholder="e.g. clientalpha" required>
             </div>
           </div>
 
@@ -194,7 +264,7 @@
             </div>
             <div class="col-md-6">
               <label class="form-label small text-muted">Account Role</label>
-              <select name="role" class="form-select form-select-modern">
+              <select name="role" id="createRoleSelect" class="form-select form-select-modern">
                 <option value="user" selected>Standard User (Client Portal)</option>
                 <option value="admin">Administrator (Full Access)</option>
               </select>
@@ -546,6 +616,128 @@
       document.getElementById('keyModalUserId').value = userId;
       document.getElementById('keyModalUserName').value = userName;
     }
+  });
+
+  // Export Users
+  function exportUsers(format) {
+    const params = new URLSearchParams();
+    params.set('format', format);
+    const role = document.getElementById('userRoleFilter')?.value;
+    if (role && role !== 'all') params.set('role', role);
+    const status = document.getElementById('userStatusFilter')?.value;
+    if (status && status !== 'all') params.set('status', status);
+    const quota = document.getElementById('userQuotaFilter')?.value;
+    if (quota && quota !== 'all') params.set('quota', quota);
+    window.location.href = '/api/users/export?' + params.toString();
+  }
+
+  // Filter Users Table
+  function filterUsers() {
+    const query = (document.getElementById('userSearchInput')?.value || '').toLowerCase().trim();
+    const roleFilter = document.getElementById('userRoleFilter')?.value || 'all';
+    const statusFilter = document.getElementById('userStatusFilter')?.value || 'all';
+    const quotaFilter = document.getElementById('userQuotaFilter')?.value || 'all';
+
+    const rows = document.querySelectorAll('#usersTableBody tr[data-user-id]');
+    let visibleCount = 0;
+
+    rows.forEach(row => {
+      const name = (row.dataset.name || '').toLowerCase();
+      const username = (row.dataset.username || '').toLowerCase();
+      const userId = (row.dataset.userId || '').toLowerCase();
+      const models = (row.dataset.models || '').toLowerCase();
+      const role = (row.dataset.role || 'user').toLowerCase();
+      const status = row.dataset.status || 'active';
+      const quota = parseInt(row.dataset.quota || '0', 10);
+      const used = parseInt(row.dataset.used || '0', 10);
+
+      let matchesSearch = !query || name.includes(query) || username.includes(query) || userId.includes(query) || models.includes(query);
+      let matchesRole = (roleFilter === 'all') || (role === roleFilter);
+      let matchesStatus = (statusFilter === 'all') || (status === statusFilter);
+
+      let matchesQuota = true;
+      if (quotaFilter === 'unlimited') {
+        matchesQuota = (quota === 0);
+      } else if (quotaFilter === 'limited') {
+        matchesQuota = (quota > 0);
+      } else if (quotaFilter === 'near_limit') {
+        matchesQuota = (quota > 0) && (used / quota >= 0.8) && (used < quota);
+      } else if (quotaFilter === 'exhausted') {
+        matchesQuota = (quota > 0) && (used >= quota);
+      }
+
+      if (matchesSearch && matchesRole && matchesStatus && matchesQuota) {
+        row.style.display = '';
+        visibleCount++;
+      } else {
+        row.style.display = 'none';
+      }
+    });
+
+    const countEl = document.getElementById('userFilterCount');
+    if (countEl) {
+      countEl.textContent = `Showing ${visibleCount} of ${rows.length} users`;
+    }
+
+    const noMatchRow = document.getElementById('noUsersMatchRow');
+    if (noMatchRow) {
+      noMatchRow.style.display = (visibleCount === 0 && rows.length > 0) ? '' : 'none';
+    }
+  }
+
+  function resetUserFilters() {
+    const search = document.getElementById('userSearchInput');
+    const role = document.getElementById('userRoleFilter');
+    const status = document.getElementById('userStatusFilter');
+    const quota = document.getElementById('userQuotaFilter');
+    if (search) search.value = '';
+    if (role) role.value = 'all';
+    if (status) status.value = 'all';
+    if (quota) quota.value = 'all';
+    filterUsers();
+  }
+
+  document.getElementById('userSearchInput')?.addEventListener('input', filterUsers);
+  document.getElementById('userRoleFilter')?.addEventListener('change', filterUsers);
+  document.getElementById('userStatusFilter')?.addEventListener('change', filterUsers);
+  document.getElementById('userQuotaFilter')?.addEventListener('change', filterUsers);
+
+  // Clone User Profile to Create Modal
+  const createModal = new bootstrap.Modal(document.getElementById('createUserModal'));
+  document.querySelectorAll('.btn-clone-user').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const name = this.getAttribute('data-name');
+      const role = this.getAttribute('data-role');
+      const quota = this.getAttribute('data-quota');
+      const modelsRaw = this.getAttribute('data-models');
+
+      document.getElementById('createNameInput').value = name ? (name + ' (Copy)') : '';
+      document.getElementById('createUsernameInput').value = '';
+      document.getElementById('createPasswordInput').value = randomStr(10);
+      document.getElementById('createRoleSelect').value = role || 'user';
+      document.getElementById('createQuotaInput').value = quota || '1000000';
+
+      const allowAllCheck = document.getElementById('createAllowAllCheck');
+      const container = document.getElementById('createModelsChecklistContainer');
+      const isWildcard = !modelsRaw || modelsRaw.includes('*');
+      allowAllCheck.checked = isWildcard;
+      container.style.display = isWildcard ? 'none' : 'block';
+
+      let parsedModels = [];
+      try { parsedModels = JSON.parse(modelsRaw); } catch(e) { parsedModels = (modelsRaw || '').split(','); }
+      document.querySelectorAll('.create-model-checkbox').forEach(cb => {
+        cb.checked = parsedModels.includes(cb.value);
+      });
+
+      createModal.show();
+      setTimeout(() => {
+        document.getElementById('createUsernameInput')?.focus();
+      }, 400);
+
+      if (window.showToast) {
+        window.showToast('Template user disalin! Silakan isi username baru ✨', '📋');
+      }
+    });
   });
 </script>
 {{ end }}

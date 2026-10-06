@@ -387,3 +387,99 @@ func (h *Handler) APIUserLoginAudits(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, audits)
 }
+
+// ExportUsers exports users as CSV or JSON file (admin only).
+func (h *Handler) ExportUsers(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	currentUser := GetUserFromContext(ctx)
+	if currentUser == nil || !currentUser.IsAdmin() {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	filterRole := strings.TrimSpace(r.URL.Query().Get("role"))
+	filterStatus := strings.TrimSpace(r.URL.Query().Get("status"))
+	filterQuota := strings.TrimSpace(r.URL.Query().Get("quota"))
+	format := strings.ToLower(r.URL.Query().Get("format"))
+	if format != "json" {
+		format = "csv"
+	}
+
+	users, err := h.repo.GetAllUsers(ctx)
+	if err != nil {
+		http.Error(w, "Failed to retrieve users", http.StatusInternalServerError)
+		return
+	}
+
+	var filtered []entity.User
+	for _, u := range users {
+		if filterRole != "" && filterRole != "all" && !strings.EqualFold(u.Role, filterRole) {
+			continue
+		}
+		if filterStatus == "active" && !u.IsActive {
+			continue
+		}
+		if filterStatus == "suspended" && u.IsActive {
+			continue
+		}
+		if filterQuota == "unlimited" && u.TokenQuota > 0 {
+			continue
+		}
+		if filterQuota == "limited" && u.TokenQuota == 0 {
+			continue
+		}
+		if filterQuota == "exhausted" && (u.TokenQuota == 0 || u.TokensUsed < u.TokenQuota) {
+			continue
+		}
+		if filterQuota == "near_limit" && (u.TokenQuota == 0 || u.QuotaPercent() < 80.0 || (u.TokenQuota > 0 && u.TokensUsed >= u.TokenQuota)) {
+			continue
+		}
+		filtered = append(filtered, u)
+	}
+
+	timestamp := time.Now().Format("20060102_150405")
+
+	if format == "json" {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=users_%s.json", timestamp))
+		_ = json.NewEncoder(w).Encode(filtered)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=users_%s.csv", timestamp))
+
+	writer := csv.NewWriter(w)
+	defer writer.Flush()
+
+	_ = writer.Write([]string{
+		"ID", "Username", "Name", "Role", "Token_Quota", "Tokens_Used", "Daily_Token_Quota",
+		"Rate_Limit_RPM", "Rate_Limit_TPM", "Key_Count", "Is_Active", "Allowed_Models",
+		"Created_At_WIB", "Last_Login_At_WIB",
+	})
+
+	for _, u := range filtered {
+		createdAtWIB := u.CreatedAt.Add(7 * time.Hour).Format("2006-01-02 15:04:05")
+		lastLoginWIB := "-"
+		if u.LastLoginAt != nil && !u.LastLoginAt.IsZero() {
+			lastLoginWIB = u.LastLoginAt.Add(7 * time.Hour).Format("2006-01-02 15:04:05")
+		}
+
+		_ = writer.Write([]string{
+			u.ID,
+			u.Username,
+			u.Name,
+			u.Role,
+			strconv.FormatInt(u.TokenQuota, 10),
+			strconv.FormatInt(u.TokensUsed, 10),
+			strconv.FormatInt(u.DailyTokenQuota, 10),
+			strconv.Itoa(u.RateLimitRPM),
+			strconv.FormatInt(u.RateLimitTPM, 10),
+			strconv.Itoa(u.KeyCount),
+			strconv.FormatBool(u.IsActive),
+			u.AllowedModels,
+			createdAtWIB,
+			lastLoginWIB,
+		})
+	}
+}
