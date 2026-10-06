@@ -71,11 +71,40 @@
   </div>
 </div>
 
+<!-- Bulk Actions Bar -->
+<div id="bulkActionsBar" class="card-modern p-3 mb-3 d-none align-items-center justify-content-between flex-wrap gap-2" style="background: rgba(39, 39, 42, 0.35); border-color: var(--primary);">
+  <div class="d-flex align-items-center gap-2">
+    <span class="badge-modern badge-indigo font-monospace" id="bulkSelectedCount">0 selected</span>
+    <span class="text-light small fw-medium">Batch Operations</span>
+  </div>
+  <div class="d-flex align-items-center gap-2 flex-wrap">
+    <button type="button" class="btn-modern-ghost btn-sm text-emerald d-inline-flex align-items-center gap-1.5" onclick="executeBulkKeyAction('activate')">
+      <i class="bi bi-play-circle"></i> Activate
+    </button>
+    <button type="button" class="btn-modern-ghost btn-sm text-warning d-inline-flex align-items-center gap-1.5" onclick="executeBulkKeyAction('revoke')">
+      <i class="bi bi-pause-circle"></i> Revoke
+    </button>
+    <button type="button" class="btn-modern-ghost btn-sm text-info d-inline-flex align-items-center gap-1.5" onclick="executeBulkKeyAction('reset_usage')">
+      <i class="bi bi-arrow-counterclockwise"></i> Reset Usage
+    </button>
+    <button type="button" class="btn-modern-ghost btn-sm text-danger d-inline-flex align-items-center gap-1.5" onclick="executeBulkKeyAction('delete')">
+      <i class="bi bi-trash"></i> Delete
+    </button>
+    <button type="button" class="btn-modern-ghost btn-sm text-dim d-inline-flex align-items-center gap-1.5" onclick="clearKeySelection()">
+      <i class="bi bi-x"></i> Deselect
+    </button>
+  </div>
+</div>
+
 <div class="card-modern mb-4">
   <div class="table-responsive">
     <table class="table table-modern mb-0" id="keysTable">
       <thead>
         <tr>
+          <th style="width: 38px;">
+            <span class="visually-hidden">Select</span>
+            <input type="checkbox" id="selectAllKeys" class="form-check-input" title="Select all keys">
+          </th>
           <th>User</th>
           <th>Name / Label</th>
           <th>API Key Token</th>
@@ -93,6 +122,9 @@
         {{ if .Keys }}
           {{ range .Keys }}
             <tr data-key-id="{{ .ID }}" data-name="{{ .Name }}" data-user="{{ .UserName }}" data-key="{{ .Key }}" data-ip="{{ .AllowedIPs }}" data-last-ip="{{ .LastUsedIP }}" data-status="{{ if not .IsActive }}revoked{{ else if .IsExpired }}expired{{ else }}active{{ end }}" data-scoped="{{ if and .AllowedModels (ne .AllowedModels "") (ne .AllowedModels "[]") }}true{{ else }}false{{ end }}" data-ipbound="{{ if and .AllowedIPs (ne .AllowedIPs "") }}true{{ else }}false{{ end }}" data-expires="{{ if .ExpiresAt }}{{ .ExpiresAt.Format "2006-01-02T15:04:05Z07:00" }}{{ end }}">
+              <td class="text-center">
+                <input type="checkbox" class="form-check-input key-row-check" value="{{ .ID }}" data-name="{{ .Name }}">
+              </td>
               <td>
                 <span class="fw-bold text-light">{{ .UserName }}</span>
               </td>
@@ -230,14 +262,14 @@
             </tr>
           {{ end }}
           <tr id="keysFilteredEmptyRow" style="display: none;">
-            <td colspan="11" class="text-center text-dim py-5">
+            <td colspan="12" class="text-center text-dim py-5">
               <i class="bi bi-search fs-2 d-block mb-2 opacity-50"></i>
               No API keys match your filter criteria.
             </td>
           </tr>
         {{ else }}
           <tr>
-            <td colspan="11" class="text-center text-dim py-5">
+            <td colspan="12" class="text-center text-dim py-5">
               <i class="bi bi-key fs-2 d-block mb-2 opacity-50"></i>
               No API keys created yet. Click <strong>Create API Key</strong> to generate one.
             </td>
@@ -635,6 +667,112 @@ function filterKeys() {
   const emptyRow = document.getElementById('keysFilteredEmptyRow');
   if (emptyRow) {
     emptyRow.style.display = (visibleCount === 0 && rows.length > 0) ? '' : 'none';
+  }
+  updateBulkBar();
+}
+
+// Bulk Key Actions & Selection
+const selectAllKeys = document.getElementById("selectAllKeys");
+const keyCheckboxes = document.querySelectorAll(".key-row-check");
+const bulkActionsBar = document.getElementById("bulkActionsBar");
+const bulkSelectedCount = document.getElementById("bulkSelectedCount");
+
+function getSelectedKeyIDs() {
+  return Array.from(document.querySelectorAll(".key-row-check:checked")).map(cb => cb.value);
+}
+
+function updateBulkBar() {
+  const selected = getSelectedKeyIDs();
+  if (bulkActionsBar) {
+    if (selected.length > 0) {
+      bulkActionsBar.classList.remove("d-none");
+      bulkActionsBar.classList.add("d-flex");
+      if (bulkSelectedCount) bulkSelectedCount.textContent = `${selected.length} selected`;
+    } else {
+      bulkActionsBar.classList.add("d-none");
+      bulkActionsBar.classList.remove("d-flex");
+    }
+  }
+  if (selectAllKeys) {
+    const visibleCheckboxes = Array.from(document.querySelectorAll("#keysTableBody tr:not([style*='display: none']) .key-row-check"));
+    if (visibleCheckboxes.length > 0) {
+      selectAllKeys.checked = visibleCheckboxes.every(cb => cb.checked);
+      selectAllKeys.indeterminate = visibleCheckboxes.some(cb => cb.checked) && !selectAllKeys.checked;
+    } else {
+      selectAllKeys.checked = false;
+      selectAllKeys.indeterminate = false;
+    }
+  }
+}
+
+if (selectAllKeys) {
+  selectAllKeys.addEventListener("change", function() {
+    const visibleCheckboxes = document.querySelectorAll("#keysTableBody tr:not([style*='display: none']) .key-row-check");
+    visibleCheckboxes.forEach(cb => { cb.checked = selectAllKeys.checked; });
+    updateBulkBar();
+  });
+}
+
+keyCheckboxes.forEach(cb => {
+  cb.addEventListener("change", updateBulkBar);
+});
+
+function clearKeySelection() {
+  keyCheckboxes.forEach(cb => { cb.checked = false; });
+  if (selectAllKeys) {
+    selectAllKeys.checked = false;
+    selectAllKeys.indeterminate = false;
+  }
+  updateBulkBar();
+}
+
+async function executeBulkKeyAction(action) {
+  const ids = getSelectedKeyIDs();
+  if (ids.length === 0) {
+    if (window.showToast) window.showToast("No keys selected", "⚠️");
+    return;
+  }
+
+  const actionLabels = {
+    activate: "activate",
+    revoke: "revoke",
+    reset_usage: "reset usage counter for",
+    delete: "permanently delete"
+  };
+
+  const label = actionLabels[action] || action;
+  if (action === "delete" || action === "reset_usage") {
+    if (!confirm(`Are you sure you want to ${label} ${ids.length} selected API key(s)?`)) {
+      return;
+    }
+  }
+
+  try {
+    const res = await fetch("/api/keys/bulk", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ action, ids })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(data.error || `HTTP ${res.status}`);
+    }
+
+    if (window.showToast) {
+      window.showToast(data.message || `Bulk ${action} succeeded ✨`, "🔑");
+    }
+    setTimeout(() => {
+      window.location.reload();
+    }, 600);
+  } catch (err) {
+    if (window.showToast) {
+      window.showToast("Bulk action failed: " + err.message, "❌");
+    } else {
+      alert("Bulk action failed: " + err.message);
+    }
   }
 }
 
