@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -2267,5 +2268,189 @@ func TestExportUsers(t *testing.T) {
 	}
 	if len(exportedNear) != 1 || exportedNear[0].Username != "alice" {
 		t.Errorf("expected alice (95%% used) in near_limit export, got %+v", exportedNear)
+	}
+}
+
+func TestExportTransactions(t *testing.T) {
+	tempDir := t.TempDir()
+	db, err := database.InitDB(filepath.Join(tempDir, "test_export_tx.db"))
+	if err != nil {
+		t.Fatalf("failed to init db: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+	h := &Handler{repo: repo}
+	ctx := context.Background()
+
+	adminUser := &entity.User{
+		ID:         "u-admin-tx",
+		Username:   "admin",
+		Name:       "Admin User",
+		Role:       "admin",
+		TokenQuota: 0,
+		IsActive:   true,
+	}
+	aliceUser := &entity.User{
+		ID:         "u-alice-tx",
+		Username:   "alice",
+		Name:       "Alice Client",
+		Role:       "user",
+		TokenQuota: 1000000,
+		IsActive:   true,
+	}
+	bobUser := &entity.User{
+		ID:         "u-bob-tx",
+		Username:   "bob",
+		Name:       "Bob Client",
+		Role:       "user",
+		TokenQuota: 2000000,
+		IsActive:   true,
+	}
+
+	_ = repo.CreateUser(ctx, adminUser)
+	_ = repo.CreateUser(ctx, aliceUser)
+	_ = repo.CreateUser(ctx, bobUser)
+
+	now := time.Now()
+	tx1 := &entity.Transaction{
+		ID:           "AIM-001",
+		UserID:       "u-alice-tx",
+		PackageID:    "pkg-1",
+		Tokens:       1000000,
+		AmountIDR:    50000,
+		Status:       "settlement",
+		PaymentType:  "qris",
+		MidtransTxID: "mt-001",
+		CreatedAt:    now.Add(-2 * time.Hour),
+		PaidAt:       &now,
+	}
+	tx2 := &entity.Transaction{
+		ID:          "AIM-002",
+		UserID:      "u-alice-tx",
+		PackageID:   "pkg-2",
+		Tokens:      500000,
+		AmountIDR:   25000,
+		Status:      "pending",
+		PaymentType: "gopay",
+		SnapToken:   "snap-002",
+		CreatedAt:   now.Add(-1 * time.Hour),
+	}
+	tx3 := &entity.Transaction{
+		ID:           "AIM-003",
+		UserID:       "u-bob-tx",
+		PackageID:    "pkg-3",
+		Tokens:       2000000,
+		AmountIDR:    100000,
+		Status:       "settlement",
+		PaymentType:  "bca_va",
+		MidtransTxID: "mt-003",
+		CreatedAt:    now.Add(-30 * time.Minute),
+		PaidAt:       &now,
+	}
+	tx4 := &entity.Transaction{
+		ID:          "AIM-004",
+		UserID:      "u-bob-tx",
+		PackageID:   "pkg-4",
+		Tokens:      100000,
+		AmountIDR:   10000,
+		Status:      "expire",
+		PaymentType: "qris",
+		CreatedAt:   now.Add(-10 * time.Minute),
+	}
+
+	_ = repo.CreateTransaction(ctx, tx1)
+	_ = repo.CreateTransaction(ctx, tx2)
+	_ = repo.CreateTransaction(ctx, tx3)
+	_ = repo.CreateTransaction(ctx, tx4)
+
+	// 1. Unauthorized for unauthenticated request
+	reqUnauth := httptest.NewRequest(http.MethodGet, "/api/billing/export", nil)
+	rrUnauth := httptest.NewRecorder()
+	h.ExportTransactions(rrUnauth, reqUnauth)
+	if rrUnauth.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for unauthenticated request, got %d", rrUnauth.Code)
+	}
+
+	// 2. Admin Export All as CSV
+	reqCSV := httptest.NewRequest(http.MethodGet, "/api/billing/export?format=csv", nil)
+	reqCSV = reqCSV.WithContext(context.WithValue(ctx, userContextKey, adminUser))
+	rrCSV := httptest.NewRecorder()
+	h.ExportTransactions(rrCSV, reqCSV)
+	if rrCSV.Code != http.StatusOK {
+		t.Fatalf("Admin ExportTransactions CSV returned %d", rrCSV.Code)
+	}
+	csvBody := rrCSV.Body.String()
+	if !strings.Contains(csvBody, "Order_ID") || !strings.Contains(csvBody, "AIM-001") || !strings.Contains(csvBody, "AIM-002") || !strings.Contains(csvBody, "AIM-003") || !strings.Contains(csvBody, "AIM-004") {
+		t.Errorf("unexpected CSV content: %s", csvBody)
+	}
+
+	// 3. Admin Export JSON with status=settled filter
+	reqJSONSettled := httptest.NewRequest(http.MethodGet, "/api/billing/export?format=json&status=settled", nil)
+	reqJSONSettled = reqJSONSettled.WithContext(context.WithValue(ctx, userContextKey, adminUser))
+	rrJSONSettled := httptest.NewRecorder()
+	h.ExportTransactions(rrJSONSettled, reqJSONSettled)
+	if rrJSONSettled.Code != http.StatusOK {
+		t.Fatalf("Admin ExportTransactions JSON settled returned %d", rrJSONSettled.Code)
+	}
+	var exportedSettled []entity.Transaction
+	if err := json.NewDecoder(rrJSONSettled.Body).Decode(&exportedSettled); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+	if len(exportedSettled) != 2 {
+		t.Errorf("expected 2 settled transactions, got %d", len(exportedSettled))
+	}
+
+	// 4. Admin Export JSON with user_id filter
+	reqJSONAlice := httptest.NewRequest(http.MethodGet, "/api/billing/export?format=json&user_id=u-alice-tx", nil)
+	reqJSONAlice = reqJSONAlice.WithContext(context.WithValue(ctx, userContextKey, adminUser))
+	rrJSONAlice := httptest.NewRecorder()
+	h.ExportTransactions(rrJSONAlice, reqJSONAlice)
+	if rrJSONAlice.Code != http.StatusOK {
+		t.Fatalf("Admin ExportTransactions JSON alice returned %d", rrJSONAlice.Code)
+	}
+	var exportedAlice []entity.Transaction
+	if err := json.NewDecoder(rrJSONAlice.Body).Decode(&exportedAlice); err != nil {
+		t.Fatalf("failed to decode JSON: %v", err)
+	}
+	if len(exportedAlice) != 2 {
+		t.Errorf("expected 2 transactions for alice, got %d", len(exportedAlice))
+	}
+
+	// 5. Standard user (Alice) export scoping
+	reqUser := httptest.NewRequest(http.MethodGet, "/api/billing/export?format=json", nil)
+	reqUser = reqUser.WithContext(context.WithValue(ctx, userContextKey, aliceUser))
+	rrUser := httptest.NewRecorder()
+	h.ExportTransactions(rrUser, reqUser)
+	if rrUser.Code != http.StatusOK {
+		t.Fatalf("User ExportTransactions JSON returned %d", rrUser.Code)
+	}
+	var userTxs []entity.Transaction
+	if err := json.NewDecoder(rrUser.Body).Decode(&userTxs); err != nil {
+		t.Fatalf("failed to decode user JSON: %v", err)
+	}
+	if len(userTxs) != 2 {
+		t.Errorf("expected 2 transactions for alice, got %d", len(userTxs))
+	}
+	for _, tx := range userTxs {
+		if tx.UserID != "u-alice-tx" {
+			t.Errorf("leaked other user transaction: %+v", tx)
+		}
+	}
+
+	// 6. Standard user (Alice) export with pending filter
+	reqUserPending := httptest.NewRequest(http.MethodGet, "/api/billing/export?format=json&status=pending", nil)
+	reqUserPending = reqUserPending.WithContext(context.WithValue(ctx, userContextKey, aliceUser))
+	rrUserPending := httptest.NewRecorder()
+	h.ExportTransactions(rrUserPending, reqUserPending)
+	if rrUserPending.Code != http.StatusOK {
+		t.Fatalf("User ExportTransactions JSON pending returned %d", rrUserPending.Code)
+	}
+	var userPendingTxs []entity.Transaction
+	if err := json.NewDecoder(rrUserPending.Body).Decode(&userPendingTxs); err != nil {
+		t.Fatalf("failed to decode user pending JSON: %v", err)
+	}
+	if len(userPendingTxs) != 1 || userPendingTxs[0].ID != "AIM-002" {
+		t.Errorf("expected only AIM-002 for pending alice, got %+v", userPendingTxs)
 	}
 }

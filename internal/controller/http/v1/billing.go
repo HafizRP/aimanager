@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,10 +9,12 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog/log"
 
 	"9router-gateway/internal/billing"
+	"9router-gateway/internal/entity"
 	"9router-gateway/internal/usecase"
 )
 
@@ -24,10 +27,20 @@ func (h *Handler) BillingPage(w http.ResponseWriter, r *http.Request) {
 
 	txs, totalTxCount := h.billing.GetTransactions(ctx, currentUser)
 
-	// Calculate total revenue for admin
+	// Calculate statistics
 	var totalRevenue int64
-	if currentUser != nil && currentUser.IsAdmin() {
-		totalRevenue = h.billing.TotalRevenue(txs)
+	var settledTxCount, pendingTxCount int
+	var totalTokensCredited int64
+	for _, t := range txs {
+		if t.Status == "settlement" || t.Status == "paid" || t.Status == "capture" {
+			if currentUser != nil && currentUser.IsAdmin() {
+				totalRevenue += t.AmountIDR
+			}
+			settledTxCount++
+			totalTokensCredited += t.Tokens
+		} else if t.Status == "pending" {
+			pendingTxCount++
+		}
 	}
 
 	allUsers, _ := h.repo.GetAllUsers(ctx)
@@ -35,17 +48,20 @@ func (h *Handler) BillingPage(w http.ResponseWriter, r *http.Request) {
 	midtransClient := billing.NewMidtransClient(h.cfg)
 
 	h.render(w, r, "billing.html", "base.html", map[string]interface{}{
-		"ActivePage":        "billing",
-		"Packages":          packages,
-		"Transactions":      txs,
-		"TotalTxCount":      totalTxCount,
-		"TotalRevenue":      totalRevenue,
-		"AllUsers":          allUsers,
-		"MidtransClientKey": h.cfg.MidtransClientKey,
-		"MidtransSnapURL":   midtransClient.SnapURL(),
-		"IsProduction":      h.cfg.MidtransIsProduction,
-		"SuccessMsg":        r.URL.Query().Get("msg"),
-		"ErrorMsg":          r.URL.Query().Get("error"),
+		"ActivePage":          "billing",
+		"Packages":            packages,
+		"Transactions":        txs,
+		"TotalTxCount":        totalTxCount,
+		"TotalRevenue":        totalRevenue,
+		"SettledTxCount":      settledTxCount,
+		"PendingTxCount":      pendingTxCount,
+		"TotalTokensCredited": totalTokensCredited,
+		"AllUsers":            allUsers,
+		"MidtransClientKey":   h.cfg.MidtransClientKey,
+		"MidtransSnapURL":     midtransClient.SnapURL(),
+		"IsProduction":        h.cfg.MidtransIsProduction,
+		"SuccessMsg":          r.URL.Query().Get("msg"),
+		"ErrorMsg":            r.URL.Query().Get("error"),
 	})
 }
 
@@ -184,4 +200,121 @@ func (h *Handler) ManualCreditTokens(w http.ResponseWriter, r *http.Request) {
 
 	msg := fmt.Sprintf("Successfully credited %d tokens!", tokens)
 	http.Redirect(w, r, "/billing?msg="+url.QueryEscape(msg), http.StatusSeeOther)
+}
+
+// ExportTransactions exports billing transactions as CSV or JSON file.
+func (h *Handler) ExportTransactions(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	currentUser := GetUserFromContext(ctx)
+	if currentUser == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var txs []entity.Transaction
+	var err error
+
+	filterUserID := strings.TrimSpace(r.URL.Query().Get("user_id"))
+	if currentUser.IsAdmin() {
+		if filterUserID != "" {
+			txs, _, err = h.repo.GetTransactionsByUserID(ctx, filterUserID, 10000, 0)
+		} else {
+			txs, _, err = h.repo.GetAllTransactions(ctx, 10000, 0)
+		}
+	} else {
+		txs, _, err = h.repo.GetTransactionsByUserID(ctx, currentUser.ID, 10000, 0)
+		for i := range txs {
+			if txs[i].UserName == "" || txs[i].UserName == "Unknown" {
+				txs[i].UserName = currentUser.Name
+			}
+		}
+	}
+
+	if err != nil {
+		http.Error(w, "Failed to retrieve transactions", http.StatusInternalServerError)
+		return
+	}
+
+	statusFilter := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("status")))
+	var filtered []entity.Transaction
+	for _, t := range txs {
+		if statusFilter != "" && statusFilter != "all" {
+			st := strings.ToLower(t.Status)
+			switch statusFilter {
+			case "settled", "paid":
+				if st != "settlement" && st != "paid" && st != "capture" {
+					continue
+				}
+			case "pending":
+				if st != "pending" {
+					continue
+				}
+			case "expired", "failed":
+				if st != "expire" && st != "cancel" && st != "deny" {
+					continue
+				}
+			case "manual":
+				if st != "manual" && t.PackageID != "pkg_manual" {
+					continue
+				}
+			default:
+				if st != statusFilter {
+					continue
+				}
+			}
+		}
+		filtered = append(filtered, t)
+	}
+
+	format := strings.ToLower(r.URL.Query().Get("format"))
+	if format != "json" {
+		format = "csv"
+	}
+
+	timestamp := time.Now().Format("20060102_150405")
+
+	if format == "json" {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=transactions_%s.json", timestamp))
+		_ = json.NewEncoder(w).Encode(filtered)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=transactions_%s.csv", timestamp))
+
+	writer := csv.NewWriter(w)
+	defer writer.Flush()
+
+	_ = writer.Write([]string{
+		"Order_ID", "Created_At_WIB", "User_Name", "User_ID", "Package_ID",
+		"Tokens_Added", "Amount_IDR", "Payment_Type", "Status", "Midtrans_Tx_ID",
+		"Paid_At_WIB", "Snap_Token",
+	})
+
+	for _, t := range filtered {
+		createdAtWIB := ""
+		if !t.CreatedAt.IsZero() {
+			createdAtWIB = t.CreatedAt.Add(7 * time.Hour).Format("2006-01-02 15:04:05")
+		}
+		paidAtWIB := ""
+		if t.PaidAt != nil && !t.PaidAt.IsZero() {
+			paidAtWIB = t.PaidAt.Add(7 * time.Hour).Format("2006-01-02 15:04:05")
+		}
+
+		_ = writer.Write([]string{
+			t.ID,
+			createdAtWIB,
+			t.UserName,
+			t.UserID,
+			t.PackageID,
+			strconv.FormatInt(t.Tokens, 10),
+			strconv.FormatInt(t.AmountIDR, 10),
+			t.PaymentType,
+			t.Status,
+			t.MidtransTxID,
+			paidAtWIB,
+			t.SnapToken,
+		})
+	}
 }
