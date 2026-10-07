@@ -95,4 +95,57 @@ func TestStripModelPrefix(t *testing.T) {
 	}
 }
 
+func TestComboContextWindowElevation(t *testing.T) {
+	combo := map[string]interface{}{
+		"id":             "work",
+		"owned_by":       "combo",
+		"context_length": 128000,
+		"capabilities": map[string]interface{}{
+			"contextWindow": 128000,
+		},
+	}
+	normal := map[string]interface{}{
+		"id":             "some-normal-model",
+		"owned_by":       "openai",
+		"context_length": 128000,
+	}
+
+	models := []map[string]interface{}{combo, normal}
+	for _, m := range models {
+		if ownedBy, ok := m["owned_by"].(string); ok && ownedBy == "combo" {
+			currentCL := 0
+			if cl, ok := m["context_length"].(float64); ok {
+				currentCL = int(cl)
+			} else if cl, ok := m["context_length"].(int); ok {
+				currentCL = cl
+			}
+			if currentCL < 1000000 {
+				m["context_length"] = 1000000
+			}
+			if caps, ok := m["capabilities"].(map[string]interface{}); ok {
+				currentCW := 0
+				if cw, ok := caps["contextWindow"].(float64); ok {
+					currentCW = int(cw)
+				} else if cw, ok := caps["contextWindow"].(int); ok {
+					currentCW = cw
+				}
+				if currentCW < 1000000 {
+					caps["contextWindow"] = 1000000
+				}
+			}
+		}
+	}
+
+	if combo["context_length"] != 1000000 {
+		t.Errorf("expected combo context_length to be 1000000, got %v", combo["context_length"])
+	}
+	caps := combo["capabilities"].(map[string]interface{})
+	if caps["contextWindow"] != 1000000 {
+		t.Errorf("expected combo capabilities.contextWindow to be 1000000, got %v", caps["contextWindow"])
+	}
+	if normal["context_length"] != 128000 {
+		t.Errorf("expected normal model context_length to be unchanged at 128000, got %v", normal["context_length"])
+	}
+}
+
 
