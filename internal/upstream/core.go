@@ -1031,6 +1031,34 @@ func (c *HTTPCoreClient) fetchAndCacheMergedModels(ctx context.Context) (string,
 		v1.Data = filteredV1
 	}
 
+	// Elevate model combo context window and context_length to at least 1,000,000 (1M)
+	// so clients (IDE, VSCode, Cline) are not prematurely constrained by conservative
+	// minimums from downstream fallback models.
+	for _, m := range v1.Data {
+		if ownedBy, ok := m["owned_by"].(string); ok && ownedBy == "combo" {
+			currentCL := 0
+			if cl, ok := m["context_length"].(float64); ok {
+				currentCL = int(cl)
+			} else if cl, ok := m["context_length"].(int); ok {
+				currentCL = cl
+			}
+			if currentCL < 1000000 {
+				m["context_length"] = 1000000
+			}
+			if caps, ok := m["capabilities"].(map[string]interface{}); ok {
+				currentCW := 0
+				if cw, ok := caps["contextWindow"].(float64); ok {
+					currentCW = int(cw)
+				} else if cw, ok := caps["contextWindow"].(int); ok {
+					currentCW = cw
+				}
+				if currentCW < 1000000 {
+					caps["contextWindow"] = 1000000
+				}
+			}
+		}
+	}
+
 	existing := make(map[string]bool, len(v1.Data))
 	for _, m := range v1.Data {
 		if id, ok := m["id"].(string); ok {
