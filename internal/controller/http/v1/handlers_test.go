@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -2268,4 +2269,124 @@ func TestExportUsers(t *testing.T) {
 	if len(exportedNear) != 1 || exportedNear[0].Username != "alice" {
 		t.Errorf("expected alice (95%% used) in near_limit export, got %+v", exportedNear)
 	}
+}
+
+func TestExportModels(t *testing.T) {
+	tempDir := t.TempDir()
+	db, err := database.InitDB(filepath.Join(tempDir, "test_export_models.db"))
+	if err != nil {
+		t.Fatalf("failed to init db: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+	h := &Handler{
+		repo: repo,
+		modelsCache: []UpstreamModelItem{
+			{ID: "ag/gemini-3.7-flash-high", OwnedBy: "google"},
+			{ID: "kr/claude-sonnet-4-6", OwnedBy: "kiro"},
+			{ID: "oc/deepseek-v3", OwnedBy: "opencode"},
+		},
+		modelsTime: time.Now(),
+	}
+	ctx := context.Background()
+
+	adminUser := &entity.User{
+		ID:            "u-admin-models",
+		Username:      "admin",
+		Name:          "Admin User",
+		Role:          "admin",
+		AllowedModels: "*",
+		IsActive:      true,
+	}
+	restrictedUser := &entity.User{
+		ID:            "u-user-models",
+		Username:      "charlie",
+		Name:          "Charlie Restricted",
+		Role:          "user",
+		AllowedModels: `["ag/gemini-3.7-flash-high"]`,
+		IsActive:      true,
+	}
+
+	_ = repo.CreateUser(ctx, adminUser)
+	_ = repo.CreateUser(ctx, restrictedUser)
+
+	// 1. Admin CSV Export
+	t.Run("Admin CSV Export", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/models/export?format=csv", nil)
+		req = req.WithContext(context.WithValue(ctx, userContextKey, adminUser))
+		rr := httptest.NewRecorder()
+		h.ExportModels(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d", rr.Code)
+		}
+		if ct := rr.Header().Get("Content-Type"); !strings.Contains(ct, "text/csv") {
+			t.Errorf("expected text/csv Content-Type, got %s", ct)
+		}
+		if cd := rr.Header().Get("Content-Disposition"); !strings.Contains(cd, "models_") || !strings.Contains(cd, ".csv") {
+			t.Errorf("expected models_*.csv Content-Disposition, got %s", cd)
+		}
+
+		body := rr.Body.String()
+		if !strings.Contains(body, "Model_ID") || !strings.Contains(body, "Provider") || !strings.Contains(body, "Status") {
+			t.Errorf("missing expected CSV header columns: %s", body)
+		}
+		if !strings.Contains(body, "ag/gemini-3.7-flash-high") || !strings.Contains(body, "kr/claude-sonnet-4-6") || !strings.Contains(body, "oc/deepseek-v3") {
+			t.Errorf("admin export should contain all 3 models: %s", body)
+		}
+	})
+
+	// 2. Admin JSON Export
+	t.Run("Admin JSON Export", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/models/export?format=json", nil)
+		req = req.WithContext(context.WithValue(ctx, userContextKey, adminUser))
+		rr := httptest.NewRecorder()
+		h.ExportModels(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d", rr.Code)
+		}
+		if ct := rr.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+			t.Errorf("expected application/json Content-Type, got %s", ct)
+		}
+
+		var items []struct {
+			ID       string `json:"id"`
+			Provider string `json:"provider"`
+			Status   string `json:"status"`
+		}
+		if err := json.NewDecoder(rr.Body).Decode(&items); err != nil {
+			t.Fatalf("failed to decode JSON: %v", err)
+		}
+		if len(items) != 3 {
+			t.Fatalf("expected 3 items in admin export, got %d", len(items))
+		}
+	})
+
+	// 3. Restricted User Scoping
+	t.Run("Restricted User Scoping", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/models/export?format=json", nil)
+		req = req.WithContext(context.WithValue(ctx, userContextKey, restrictedUser))
+		rr := httptest.NewRecorder()
+		h.ExportModels(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d", rr.Code)
+		}
+
+		var items []struct {
+			ID       string `json:"id"`
+			Provider string `json:"provider"`
+		}
+		if err := json.NewDecoder(rr.Body).Decode(&items); err != nil {
+			t.Fatalf("failed to decode JSON: %v", err)
+		}
+		if len(items) != 1 {
+			t.Fatalf("expected 1 item for restricted user, got %d", len(items))
+		}
+		if items[0].ID != "ag/gemini-3.7-flash-high" {
+			t.Errorf("expected ag/gemini-3.7-flash-high, got %s", items[0].ID)
+		}
+	})
 }

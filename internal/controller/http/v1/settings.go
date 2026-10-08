@@ -2,10 +2,12 @@ package v1
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -81,6 +83,145 @@ func (h *Handler) ModelsPage(w http.ResponseWriter, r *http.Request) {
 		"Aliases":     aliases,
 		"UpstreamURL": h.cfg.GetUpstreamURL(),
 	})
+}
+
+// ExportModels streams the model catalog with real-time quota status as CSV or JSON file
+func (h *Handler) ExportModels(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	currentUser := GetUserFromContext(ctx)
+
+	// Fetch detailed models from 9router
+	allModels, err := h.fetchUpstreamModels(ctx)
+	if err != nil {
+		allModels = []UpstreamModelItem{}
+	}
+
+	// Filter for non-admin user
+	displayModels := allModels
+	if currentUser != nil && !currentUser.IsAdmin() {
+		allowedList := entity.ParseAllowedModels(currentUser.AllowedModels)
+		if !entity.HasWildcard(allowedList) {
+			allowedMap := make(map[string]bool)
+			for _, m := range allowedList {
+				allowedMap[strings.TrimSpace(m)] = true
+			}
+			displayModels = []UpstreamModelItem{}
+			for _, m := range allModels {
+				if allowedMap[m.ID] {
+					displayModels = append(displayModels, m)
+				}
+			}
+		}
+	}
+
+	// Fetch upstream quota report
+	var quotaReport *upstream.UpstreamQuotaReport
+	if h.quotaManager != nil {
+		quotaReport, _ = h.quotaManager.FetchAllQuotas(ctx, false)
+	}
+
+	var users []entity.User
+	if currentUser != nil && currentUser.IsAdmin() {
+		users, _ = h.repo.GetAllUsers(ctx)
+	}
+
+	type modelExportRow struct {
+		ID               string  `json:"id"`
+		Provider         string  `json:"provider"`
+		Status           string  `json:"status"`
+		HasQuota         bool    `json:"has_quota"`
+		AvailableValue   string  `json:"available_value"`
+		AvailablePercent float64 `json:"available_percent"`
+		ReadyAccounts    int     `json:"ready_accounts"`
+		TotalAccounts    int     `json:"total_accounts"`
+		NearestResetWIB  string  `json:"nearest_reset_wib"`
+		NearestResetIn   string  `json:"nearest_reset_in"`
+		WhitelistedUsers int     `json:"whitelisted_users"`
+	}
+
+	rows := make([]modelExportRow, 0, len(displayModels))
+	for _, m := range displayModels {
+		var q upstream.ModelQuotaSummary
+		if h.quotaManager != nil && quotaReport != nil {
+			q = h.quotaManager.GetModelSummary(m.ID, quotaReport)
+		}
+
+		status := "Ready"
+		availVal := "Uncapped"
+		if q.HasQuota {
+			switch q.Status {
+			case "exhausted":
+				status = "Limit Reached"
+			case "partial":
+				status = "Partial Ready"
+			default:
+				status = "Ready"
+			}
+			if q.Provider == "kiro" {
+				availVal = fmt.Sprintf("%.1f/%.1f Cr", q.BestRemaining, q.BestTotal)
+			} else {
+				availVal = fmt.Sprintf("%.1f%%", q.BestPercentage)
+			}
+		}
+
+		whitelistedCount := 0
+		if len(users) > 0 {
+			for _, u := range users {
+				if strings.Contains(u.AllowedModels, "*") || strings.Contains(u.AllowedModels, m.ID) {
+					whitelistedCount++
+				}
+			}
+		}
+
+		rows = append(rows, modelExportRow{
+			ID:               m.ID,
+			Provider:         m.OwnedBy,
+			Status:           status,
+			HasQuota:         q.HasQuota,
+			AvailableValue:   availVal,
+			AvailablePercent: q.BestPercentage,
+			ReadyAccounts:    q.ReadyAccounts,
+			TotalAccounts:    q.TotalAccounts,
+			NearestResetWIB:  q.NearestResetWIB,
+			NearestResetIn:   q.NearestResetIn,
+			WhitelistedUsers: whitelistedCount,
+		})
+	}
+
+	format := strings.ToLower(r.URL.Query().Get("format"))
+	timestamp := time.Now().Format("20060102_150405")
+
+	if format == "json" {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=models_%s.json", timestamp))
+		_ = json.NewEncoder(w).Encode(rows)
+		return
+	}
+
+	// CSV format default
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=models_%s.csv", timestamp))
+
+	writer := csv.NewWriter(w)
+	defer writer.Flush()
+
+	_ = writer.Write([]string{
+		"Model_ID", "Provider", "Status", "Available_Value", "Ready_Accounts", "Total_Accounts", "Nearest_Reset_WIB", "Nearest_Reset_In", "Whitelisted_Users",
+	})
+
+	for _, r := range rows {
+		_ = writer.Write([]string{
+			r.ID,
+			r.Provider,
+			r.Status,
+			r.AvailableValue,
+			strconv.Itoa(r.ReadyAccounts),
+			strconv.Itoa(r.TotalAccounts),
+			r.NearestResetWIB,
+			r.NearestResetIn,
+			strconv.Itoa(r.WhitelistedUsers),
+		})
+	}
 }
 
 // SettingsPage renders the gateway settings page.
