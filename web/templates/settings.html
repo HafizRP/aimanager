@@ -76,11 +76,11 @@
         <form action="/settings/midtrans" method="POST">
           <div class="mb-3">
             <label class="form-label small text-muted">Server Key</label>
-            <input type="text" name="server_key" class="form-control form-control-modern font-monospace" value="{{ .Config.MidtransServerKey }}" required>
+            <input type="password" name="server_key" class="form-control form-control-modern font-monospace" value="{{ .Config.MidtransServerKey }}" placeholder="••••••••••••••••" required>
           </div>
           <div class="mb-3">
             <label class="form-label small text-muted">Client Key</label>
-            <input type="text" name="client_key" class="form-control form-control-modern font-monospace" value="{{ .Config.MidtransClientKey }}" required>
+            <input type="password" name="client_key" class="form-control form-control-modern font-monospace" value="{{ .Config.MidtransClientKey }}" placeholder="••••••••••••••••" required>
           </div>
           <div class="mb-3">
             <label class="form-label small text-muted">Merchant ID (Optional)</label>

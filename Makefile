@@ -1,9 +1,9 @@
 # ==============================================================================
-# AI Manager (9router-gateway) Makefile
+# AI Manager Makefile
 # Developer and AI agent automation commands
 # ==============================================================================
 
-BINARY_NAME := 9router-gateway
+BINARY_NAME := aimanager
 BIN_DIR := bin
 CMD_PKG := ./cmd/gateway
 GOPATH_BIN := $(shell go env GOPATH 2>/dev/null)/bin

@@ -18,12 +18,12 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     defaults:
       run:
-        working-directory: /home/b14/9router-gateway
+        working-directory: /home/b14/aimanager
     steps:
       - name: Sync server checkout to this commit
         run: |
           set -euo pipefail
-          echo "→ Syncing /home/b14/9router-gateway to $GITHUB_SHA..."
+          echo "→ Syncing /home/b14/aimanager to $GITHUB_SHA..."
           git fetch origin
           git reset --hard "$GITHUB_SHA"
           git status --short | head -5 || true
