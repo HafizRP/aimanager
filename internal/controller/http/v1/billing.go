@@ -106,7 +106,6 @@ func (h *Handler) CheckoutSnap(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, `{"error":"Failed to create transaction"}`, http.StatusInternalServerError)
 		return
 	}
-	// The order ID placeholder above isn't used; CreateOrder generates the real one.
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
@@ -138,8 +137,8 @@ func (h *Handler) MidtransWebhook(w http.ResponseWriter, r *http.Request) {
 		Msg("Received Midtrans Webhook")
 
 	midtransClient := billing.NewMidtransClient(h.cfg)
-	if h.cfg.MidtransServerKey != "" && !midtransClient.VerifySignature(&payload) {
-		log.Warn().Str("order_id", payload.OrderID).Msg("Midtrans webhook signature invalid")
+	if !midtransClient.VerifySignature(&payload) {
+		log.Warn().Str("order_id", payload.OrderID).Msg("Midtrans webhook signature invalid or unconfigured")
 		http.Error(w, "Invalid signature", http.StatusUnauthorized)
 		return
 	}

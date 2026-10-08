@@ -3,6 +3,8 @@ package v1
 import (
 	"bytes"
 	"context"
+	"crypto/sha512"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -21,6 +23,7 @@ import (
 	"9router-gateway/internal/proxy"
 	"9router-gateway/internal/repository"
 	"9router-gateway/internal/upstream"
+	"9router-gateway/internal/usecase"
 )
 
 func TestSafeRedirectURL(t *testing.T) {
@@ -2573,4 +2576,96 @@ func TestExportModels(t *testing.T) {
 			t.Errorf("expected ag/gemini-3.7-flash-high, got %s", items[0].ID)
 		}
 	})
+}
+
+func TestMidtransWebhook(t *testing.T) {
+	tempDir := t.TempDir()
+	db, err := database.InitDB(filepath.Join(tempDir, "test_webhook.db"))
+	if err != nil {
+		t.Fatalf("failed to init db: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+	ctx := context.Background()
+
+	serverKey := "secret-server-key-123"
+	cfg := &config.Config{MidtransServerKey: serverKey}
+	billingSvc := usecase.NewBillingService(repo)
+	h := &Handler{repo: repo, cfg: cfg, billing: billingSvc}
+
+	user := &entity.User{
+		ID:         "u-webhook-test",
+		Username:   "webhooker",
+		Name:       "Webhook User",
+		Role:       "user",
+		TokenQuota: 500000,
+		IsActive:   true,
+	}
+	_ = repo.CreateUser(ctx, user)
+
+	orderID := "AIM-TEST-WEBHOOK"
+	tx := &entity.Transaction{
+		ID:        orderID,
+		UserID:    user.ID,
+		PackageID: "pkg-starter",
+		Tokens:    1000000,
+		AmountIDR: 50000,
+		Status:    "pending",
+	}
+	_ = repo.CreateTransaction(ctx, tx)
+
+	// 1. Invalid signature
+	payloadInvalid := map[string]string{
+		"order_id":           orderID,
+		"status_code":        "200",
+		"gross_amount":       "50000.00",
+		"signature_key":      "invalid-sig",
+		"transaction_status": "settlement",
+	}
+	bodyInvalid, _ := json.Marshal(payloadInvalid)
+	req := httptest.NewRequest(http.MethodPost, "/webhooks/midtrans", bytes.NewReader(bodyInvalid))
+	rr := httptest.NewRecorder()
+	h.MidtransWebhook(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for invalid signature, got %d", rr.Code)
+	}
+
+	// 2. Valid signature settlement
+	raw := orderID + "200" + "50000.00" + serverKey
+	hasher := sha512.New()
+	hasher.Write([]byte(raw))
+	validSig := hex.EncodeToString(hasher.Sum(nil))
+
+	payloadValid := map[string]string{
+		"order_id":           orderID,
+		"status_code":        "200",
+		"gross_amount":       "50000.00",
+		"signature_key":      validSig,
+		"transaction_status": "settlement",
+		"payment_type":       "qris",
+		"transaction_id":     "midtrans-tx-001",
+	}
+	bodyValid, _ := json.Marshal(payloadValid)
+	reqValid := httptest.NewRequest(http.MethodPost, "/webhooks/midtrans", bytes.NewReader(bodyValid))
+	rrValid := httptest.NewRecorder()
+	h.MidtransWebhook(rrValid, reqValid)
+	if rrValid.Code != http.StatusOK {
+		t.Fatalf("expected 200 for valid webhook, got %d", rrValid.Code)
+	}
+
+	// Verify user quota updated
+	uAfter, _ := repo.GetUserByID(ctx, user.ID)
+	if uAfter.TokenQuota != 1500000 {
+		t.Errorf("expected quota credited to 1500000, got %d", uAfter.TokenQuota)
+	}
+
+	// 3. Unconfigured server key rejects webhook
+	hNoKey := &Handler{repo: repo, cfg: &config.Config{MidtransServerKey: ""}, billing: billingSvc}
+	reqNoKey := httptest.NewRequest(http.MethodPost, "/webhooks/midtrans", bytes.NewReader(bodyValid))
+	rrNoKey := httptest.NewRecorder()
+	hNoKey.MidtransWebhook(rrNoKey, reqNoKey)
+	if rrNoKey.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 when server key is unconfigured, got %d", rrNoKey.Code)
+	}
 }
