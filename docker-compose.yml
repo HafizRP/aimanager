@@ -1,3 +1,5 @@
+name: aimanager
+
 services:
   # 9router Core (decolua/9router — Next.js AI manager dashboard)
   # Migrated from standalone `docker run 9router`; volume maps ./data/core (host)
