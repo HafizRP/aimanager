@@ -4,14 +4,23 @@
 <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
   <div>
     <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
-      <i class="bi bi-wallet2 text-emerald"></i> Token Store & Billing
+      <i class="bi bi-wallet2 text-emerald"></i> Token Store &amp; Billing
     </h4>
     <p class="text-dim small mb-0">Top up your AI token balance instantly using QRIS, GoPay, ShopeePay, or Virtual Accounts.</p>
   </div>
-  <div class="d-flex gap-2 align-items-center">
+  <div class="d-flex gap-2 align-items-center flex-wrap">
+    <div class="dropdown">
+      <button class="btn-modern-ghost text-decoration-none d-inline-flex align-items-center gap-2 dropdown-toggle" type="button" data-bs-toggle="dropdown">
+        <i class="bi bi-download"></i> Export
+      </button>
+      <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end" style="background: var(--bg-surface); border: 1px solid var(--border-subtle);">
+        <li><a class="dropdown-item small d-flex align-items-center gap-2" href="#" onclick="exportTransactions('csv'); return false;"><i class="bi bi-filetype-csv text-emerald"></i> Export as CSV</a></li>
+        <li><a class="dropdown-item small d-flex align-items-center gap-2" href="#" onclick="exportTransactions('json'); return false;"><i class="bi bi-filetype-json text-primary"></i> Export as JSON</a></li>
+      </ul>
+    </div>
     {{ if .IsAdmin }}
-      <button class="btn-modern-primary btn-sm" data-bs-toggle="modal" data-bs-target="#manualCreditModal">
-        <i class="bi bi-plus-circle me-1"></i> Manual Credit Tokens
+      <button class="btn-modern-primary btn-sm d-inline-flex align-items-center gap-1.5" data-bs-toggle="modal" data-bs-target="#manualCreditModal">
+        <i class="bi bi-plus-circle"></i> Manual Credit Tokens
       </button>
     {{ end }}
     <div class="badge-modern badge-gray">
@@ -20,15 +29,15 @@
   </div>
 </div>
 
-<!-- Admin Revenue Overview (Only for Admin) -->
-{{ if .IsAdmin }}
-  <div class="row g-3 mb-4">
-    <div class="col-md-6 col-xl-4">
-      <div class="card-modern p-3">
+<!-- Revenue & Token Overview KPIs -->
+<div class="row g-3 mb-4">
+  {{ if .IsAdmin }}
+    <div class="col-md-6 col-xl-3">
+      <div class="card-modern p-3 h-100">
         <div class="d-flex justify-content-between align-items-center">
           <div>
             <span class="kpi-title">Total Revenue</span>
-            <div class="kpi-value text-emerald mt-1">Rp {{ formatNumber .TotalRevenue }}</div>
+            <div class="kpi-value text-emerald mt-1 font-monospace">Rp {{ formatNumber .TotalRevenue }}</div>
           </div>
           <div class="kpi-icon kpi-icon-emerald">
             <i class="bi bi-cash-stack"></i>
@@ -40,45 +49,107 @@
       </div>
     </div>
 
-    <div class="col-md-6 col-xl-4">
-      <div class="card-modern p-3">
+    <div class="col-md-6 col-xl-3">
+      <div class="card-modern p-3 h-100">
         <div class="d-flex justify-content-between align-items-center">
           <div>
-            <span class="kpi-title">Total Orders</span>
-            <div class="kpi-value mt-1">{{ .TotalTxCount }}</div>
+            <span class="kpi-title">Settled Orders</span>
+            <div class="kpi-value text-primary mt-1 font-monospace">{{ .SettledTxCount }} <span class="fs-6 text-dim fw-normal">/ {{ .TotalTxCount }}</span></div>
           </div>
           <div class="kpi-icon kpi-icon-indigo">
-            <i class="bi bi-receipt"></i>
+            <i class="bi bi-receipt-cutoff"></i>
           </div>
         </div>
         <div class="text-dim small mt-2">
-          Recorded transactions & invoices
+          Recorded transactions &amp; invoices
         </div>
       </div>
     </div>
 
-    <div class="col-md-12 col-xl-4">
-      <div class="card-modern p-3">
+    <div class="col-md-6 col-xl-3">
+      <div class="card-modern p-3 h-100">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <span class="kpi-title">Tokens Distributed</span>
+            <div class="kpi-value text-cyan mt-1 font-monospace">+{{ formatNumber .TotalTokensCredited }}</div>
+          </div>
+          <div class="kpi-icon kpi-icon-cyan">
+            <i class="bi bi-coin"></i>
+          </div>
+        </div>
+        <div class="text-dim small mt-2">
+          Total tokens credited to accounts
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6 col-xl-3">
+      <div class="card-modern p-3 h-100">
         <span class="kpi-title d-block mb-1">Midtrans Webhook URL</span>
         <div class="d-flex align-items-center gap-1 mt-1">
-          <code class="font-monospace small text-cyan flex-grow-1 p-2 rounded-2 text-truncate" style="background:#0b0d14; border: 1px solid var(--border-subtle); font-size: 0.72rem; min-width: 0;" title="https://aimanager.b14.my.id/api/webhook/midtrans">https://aimanager.b14.my.id/api/webhook/midtrans</code>
+          <code class="font-monospace small text-cyan flex-grow-1 p-1.5 rounded-2 text-truncate" style="background:#0b0d14; border: 1px solid var(--border-subtle); font-size: 0.72rem; min-width: 0;" title="https://aimanager.b14.my.id/api/webhook/midtrans">https://aimanager.b14.my.id/api/webhook/midtrans</code>
           <button class="btn-modern-ghost btn-sm py-1 px-2 copy-btn" data-copy="https://aimanager.b14.my.id/api/webhook/midtrans" title="Copy webhook URL">
             <i class="bi bi-clipboard"></i>
           </button>
         </div>
         <div class="text-dim small mt-2" style="font-size: 0.72rem;">
-          Paste in Midtrans Dashboard &gt; Settings &gt; Configuration &gt; Notification URL
+          Paste in Midtrans Settings &gt; Configuration &gt; Notification URL
         </div>
       </div>
     </div>
-  </div>
-{{ end }}
+  {{ else }}
+    <div class="col-md-4">
+      <div class="card-modern p-3 h-100">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <span class="kpi-title">Tokens Purchased</span>
+            <div class="kpi-value text-emerald mt-1 font-monospace">+{{ formatNumber .TotalTokensCredited }}</div>
+          </div>
+          <div class="kpi-icon kpi-icon-emerald">
+            <i class="bi bi-coin"></i>
+          </div>
+        </div>
+        <div class="text-dim small mt-2">Total credited via token packages</div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card-modern p-3 h-100">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <span class="kpi-title">Settled Orders</span>
+            <div class="kpi-value text-primary mt-1 font-monospace">{{ .SettledTxCount }}</div>
+          </div>
+          <div class="kpi-icon kpi-icon-indigo">
+            <i class="bi bi-check-circle"></i>
+          </div>
+        </div>
+        <div class="text-dim small mt-2">Successful completed payments</div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card-modern p-3 h-100">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <span class="kpi-title">Pending Orders</span>
+            <div class="kpi-value text-amber mt-1 font-monospace">{{ .PendingTxCount }}</div>
+          </div>
+          <div class="kpi-icon kpi-icon-amber">
+            <i class="bi bi-hourglass-split"></i>
+          </div>
+        </div>
+        <div class="text-dim small mt-2">Awaiting payment settlement</div>
+      </div>
+    </div>
+  {{ end }}
+</div>
 
 <!-- Token Packages Grid -->
 <div class="mb-5">
   <div class="d-flex align-items-center justify-content-between mb-3">
     <h5 class="fw-bold text-light mb-0"><i class="bi bi-grid-fill me-2 text-primary"></i>Choose Token Package</h5>
-    <span class="text-dim small">Instant top-up via QRIS & VA</span>
+    <span class="text-dim small">Instant top-up via QRIS &amp; VA</span>
   </div>
 
   <div class="row g-3">
@@ -117,17 +188,56 @@
   </div>
 </div>
 
+<!-- Search & Filter Card -->
+<div class="card-modern p-3 mb-4">
+  <div class="row g-2 align-items-end" id="txFilterForm">
+    <div class="col-md-4">
+      <label class="form-label small text-muted mb-1">Search Transactions</label>
+      <div class="input-group input-group-sm">
+        <span class="input-group-text bg-transparent border-secondary border-opacity-25 text-muted"><i class="bi bi-search"></i></span>
+        <input type="text" id="txSearchInput" class="form-control form-control-modern form-control-sm" placeholder="Search by Order ID, user, payment type, or amount...">
+      </div>
+    </div>
+    {{ if .IsAdmin }}
+    <div class="col-md-3">
+      <label class="form-label small text-muted mb-1">Filter by User</label>
+      <select id="txUserFilter" class="form-select form-select-modern form-select-sm">
+        <option value="">All Users</option>
+        {{ range .AllUsers }}
+          <option value="{{ .Name }}">{{ .Name }} (@{{ .Username }})</option>
+        {{ end }}
+      </select>
+    </div>
+    {{ end }}
+    <div class="col-md-3">
+      <label class="form-label small text-muted mb-1">Payment Status</label>
+      <select id="txStatusFilter" class="form-select form-select-modern form-select-sm">
+        <option value="all">All Statuses</option>
+        <option value="settled">Settled / Paid</option>
+        <option value="pending">Pending</option>
+        <option value="expired">Expired / Cancelled</option>
+        <option value="manual">Manual Credit</option>
+      </select>
+    </div>
+    <div class="col-md-2 d-flex gap-2">
+      <button type="button" id="btnResetTxFilter" class="btn-modern-ghost btn-sm w-100 py-1" onclick="resetTxFilters()">
+        <i class="bi bi-x-circle"></i> Reset
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- Transactions History Table -->
 <div class="card-modern mb-4">
-  <div class="p-3 border-bottom border-secondary border-opacity-10 d-flex justify-content-between align-items-center">
+  <div class="p-3 border-bottom border-secondary border-opacity-10 d-flex justify-content-between align-items-center flex-wrap gap-2">
     <h6 class="fw-bold mb-0 text-light d-flex align-items-center gap-2">
       <i class="bi bi-clock-history text-info"></i> Transaction History
     </h6>
-    <span class="text-dim small">Showing {{ len .Transactions }} entries</span>
+    <span class="text-dim small">Showing <span id="txVisibleCount">{{ len .Transactions }}</span> of {{ len .Transactions }} entries</span>
   </div>
 
   <div class="table-responsive">
-    <table class="table table-modern mb-0">
+    <table class="table table-modern mb-0" id="transactionsTable">
       <thead>
         <tr>
           <th>Order ID</th>
@@ -143,9 +253,21 @@
       <tbody>
         {{ if .Transactions }}
           {{ range .Transactions }}
-            <tr>
+            <tr class="tx-row" 
+                data-order-id="{{ .ID }}"
+                data-user="{{ .UserName }}"
+                data-status="{{ .Status }}"
+                data-package="{{ .PackageID }}"
+                data-payment="{{ .PaymentType }}"
+                data-tokens="{{ .Tokens }}"
+                data-amount="{{ .AmountIDR }}">
               <td>
-                <span class="font-monospace text-light fw-medium small">{{ .ID }}</span>
+                <div class="d-flex align-items-center gap-1.5">
+                  <span class="font-monospace text-light fw-medium small text-truncate" style="max-width: 170px;" title="{{ .ID }}">{{ .ID }}</span>
+                  <button type="button" class="btn-modern-ghost btn-sm py-0 px-1 text-dim" onclick="copyOrderID('{{ .ID }}')" title="Copy Order ID">
+                    <i class="bi bi-clipboard" style="font-size: 0.72rem;"></i>
+                  </button>
+                </div>
               </td>
               <td class="text-dim font-monospace small" style="font-size: 0.78rem;">
                 {{ formatDate .CreatedAt }}
@@ -167,11 +289,11 @@
                 </span>
               </td>
               <td>
-                {{ if or (eq .Status "settlement") (eq .Status "paid") }}
+                {{ if or (eq .Status "settlement") (eq .Status "paid") (eq .Status "capture") }}
                   <span class="badge-modern badge-emerald"><i class="bi bi-check-circle-fill"></i> Settled / Paid</span>
                 {{ else if eq .Status "pending" }}
                   <span class="badge-modern badge-amber"><i class="bi bi-hourglass-split"></i> Pending</span>
-                {{ else if eq .Status "expire" }}
+                {{ else if or (eq .Status "expire") (eq .Status "cancel") (eq .Status "deny") }}
                   <span class="badge-modern badge-rose"><i class="bi bi-x-circle"></i> Expired</span>
                 {{ else }}
                   <span class="badge-modern badge-gray">{{ .Status }}</span>
@@ -188,6 +310,12 @@
               </td>
             </tr>
           {{ end }}
+          <tr id="txEmptySearchRow" style="display: none;">
+            <td colspan="{{ if .IsAdmin }}8{{ else }}7{{ end }}" class="text-center text-dim py-5">
+              <i class="bi bi-search fs-2 d-block mb-2 opacity-50"></i>
+              No transactions match the selected filters.
+            </td>
+          </tr>
         {{ else }}
           <tr>
             <td colspan="{{ if .IsAdmin }}8{{ else }}7{{ end }}" class="text-center text-dim py-5">
@@ -244,6 +372,110 @@
 <!-- Midtrans Snap Script -->
 <script src="{{ .MidtransSnapURL }}" data-client-key="{{ .MidtransClientKey }}"></script>
 <script>
+  function exportTransactions(format) {
+    const userFilterEl = document.getElementById('txUserFilter');
+    const statusFilterEl = document.getElementById('txStatusFilter');
+    
+    let url = '/api/billing/export?format=' + encodeURIComponent(format);
+    if (statusFilterEl && statusFilterEl.value && statusFilterEl.value !== 'all') {
+      url += '&status=' + encodeURIComponent(statusFilterEl.value);
+    }
+    if (userFilterEl && userFilterEl.value) {
+      url += '&user=' + encodeURIComponent(userFilterEl.value);
+    }
+
+    if (window.showToast) {
+      window.showToast('Exporting transactions...', '📊');
+    }
+    window.location.href = url;
+  }
+
+  function copyOrderID(id) {
+    if (!id) return;
+    navigator.clipboard.writeText(id).then(() => {
+      if (window.showToast) {
+        window.showToast('Order ID copied! 📋', '✨');
+      }
+    });
+  }
+
+  function filterTransactions() {
+    const searchVal = (document.getElementById('txSearchInput')?.value || '').toLowerCase().trim();
+    const userVal = (document.getElementById('txUserFilter')?.value || '').toLowerCase().trim();
+    const statusVal = (document.getElementById('txStatusFilter')?.value || 'all').toLowerCase().trim();
+
+    const rows = document.querySelectorAll('#transactionsTable tbody tr.tx-row');
+    let visibleCount = 0;
+
+    rows.forEach(row => {
+      const orderId = (row.getAttribute('data-order-id') || '').toLowerCase();
+      const user = (row.getAttribute('data-user') || '').toLowerCase();
+      const status = (row.getAttribute('data-status') || '').toLowerCase();
+      const pkg = (row.getAttribute('data-package') || '').toLowerCase();
+      const payment = (row.getAttribute('data-payment') || '').toLowerCase();
+      const tokens = (row.getAttribute('data-tokens') || '').toLowerCase();
+      const amount = (row.getAttribute('data-amount') || '').toLowerCase();
+
+      // Search match
+      const matchesSearch = !searchVal || 
+        orderId.includes(searchVal) || 
+        user.includes(searchVal) || 
+        payment.includes(searchVal) || 
+        tokens.includes(searchVal) || 
+        amount.includes(searchVal);
+
+      // User match
+      const matchesUser = !userVal || user.includes(userVal);
+
+      // Status match
+      let matchesStatus = true;
+      if (statusVal && statusVal !== 'all') {
+        if (statusVal === 'settled') {
+          matchesStatus = (status === 'settlement' || status === 'paid' || status === 'capture');
+        } else if (statusVal === 'pending') {
+          matchesStatus = (status === 'pending');
+        } else if (statusVal === 'expired') {
+          matchesStatus = (status === 'expire' || status === 'cancel' || status === 'deny');
+        } else if (statusVal === 'manual') {
+          matchesStatus = (status === 'manual' || pkg === 'pkg_manual');
+        } else {
+          matchesStatus = (status === statusVal);
+        }
+      }
+
+      if (matchesSearch && matchesUser && matchesStatus) {
+        row.style.display = '';
+        visibleCount++;
+      } else {
+        row.style.display = 'none';
+      }
+    });
+
+    const countEl = document.getElementById('txVisibleCount');
+    if (countEl) countEl.textContent = visibleCount;
+
+    const emptyRow = document.getElementById('txEmptySearchRow');
+    if (emptyRow) {
+      emptyRow.style.display = (visibleCount === 0 && rows.length > 0) ? '' : 'none';
+    }
+  }
+
+  function resetTxFilters() {
+    const searchInput = document.getElementById('txSearchInput');
+    const userFilter = document.getElementById('txUserFilter');
+    const statusFilter = document.getElementById('txStatusFilter');
+
+    if (searchInput) searchInput.value = '';
+    if (userFilter) userFilter.value = '';
+    if (statusFilter) statusFilter.value = 'all';
+
+    filterTransactions();
+  }
+
+  document.getElementById('txSearchInput')?.addEventListener('input', filterTransactions);
+  document.getElementById('txUserFilter')?.addEventListener('change', filterTransactions);
+  document.getElementById('txStatusFilter')?.addEventListener('change', filterTransactions);
+
   document.querySelectorAll(".btn-checkout-snap").forEach(btn => {
     btn.addEventListener("click", function() {
       const packageId = this.getAttribute("data-package-id");

@@ -170,6 +170,7 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 		// Billing & Top-Up
 		authRouter.Get("/billing", h.BillingPage)
 		authRouter.Post("/api/billing/checkout", h.CheckoutSnap)
+		authRouter.Get("/api/billing/export", h.ExportTransactions)
 
 		// Keys (Scoped: Admin can manage all, Standard users manage their own)
 		authRouter.Get("/keys", h.KeysPage)
