@@ -646,8 +646,8 @@ func TestLandingAndRegister(t *testing.T) {
 	if rrReg.Code != http.StatusOK {
 		t.Fatalf("RegisterPage returned %d, want 200", rrReg.Code)
 	}
-	if !strings.Contains(rrReg.Body.String(), "Bikin Akun Baru") {
-		t.Errorf("RegisterPage body does not contain 'Bikin Akun Baru'")
+	if !strings.Contains(rrReg.Body.String(), "Create New Account") {
+		t.Errorf("RegisterPage body does not contain 'Create New Account'")
 	}
 
 	// 3. RegisterPost - Validation failures
@@ -761,9 +761,9 @@ func TestAPIKeyRestrictionsAndIPWhitelist(t *testing.T) {
 
 	// 1. CreateKey with AllowedIPs
 	form := url.Values{
-		"user_id":       {user.ID},
-		"name":          {"Restricted Key"},
-		"allowed_ips":   {"192.168.1.10, 10.0.0.0/8"},
+		"user_id":        {user.ID},
+		"name":           {"Restricted Key"},
+		"allowed_ips":    {"192.168.1.10, 10.0.0.0/8"},
 		"allowed_models": {"main"},
 		"rate_limit_rpm": {"60"},
 	}
@@ -1411,14 +1411,14 @@ func TestPricingAndCostEstimator(t *testing.T) {
 	// 4. Test APIPricingEstimate with Custom Model
 	t.Run("APIPricingEstimate Custom Rates", func(t *testing.T) {
 		payload := map[string]interface{}{
-			"source":              "custom",
-			"prompt_tokens":       2000,
-			"completion_tokens":   1000,
-			"requests":            50,
-			"usd_to_idr":          16500.0,
-			"custom_input_rate":   1.0,
-			"custom_output_rate":  2.0,
-			"custom_cached_rate":  0.1,
+			"source":                "custom",
+			"prompt_tokens":         2000,
+			"completion_tokens":     1000,
+			"requests":              50,
+			"usd_to_idr":            16500.0,
+			"custom_input_rate":     1.0,
+			"custom_output_rate":    2.0,
+			"custom_cached_rate":    0.1,
 			"custom_reasoning_rate": 2.0,
 		}
 		bodyBytes, _ := json.Marshal(payload)
@@ -1914,7 +1914,7 @@ func TestCloneKey(t *testing.T) {
 		Key:             "sk-test-source-key-alice-1",
 		Name:            "Source Agent Key",
 		AllowedModels:   "main,ag/gemini-3.8-flash-high",
-		AllowedIPs:     "192.168.1.100",
+		AllowedIPs:      "192.168.1.100",
 		RateLimitRPM:    90,
 		MaxTokensLimit:  1000000,
 		DailyTokenQuota: 100000,

@@ -210,7 +210,7 @@ func NewQuotaManager(cfg *config.Config) *QuotaManager {
 		httpClient: &http.Client{
 			Timeout: 6 * time.Second,
 		},
-		cacheTTL:  25 * time.Second,
+		cacheTTL: 25 * time.Second,
 		staleTTL: 5 * time.Minute,
 	}
 }
@@ -659,13 +659,13 @@ func (m *QuotaManager) GetModelSummary(modelID string, report *UpstreamQuotaRepo
 
 			if readyCount == totalAntigravity && totalAntigravity > 0 {
 				summary.Status = "ready"
-				summary.DescriptionLabel = fmt.Sprintf("%.1f%% (Semua %d Akun Aktif)", bestPct, totalAntigravity)
+				summary.DescriptionLabel = fmt.Sprintf("%.1f%% (All %d Accounts Active)", bestPct, totalAntigravity)
 			} else if readyCount > 0 {
 				summary.Status = "partial"
-				summary.DescriptionLabel = fmt.Sprintf("%.1f%% (%d/%d Akun Aktif)", bestPct, readyCount, totalAntigravity)
+				summary.DescriptionLabel = fmt.Sprintf("%.1f%% (%d/%d Accounts Active)", bestPct, readyCount, totalAntigravity)
 			} else {
 				summary.Status = "exhausted"
-				summary.DescriptionLabel = fmt.Sprintf("0%% (Limit tercapai, reset %s)", nearestResetWIB)
+				summary.DescriptionLabel = fmt.Sprintf("0%% (Exhausted, resets %s)", nearestResetWIB)
 			}
 		}
 
@@ -745,13 +745,13 @@ func (m *QuotaManager) GetModelSummary(modelID string, report *UpstreamQuotaRepo
 
 			if readyCount == totalKiro && totalKiro > 0 {
 				summary.Status = "ready"
-				summary.DescriptionLabel = fmt.Sprintf("%.1f/%.0f Credits (Semua Akun)", bestRemaining, bestTotal)
+				summary.DescriptionLabel = fmt.Sprintf("%.1f/%.0f Credits (All Accounts Active)", bestRemaining, bestTotal)
 			} else if readyCount > 0 {
 				summary.Status = "partial"
-				summary.DescriptionLabel = fmt.Sprintf("%.1f/%.0f Credits (%d/%d Akun Aktif)", bestRemaining, bestTotal, readyCount, totalKiro)
+				summary.DescriptionLabel = fmt.Sprintf("%.1f/%.0f Credits (%d/%d Accounts Active)", bestRemaining, bestTotal, readyCount, totalKiro)
 			} else {
 				summary.Status = "exhausted"
-				summary.DescriptionLabel = fmt.Sprintf("0 Credits (Habis, reset %s)", nearestResetWIB)
+				summary.DescriptionLabel = fmt.Sprintf("0 Credits (Exhausted, resets %s)", nearestResetWIB)
 			}
 		}
 

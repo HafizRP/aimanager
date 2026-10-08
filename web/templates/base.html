@@ -62,7 +62,7 @@
 
       <!-- Quick Menu Search / Filter in Sidebar -->
       <div class="sidebar-search-wrapper">
-        <div class="position-relative cursor-pointer" id="sidebarSearchTrigger" title="Cari menu & pengaturan (Ctrl+K)">
+        <div class="position-relative cursor-pointer" id="sidebarSearchTrigger" title="Search menus & settings (Ctrl+K)">
           <i class="bi bi-search position-absolute top-50 start-0 translate-middle-y ms-2 text-muted" style="font-size:0.75rem; pointer-events:none;"></i>
           <input type="text" id="sidebarMenuSearch" class="form-control sidebar-search-input" placeholder="Search menu... (Ctrl+K)" autocomplete="off" readonly style="cursor: pointer;">
           <kbd class="sidebar-search-kbd d-none d-sm-inline-block" id="sidebarSearchKbd" title="Open search dialog (Ctrl+K)">Ctrl+K</kbd>
@@ -74,20 +74,20 @@
         <!-- Main Navigation Group: Workspace -->
         <div class="sidebar-nav-group">
           <span class="sidebar-group-title">Workspace</span>
-          <a class="sidebar-link {{ if eq .ActivePage "dashboard" }}active{{ end }}" href="/" data-keywords="overview stats kpi metrics rolling windows trends volume beranda ringkasan statistik pemantauan">
+          <a class="sidebar-link {{ if eq .ActivePage "dashboard" }}active{{ end }}" href="/" data-keywords="overview stats kpi metrics rolling windows trends volume dashboard monitoring">
             <i class="bi bi-speedometer2 text-primary"></i>
             <span>Dashboard</span>
           </a>
-          <a class="sidebar-link {{ if eq .ActivePage "chat" }}active{{ end }}" href="/chat" data-keywords="playground chat completion stream prompt test conversation sse percakapan uji coba pesan ai playground">
+          <a class="sidebar-link {{ if eq .ActivePage "chat" }}active{{ end }}" href="/chat" data-keywords="playground chat completion stream prompt test conversation sse ai playground testing">
             <i class="bi bi-terminal-fill text-primary"></i>
             <span>Playground</span>
           </a>
-          <a class="sidebar-link {{ if or (eq .ActivePage "endpoint") (eq .ActivePage "keys") (eq .ActivePage "cli-tools") (eq .ActivePage "skills") }}active{{ end }}" href="/endpoint" data-keywords="developer hub endpoint api keys cli tools skills tokens integration panduan terminal token">
+          <a class="sidebar-link {{ if or (eq .ActivePage "endpoint") (eq .ActivePage "keys") (eq .ActivePage "cli-tools") (eq .ActivePage "skills") }}active{{ end }}" href="/endpoint" data-keywords="developer hub endpoint api keys cli tools skills tokens integration guides terminal token">
             <i class="bi bi-code-slash text-info"></i>
             <span>Developer Hub</span>
             <span class="badge-modern badge-indigo ms-auto" style="font-size:0.65rem; padding:0.12rem 0.4rem;">4</span>
           </a>
-          <a class="sidebar-link {{ if or (eq .ActivePage "logs") (eq .ActivePage "usage") (eq .ActivePage "cache-analytics") (eq .ActivePage "benchmark") (eq .ActivePage "replay") (eq .ActivePage "radar") }}active{{ end }}" href="/logs" data-keywords="observability logs audit usage stats analytics cache benchmark replay radar traffic telemetri analisis">
+          <a class="sidebar-link {{ if or (eq .ActivePage "logs") (eq .ActivePage "usage") (eq .ActivePage "cache-analytics") (eq .ActivePage "benchmark") (eq .ActivePage "replay") (eq .ActivePage "radar") }}active{{ end }}" href="/logs" data-keywords="observability logs audit usage stats analytics cache benchmark replay radar traffic telemetry audit">
             <i class="bi bi-graph-up text-cyan"></i>
             <span>Observability</span>
             <span class="badge-modern badge-cyan ms-auto" style="font-size:0.65rem; padding:0.12rem 0.4rem;">6</span>
@@ -98,22 +98,22 @@
           <!-- Engine & Control Group (Admin Only) -->
           <div class="sidebar-nav-group">
             <span class="sidebar-group-title">Engine & Control</span>
-            <a class="sidebar-link {{ if or (eq .ActivePage "models") (eq .ActivePage "combos") (eq .ActivePage "pricing") (eq .ActivePage "translator") }}active{{ end }}" href="/models" data-keywords="models routing aliases combos fallback pricing translator katalog rute model">
+            <a class="sidebar-link {{ if or (eq .ActivePage "models") (eq .ActivePage "combos") (eq .ActivePage "pricing") (eq .ActivePage "translator") }}active{{ end }}" href="/models" data-keywords="models routing aliases combos fallback pricing translator catalog routes model">
               <i class="bi bi-diagram-3-fill text-indigo"></i>
               <span>Models & Routing</span>
               <span class="badge-modern badge-indigo ms-auto" style="font-size:0.65rem; padding:0.12rem 0.4rem;">4</span>
             </a>
-            <a class="sidebar-link {{ if or (eq .ActivePage "providers") (eq .ActivePage "nodes") (eq .ActivePage "quota") (eq .ActivePage "proxy-pools") }}active{{ end }}" href="/providers" data-keywords="providers networks nodes connections upstream quota proxy pools akun kuota penyedia sambungan">
+            <a class="sidebar-link {{ if or (eq .ActivePage "providers") (eq .ActivePage "nodes") (eq .ActivePage "quota") (eq .ActivePage "proxy-pools") }}active{{ end }}" href="/providers" data-keywords="providers networks nodes connections upstream quota proxy pools accounts upstream connections">
               <i class="bi bi-hdd-network text-primary"></i>
               <span>Providers & Networks</span>
               <span class="badge-modern badge-primary ms-auto" style="font-size:0.65rem; padding:0.12rem 0.4rem;">4</span>
             </a>
-            <a class="sidebar-link {{ if or (eq .ActivePage "token-saver") (eq .ActivePage "pxpipe") (eq .ActivePage "media") (eq .ActivePage "mitm") (eq .ActivePage "mcp") }}active{{ end }}" href="/token-saver" data-keywords="optimization saver rtk compression pxpipe media voices mitm mcp plugins penghemat plugin">
+            <a class="sidebar-link {{ if or (eq .ActivePage "token-saver") (eq .ActivePage "pxpipe") (eq .ActivePage "media") (eq .ActivePage "mitm") (eq .ActivePage "mcp") }}active{{ end }}" href="/token-saver" data-keywords="optimization saver rtk compression pxpipe media voices mitm mcp plugins token saver plugin">
               <i class="bi bi-magic text-emerald"></i>
               <span>Optimization & Plugins</span>
               <span class="badge-modern badge-emerald ms-auto" style="font-size:0.65rem; padding:0.12rem 0.4rem;">5</span>
             </a>
-            <a class="sidebar-link {{ if or (eq .ActivePage "settings") (eq .ActivePage "users") (eq .ActivePage "console-log") (eq .ActivePage "profile") (eq .ActivePage "billing") }}active{{ end }}" href="/settings" data-keywords="settings administration users quotas profile billing tokens gateway console logs konfigurasi sistem">
+            <a class="sidebar-link {{ if or (eq .ActivePage "settings") (eq .ActivePage "users") (eq .ActivePage "console-log") (eq .ActivePage "profile") (eq .ActivePage "billing") }}active{{ end }}" href="/settings" data-keywords="settings administration users quotas profile billing tokens gateway console logs configuration system">
               <i class="bi bi-sliders text-warning"></i>
               <span>System & Settings</span>
               <span class="badge-modern badge-warning ms-auto" style="font-size:0.65rem; padding:0.12rem 0.4rem;">5</span>
@@ -123,7 +123,7 @@
           <!-- Account Preferences (Standard User) -->
           <div class="sidebar-nav-group">
             <span class="sidebar-group-title">Account</span>
-            <a class="sidebar-link {{ if or (eq .ActivePage "profile") (eq .ActivePage "billing") (eq .ActivePage "settings") }}active{{ end }}" href="/profile" data-keywords="profile account billing tokens password profil akun saldo beli token pengaturan">
+            <a class="sidebar-link {{ if or (eq .ActivePage "profile") (eq .ActivePage "billing") (eq .ActivePage "settings") }}active{{ end }}" href="/profile" data-keywords="profile account billing tokens password settings buy tokens user">
               <i class="bi bi-person-circle text-muted"></i>
               <span>My Profile & Billing</span>
             </a>
@@ -402,7 +402,7 @@
       <div class="modal-content command-palette-content">
         <div class="d-flex align-items-center px-3 py-2 border-bottom border-secondary border-opacity-10 gap-2">
           <i class="bi bi-search text-cyan fs-6"></i>
-          <input type="text" id="commandPaletteInput" class="form-control form-control-modern border-0 shadow-none px-1 py-2 bg-transparent text-light" placeholder="Cari menu, pengaturan, atau fitur... (Ctrl+K)" autocomplete="off">
+          <input type="text" id="commandPaletteInput" class="form-control form-control-modern border-0 shadow-none px-1 py-2 bg-transparent text-light" placeholder="Search menus, settings, or features... (Ctrl+K)" autocomplete="off">
           <kbd class="badge bg-secondary bg-opacity-25 text-dim border border-secondary border-opacity-25 py-1 px-2 small cursor-pointer" data-bs-dismiss="modal">ESC</kbd>
         </div>
         <div id="commandPaletteResults" class="p-2 overflow-y-auto" style="max-height: 380px;">
@@ -411,7 +411,7 @@
         <div class="d-flex align-items-center justify-content-between px-3 py-2 border-top border-secondary border-opacity-10 text-dim" style="font-size: 0.72rem;">
           <div class="d-flex align-items-center gap-2">
             <span><kbd class="badge bg-secondary bg-opacity-25 text-dim py-0.5 px-1 me-1">↑</kbd><kbd class="badge bg-secondary bg-opacity-25 text-dim py-0.5 px-1 me-1">↓</kbd> Navigate</span>
-            <span><kbd class="badge bg-secondary bg-opacity-25 text-dim py-0.5 px-1 me-1">↵</kbd> Open / Jalankan</span>
+            <span><kbd class="badge bg-secondary bg-opacity-25 text-dim py-0.5 px-1 me-1">↵</kbd> Open</span>
           </div>
           <span class="text-dim" id="commandPaletteCount">0 items</span>
         </div>
@@ -457,9 +457,9 @@
             deferred.prompt();
             deferred.userChoice.then(function () { deferred = null; });
           } else if (isIOS()) {
-            alert('Install AI Manager:\n1. Tap Share (kotak + panah)\n2. Pilih "Add to Home Screen"\n3. Tap Add');
+            alert('Install AI Manager:\n1. Tap Share (box + arrow icon)\n2. Select "Add to Home Screen"\n3. Tap Add');
           } else {
-            alert('Install AI Manager:\nChrome/Edge: menu browser (⋮) → "Install app" / "Save and share" → "Install".\nSudah pernah dismiss prompt? Tunggu masa blokir Chrome berakhir atau pakai menu manual ini.');
+            alert('Install AI Manager:\nChrome/Edge: browser menu (⋮) → "Install app" / "Save and share" → "Install".\nDismissed previously? Wait for the browser block period to end or use this manual menu.');
           }
         });
       });
