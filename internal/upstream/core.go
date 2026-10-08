@@ -430,12 +430,55 @@ func (c *HTTPCoreClient) DeleteModelAlias(ctx context.Context, alias string) err
 
 // ProxyPool describes one configured upstream proxy pool.
 type ProxyPool struct {
-	ID         string                 `json:"id"`
-	IsActive   bool                   `json:"isActive"`
-	TestStatus string                 `json:"testStatus"`
-	Data       map[string]interface{} `json:"data"`
-	CreatedAt  string                 `json:"createdAt"`
-	UpdatedAt  string                 `json:"updatedAt"`
+	ID         string      `json:"id"`
+	IsActive   bool        `json:"isActive"`
+	TestStatus string      `json:"testStatus"`
+	Data       interface{} `json:"data"`
+	CreatedAt  string      `json:"createdAt"`
+	UpdatedAt  string      `json:"updatedAt"`
+}
+
+// DataString returns the proxy connection target as a clean string.
+func (p ProxyPool) DataString() string {
+	switch v := p.Data.(type) {
+	case string:
+		return v
+	case map[string]interface{}:
+		if u, ok := v["url"].(string); ok && u != "" {
+			return u
+		}
+		if t, ok := v["target"].(string); ok && t != "" {
+			return t
+		}
+		b, err := json.Marshal(v)
+		if err == nil {
+			return string(b)
+		}
+		return fmt.Sprintf("%v", v)
+	default:
+		if p.Data == nil {
+			return ""
+		}
+		return fmt.Sprintf("%v", p.Data)
+	}
+}
+
+// Protocol returns the detected protocol for the proxy target.
+func (p ProxyPool) Protocol() string {
+	ds := strings.ToLower(p.DataString())
+	if strings.HasPrefix(ds, "socks5://") {
+		return "SOCKS5"
+	}
+	if strings.HasPrefix(ds, "socks4://") {
+		return "SOCKS4"
+	}
+	if strings.HasPrefix(ds, "https://") {
+		return "HTTPS"
+	}
+	if strings.HasPrefix(ds, "http://") {
+		return "HTTP"
+	}
+	return "HTTP/SOCKS"
 }
 
 // GetProxyPools lists all configured proxy pools.

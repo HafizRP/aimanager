@@ -8,68 +8,166 @@
     </h4>
     <p class="text-dim small mb-0">Configure HTTP / SOCKS5 proxy pools to rotate egress IP addresses and bypass geolocation blocks on upstream AI providers.</p>
   </div>
-  <div class="d-flex align-items-center gap-2">
+  <div class="d-flex flex-wrap align-items-center gap-2">
+    <div class="dropdown">
+      <button class="btn-modern-ghost py-1 px-3 dropdown-toggle d-inline-flex align-items-center gap-1.5 text-light" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Export proxy pool configurations">
+        <i class="bi bi-download text-primary"></i> Export
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end dropdown-menu-dark">
+        <li><a class="dropdown-item d-flex align-items-center gap-2" href="#" onclick="exportProxies('csv'); return false;"><i class="bi bi-filetype-csv text-emerald"></i> Export as CSV</a></li>
+        <li><a class="dropdown-item d-flex align-items-center gap-2" href="#" onclick="exportProxies('json'); return false;"><i class="bi bi-filetype-json text-primary"></i> Export as JSON</a></li>
+      </ul>
+    </div>
+    <button type="button" class="btn-modern-ghost py-1 px-3 d-inline-flex align-items-center gap-2 text-light" id="btnTestAll" onclick="testAllProxies()" title="Test all configured proxies in parallel">
+      <i class="bi bi-broadcast text-cyan"></i> Test All
+    </button>
     <button type="button" class="btn-modern-primary d-inline-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#addProxyModal">
       <i class="bi bi-plus-lg"></i> Add Proxy
     </button>
   </div>
 </div>
 
+<!-- Quick Metric Summary Cards -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="card-modern p-3 h-100">
+      <div class="d-flex align-items-center justify-content-between mb-1">
+        <span class="text-dim small font-monospace">Total Proxies</span>
+        <i class="bi bi-shield-shaded text-cyan fs-5"></i>
+      </div>
+      <div class="fs-4 fw-bold text-light" id="kpiTotalProxies">{{ if .Stats.Total }}{{ .Stats.Total }}{{ else }}{{ len .ProxyPools }}{{ end }}</div>
+      <div class="text-dim small mt-1" style="font-size: 0.72rem;">Configured egress endpoints</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card-modern p-3 h-100">
+      <div class="d-flex align-items-center justify-content-between mb-1">
+        <span class="text-dim small font-monospace">Active / Verified</span>
+        <i class="bi bi-check-circle-fill text-emerald fs-5"></i>
+      </div>
+      <div class="fs-4 fw-bold text-emerald" id="kpiActiveProxies">{{ .Stats.Active }}</div>
+      <div class="text-dim small mt-1" style="font-size: 0.72rem;">Connectivity confirmed</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card-modern p-3 h-100">
+      <div class="d-flex align-items-center justify-content-between mb-1">
+        <span class="text-dim small font-monospace">Failed / Timeout</span>
+        <i class="bi bi-x-circle-fill text-danger fs-5"></i>
+      </div>
+      <div class="fs-4 fw-bold text-danger" id="kpiFailedProxies">{{ .Stats.Failed }}</div>
+      <div class="text-dim small mt-1" style="font-size: 0.72rem;">Connection errors detected</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="card-modern p-3 h-100">
+      <div class="d-flex align-items-center justify-content-between mb-1">
+        <span class="text-dim small font-monospace">Untested / Pending</span>
+        <i class="bi bi-clock-history text-muted fs-5"></i>
+      </div>
+      <div class="fs-4 fw-bold text-muted" id="kpiUntestedProxies">{{ .Stats.Untested }}</div>
+      <div class="text-dim small mt-1" style="font-size: 0.72rem;">Awaiting verification</div>
+    </div>
+  </div>
+</div>
+
+<!-- Search & Filter Card -->
+<div class="card-modern p-3 mb-4">
+  <div class="row g-2 align-items-end" id="proxyFilterForm">
+    <div class="col-md-5">
+      <label class="form-label small text-muted mb-1">Search Proxies</label>
+      <div class="input-group input-group-sm">
+        <span class="input-group-text bg-transparent border-secondary border-opacity-25 text-muted"><i class="bi bi-search"></i></span>
+        <input type="text" id="proxySearchInput" class="form-control form-control-modern form-control-sm" placeholder="Search by target URL, host, port, or protocol..." oninput="filterProxies()">
+      </div>
+    </div>
+    <div class="col-md-3">
+      <label class="form-label small text-muted mb-1">Status</label>
+      <select id="proxyStatusFilter" class="form-select form-select-modern form-select-sm" onchange="filterProxies()">
+        <option value="all">All Statuses</option>
+        <option value="active">Active Only</option>
+        <option value="failed">Failed Only</option>
+        <option value="untested">Untested Only</option>
+      </select>
+    </div>
+    <div class="col-md-2">
+      <label class="form-label small text-muted mb-1">Protocol</label>
+      <select id="proxyProtoFilter" class="form-select form-select-modern form-select-sm" onchange="filterProxies()">
+        <option value="all">All Protocols</option>
+        <option value="HTTP">HTTP / HTTPS</option>
+        <option value="SOCKS">SOCKS4 / SOCKS5</option>
+      </select>
+    </div>
+    <div class="col-md-2 d-flex gap-2">
+      <button type="button" id="btnResetProxyFilter" class="btn-modern-ghost btn-sm w-100 py-1" onclick="resetProxyFilters()">
+        <i class="bi bi-x-circle"></i> Reset
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="card-modern mb-4">
   <div class="table-responsive">
-    <table class="table table-modern mb-0">
+    <table class="table table-modern mb-0" id="proxyTable">
       <thead>
         <tr>
           <th>Proxy Target</th>
           <th>Protocol</th>
           <th>Test Status</th>
+          <th>Latency</th>
           <th>Created</th>
-          <th class="text-end">Actions</th>
+          <th class="text-end">Actions<span class="visually-hidden">Actions</span></th>
         </tr>
       </thead>
-      <tbody>
-        {{ if .Pools }}
-          {{ range .Pools }}
-            <tr id="pool-row-{{ .ID }}">
+      <tbody id="proxyTableBody">
+        {{ $pools := .ProxyPools }}
+        {{ if not $pools }}{{ $pools = .Pools }}{{ end }}
+        {{ if $pools }}
+          {{ range $pools }}
+            <tr id="pool-row-{{ .ID }}" class="proxy-row" data-id="{{ .ID }}" data-target="{{ .DataString }}" data-status="{{ if .TestStatus }}{{ .TestStatus }}{{ else }}untested{{ end }}" data-proto="{{ .Protocol }}">
               <td>
                 <div class="d-flex align-items-center gap-2">
                   <div class="kpi-icon kpi-icon-cyan" style="width: 32px; height: 32px; font-size: 0.85rem; border-radius: 8px;">
                     <i class="bi bi-globe"></i>
                   </div>
                   <div>
-                    <span class="fw-bold text-light font-monospace small">{{ .Data }}</span>
+                    <span class="fw-bold text-light font-monospace small text-break">{{ .DataString }}</span>
                   </div>
                 </div>
               </td>
               <td>
-                <span class="badge-modern badge-gray text-uppercase font-monospace" style="font-size: 0.68rem;">HTTP/SOCKS</span>
+                <span class="badge-modern badge-gray text-uppercase font-monospace" style="font-size: 0.68rem;">{{ .Protocol }}</span>
               </td>
               <td>
-                <span class="badge-modern {{ if eq .TestStatus "active" }}badge-emerald text-emerald{{ else }}badge-gray text-muted{{ end }}" id="test-status-{{ .ID }}">
+                <span class="badge-modern {{ if or (eq .TestStatus "active") (eq .TestStatus "ok") (eq .TestStatus "success") }}badge-emerald text-emerald{{ else if or (eq .TestStatus "failed") (eq .TestStatus "error") (eq .TestStatus "timeout") }}badge-rose text-danger{{ else }}badge-gray text-muted{{ end }}" id="test-status-{{ .ID }}">
                   {{ if .TestStatus }}{{ .TestStatus }}{{ else }}Untested{{ end }}
                 </span>
+              </td>
+              <td class="font-monospace small text-dim" id="test-latency-{{ .ID }}">
+                -
               </td>
               <td class="text-dim font-monospace small" style="font-size: 0.78rem;">
                 {{ formatDate .CreatedAt }}
               </td>
               <td class="text-end">
-                <button type="button" class="btn-modern-ghost btn-sm py-1 px-2 me-1" onclick="testProxy('{{ .ID }}')">
-                  <i class="bi bi-broadcast"></i> Test
-                </button>
-                <button type="button" class="btn-modern-ghost btn-sm text-danger border-0 p-1" onclick="deleteProxy('{{ .ID }}')">
-                  <i class="bi bi-trash"></i>
-                </button>
+                <div class="d-flex justify-content-end align-items-center gap-1">
+                  <button type="button" class="btn-modern-ghost py-1 px-2" onclick="testProxy('{{ .ID }}')" title="Test Proxy Connectivity">
+                    <i class="bi bi-broadcast text-cyan"></i>
+                  </button>
+                  <button type="button" class="btn-modern-ghost py-1 px-2 text-danger" onclick="confirmDeleteProxy('{{ .ID }}', '{{ .DataString }}')" title="Remove Proxy">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </div>
               </td>
             </tr>
           {{ end }}
-        {{ else }}
-          <tr>
-            <td colspan="5" class="text-center text-dim py-5">
-              <i class="bi bi-shield-slash fs-2 d-block mb-2 opacity-50"></i>
-              No outbound proxies configured in pool. Upstream requests are sent directly.
-            </td>
-          </tr>
         {{ end }}
+        <tr id="proxyEmptyState" style="{{ if $pools }}display: none;{{ end }}">
+          <td colspan="6" class="text-center text-dim py-5">
+            <i class="bi bi-shield-slash fs-2 d-block mb-2 opacity-50"></i>
+            <span id="emptyStateText">{{ if $pools }}No proxy endpoints match your search filters.{{ else }}No outbound proxies configured in pool. Upstream requests are sent directly.{{ end }}</span>
+          </td>
+        </tr>
       </tbody>
     </table>
   </div>
@@ -90,7 +188,7 @@
           <div>
             <label class="form-label small text-muted mb-1">Proxy URL / Connection String</label>
             <input type="text" class="form-control form-control-modern font-monospace" id="proxyUrl" placeholder="http://user:pass@proxy.example.com:8080 or socks5://127.0.0.1:1080" required>
-            <div class="text-dim small mt-1" style="font-size: 0.72rem;">Supports HTTP, HTTPS, SOCKS5 proxies with optional authentication.</div>
+            <div class="text-dim small mt-1" style="font-size: 0.72rem;">Supports HTTP, HTTPS, SOCKS4, and SOCKS5 proxies with optional authentication credentials.</div>
           </div>
         </div>
         <div class="modal-footer modal-footer-modern">
@@ -102,43 +200,281 @@
   </div>
 </div>
 
+<!-- Confirm Delete Modal -->
+<div class="modal fade" id="deleteProxyModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content modal-content-modern">
+      <div class="modal-header modal-header-modern">
+        <h5 class="modal-title fw-bold text-danger d-flex align-items-center gap-2">
+          <i class="bi bi-exclamation-triangle-fill"></i> Remove Outbound Proxy
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-light mb-2">Are you sure you want to remove this proxy from the outbound pool?</p>
+        <div class="p-2.5 rounded bg-black bg-opacity-30 border border-secondary border-opacity-25 font-monospace small text-cyan text-break" id="deleteProxyTargetPreview">-</div>
+        <p class="text-dim small mt-2 mb-0">Upstream provider requests will no longer route through this proxy endpoint.</p>
+      </div>
+      <div class="modal-footer modal-footer-modern">
+        <input type="hidden" id="deleteProxyID">
+        <button type="button" class="btn-modern-ghost" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger btn-modern-ghost border-danger text-danger px-3 fw-bold" id="btnConfirmDeleteProxy" onclick="executeDeleteProxy()">
+          <i class="bi bi-trash"></i> Remove
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
+function exportProxies(format) {
+  window.location.href = '/api/proxy-pools/export?format=' + encodeURIComponent(format || 'csv');
+}
+
+function filterProxies() {
+  const query = (document.getElementById('proxySearchInput')?.value || '').toLowerCase().trim();
+  const statusFilter = document.getElementById('proxyStatusFilter')?.value || 'all';
+  const protoFilter = document.getElementById('proxyProtoFilter')?.value || 'all';
+
+  const rows = document.querySelectorAll('.proxy-row');
+  let visibleCount = 0;
+
+  rows.forEach(row => {
+    const target = (row.getAttribute('data-target') || '').toLowerCase();
+    const status = (row.getAttribute('data-status') || '').toLowerCase();
+    const proto = (row.getAttribute('data-proto') || '').toUpperCase();
+
+    const matchesQuery = !query || target.includes(query) || proto.toLowerCase().includes(query) || status.includes(query);
+    
+    let matchesStatus = true;
+    if (statusFilter === 'active') {
+      matchesStatus = status === 'active' || status === 'ok' || status === 'success';
+    } else if (statusFilter === 'failed') {
+      matchesStatus = status === 'failed' || status === 'error' || status === 'timeout';
+    } else if (statusFilter === 'untested') {
+      matchesStatus = status === 'untested' || !status;
+    }
+
+    let matchesProto = true;
+    if (protoFilter === 'HTTP') {
+      matchesProto = proto.startsWith('HTTP');
+    } else if (protoFilter === 'SOCKS') {
+      matchesProto = proto.startsWith('SOCKS');
+    }
+
+    if (matchesQuery && matchesStatus && matchesProto) {
+      row.style.display = '';
+      visibleCount++;
+    } else {
+      row.style.display = 'none';
+    }
+  });
+
+  const emptyState = document.getElementById('proxyEmptyState');
+  const emptyText = document.getElementById('emptyStateText');
+  if (emptyState) {
+    if (visibleCount === 0) {
+      emptyState.style.display = '';
+      if (emptyText) {
+        emptyText.textContent = rows.length === 0 ? 'No outbound proxies configured in pool. Upstream requests are sent directly.' : 'No proxy endpoints match your search filters.';
+      }
+    } else {
+      emptyState.style.display = 'none';
+    }
+  }
+}
+
+function resetProxyFilters() {
+  const search = document.getElementById('proxySearchInput');
+  const status = document.getElementById('proxyStatusFilter');
+  const proto = document.getElementById('proxyProtoFilter');
+  if (search) search.value = '';
+  if (status) status.value = 'all';
+  if (proto) proto.value = 'all';
+  filterProxies();
+}
+
 async function testProxy(id) {
   const badge = document.getElementById(`test-status-${id}`);
-  badge.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span>';
+  const latencyEl = document.getElementById(`test-latency-${id}`);
+  if (badge) {
+    badge.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" style="width: 0.8rem; height: 0.8rem;"></span> Testing...';
+    badge.className = 'badge-modern badge-gray text-light';
+  }
+  if (latencyEl) {
+    latencyEl.textContent = '...';
+  }
+
+  const startTime = performance.now();
+
   try {
     const res = await fetch('/api/proxy-pools/test', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ id })
     });
-    const data = await res.json();
-    if (data.status === 'active' || res.ok) {
-      badge.className = 'badge-modern badge-emerald text-emerald';
-      badge.textContent = 'Active (OK)';
+    const elapsed = Math.round(performance.now() - startTime);
+    const data = await res.json().catch(() => ({}));
+
+    const isOk = res.ok && (data.status === 'active' || data.status === 'ok' || data.success === true || data.ok === true || !data.error);
+
+    const row = document.getElementById(`pool-row-${id}`);
+
+    if (isOk) {
+      if (badge) {
+        badge.className = 'badge-modern badge-emerald text-emerald';
+        badge.textContent = 'Active (OK)';
+      }
+      if (latencyEl) {
+        latencyEl.innerHTML = `<span class="badge-modern badge-emerald font-monospace text-emerald">${elapsed}ms</span>`;
+      }
+      if (row) row.setAttribute('data-status', 'active');
+      if (window.showToast) window.showToast(`Proxy ${id} verified! (${elapsed}ms) ✨`, '🌐');
+      return { success: true, elapsed };
     } else {
-      badge.className = 'badge-modern badge-rose text-danger';
-      badge.textContent = 'Failed';
+      const errReason = data.error || data.message || 'Failed';
+      if (badge) {
+        badge.className = 'badge-modern badge-rose text-danger';
+        badge.textContent = 'Failed';
+      }
+      if (latencyEl) {
+        latencyEl.innerHTML = `<span class="badge-modern badge-rose font-monospace text-danger">${elapsed}ms</span>`;
+      }
+      if (row) row.setAttribute('data-status', 'failed');
+      if (window.showToast) window.showToast(`Proxy test failed: ${errReason}`, '⚠️');
+      return { success: false, elapsed, error: errReason };
     }
   } catch (err) {
-    badge.className = 'badge-modern badge-rose text-danger';
-    badge.textContent = 'Timeout';
+    const elapsed = Math.round(performance.now() - startTime);
+    if (badge) {
+      badge.className = 'badge-modern badge-rose text-danger';
+      badge.textContent = 'Timeout';
+    }
+    if (latencyEl) {
+      latencyEl.innerHTML = `<span class="badge-modern badge-rose font-monospace text-danger">Timeout</span>`;
+    }
+    const row = document.getElementById(`pool-row-${id}`);
+    if (row) row.setAttribute('data-status', 'failed');
+    if (window.showToast) window.showToast('Proxy connection timed out.', '⚠️');
+    return { success: false, elapsed, error: err.message };
+  } finally {
+    recalculateKPIs();
   }
 }
 
-async function deleteProxy(id) {
-  if (!confirm('Remove this proxy from the pool?')) return;
+async function testAllProxies() {
+  const rows = Array.from(document.querySelectorAll('.proxy-row')).filter(r => r.style.display !== 'none');
+  if (rows.length === 0) {
+    if (window.showToast) window.showToast('No proxies to test.', 'ℹ️');
+    return;
+  }
+
+  const btn = document.getElementById('btnTestAll');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Testing...';
+  }
+
+  let passed = 0;
+  let failed = 0;
+
+  for (const row of rows) {
+    const id = row.getAttribute('data-id');
+    if (id) {
+      const result = await testProxy(id);
+      if (result && result.success) passed++;
+      else failed++;
+    }
+  }
+
+  if (btn) {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-broadcast text-cyan"></i> Test All';
+  }
+
+  if (window.showToast) {
+    window.showToast(`Batch test complete: ${passed} active, ${failed} failed ✨`, '🌐');
+  }
+}
+
+function recalculateKPIs() {
+  const rows = document.querySelectorAll('.proxy-row');
+  let active = 0;
+  let failed = 0;
+  let untested = 0;
+
+  rows.forEach(r => {
+    const s = (r.getAttribute('data-status') || '').toLowerCase();
+    if (s === 'active' || s === 'ok' || s === 'success') active++;
+    else if (s === 'failed' || s === 'error' || s === 'timeout') failed++;
+    else untested++;
+  });
+
+  const kpiTotal = document.getElementById('kpiTotalProxies');
+  const kpiActive = document.getElementById('kpiActiveProxies');
+  const kpiFailed = document.getElementById('kpiFailedProxies');
+  const kpiUntested = document.getElementById('kpiUntestedProxies');
+
+  if (kpiTotal) kpiTotal.textContent = rows.length;
+  if (kpiActive) kpiActive.textContent = active;
+  if (kpiFailed) kpiFailed.textContent = failed;
+  if (kpiUntested) kpiUntested.textContent = untested;
+}
+
+function confirmDeleteProxy(id, target) {
+  const idInput = document.getElementById('deleteProxyID');
+  const targetPreview = document.getElementById('deleteProxyTargetPreview');
+  if (idInput) idInput.value = id;
+  if (targetPreview) targetPreview.textContent = target || id;
+
+  const modalEl = document.getElementById('deleteProxyModal');
+  if (modalEl && window.bootstrap) {
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+  }
+}
+
+async function executeDeleteProxy() {
+  const id = document.getElementById('deleteProxyID')?.value;
+  if (!id) return;
+
+  const btn = document.getElementById('btnConfirmDeleteProxy');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Removing...';
+  }
+
   try {
     const res = await fetch('/api/proxy-pools/delete', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ id })
     });
-    if (!res.ok) throw new Error('Delete failed');
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Delete failed');
+    }
+
+    const modalEl = document.getElementById('deleteProxyModal');
+    if (modalEl && window.bootstrap) {
+      const modalInstance = bootstrap.Modal.getInstance(modalEl);
+      if (modalInstance) modalInstance.hide();
+    }
+
     const row = document.getElementById(`pool-row-${id}`);
     if (row) row.remove();
+
+    recalculateKPIs();
+    filterProxies();
+
+    if (window.showToast) window.showToast('Proxy successfully removed! ✨', '🗑️');
   } catch (err) {
-    alert('Failed to delete proxy: ' + err.message);
+    if (window.showToast) window.showToast('Error: ' + err.message, '⚠️');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="bi bi-trash"></i> Remove';
+    }
   }
 }
 
@@ -157,10 +493,23 @@ async function submitAddProxy(e) {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({ data: url, isActive: 1 })
     });
-    if (!res.ok) throw new Error('Failed to create proxy');
-    window.location.reload();
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'Failed to create proxy');
+    }
+
+    const modalEl = document.getElementById('addProxyModal');
+    if (modalEl && window.bootstrap) {
+      const modalInstance = bootstrap.Modal.getInstance(modalEl);
+      if (modalInstance) modalInstance.hide();
+    }
+
+    if (window.showToast) window.showToast('Proxy added to pool! ✨', '🌐');
+    setTimeout(() => {
+      window.location.reload();
+    }, 400);
   } catch (err) {
-    alert('Error: ' + err.message);
+    if (window.showToast) window.showToast('Error: ' + err.message, '⚠️');
     btn.disabled = false;
     btn.textContent = 'Add to Pool';
   }

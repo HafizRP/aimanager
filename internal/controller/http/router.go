@@ -271,6 +271,7 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 
 			// 9router Core: Proxy Pools
 			adminOnly.Get("/proxy-pools", h.ProxyPoolsPage)
+			adminOnly.Get("/api/proxy-pools/export", h.APIProxyPoolsExport)
 			adminOnly.Post("/api/proxy-pools/create", h.APIProxyPoolsCreate)
 			adminOnly.Post("/api/proxy-pools/delete", h.APIProxyPoolsDelete)
 			adminOnly.Post("/api/proxy-pools/test", h.APIProxyPoolsTest)
