@@ -103,7 +103,7 @@ func (rd *Radar) scan() {
 			detail := fmt.Sprintf("key %s: %d/%d requests failed in 30m (%.0f%%)", who, s.Errors, s.Requests, float64(s.Errors)/float64(s.Requests)*100)
 			if err := rd.repo.ToggleAPIKeyStatus(ctx, s.KeyID, false); err == nil {
 				_ = rd.repo.CreateSecurityEvent(ctx, &entity.SecurityEvent{Kind: "error_spike", UserID: s.UserID, APIKeyID: s.KeyID, Detail: detail, Action: "key auto-disabled"})
-				rd.alert("radar:error:"+s.KeyID, "🚨 Error spike — "+detail+". Key auto-disabled, re-enable dari Keys kalau false alarm.")
+				rd.alert("radar:error:"+s.KeyID, "🚨 Error spike — "+detail+". Key auto-disabled, re-enable from Keys menu if false alarm.")
 			}
 			continue
 		}
@@ -115,7 +115,7 @@ func (rd *Radar) scan() {
 			}
 			detail := fmt.Sprintf("key %s: %d tokens in 30m vs ~%.0f/day baseline", who, s.Tokens, avg)
 			_ = rd.repo.CreateSecurityEvent(ctx, &entity.SecurityEvent{Kind: "usage_spike", UserID: s.UserID, APIKeyID: s.KeyID, Detail: detail, Action: "alerted"})
-			rd.alert("radar:usage:"+s.KeyID, "📈 Usage spike — "+detail+". Cek Logs kalau bukan traffic lo.")
+			rd.alert("radar:usage:"+s.KeyID, "📈 Usage spike — "+detail+". Check Logs if this is unexpected traffic.")
 		}
 
 		// 3. IP burst: key used from 4+ distinct IPs in 30m (possible leak).
@@ -125,7 +125,7 @@ func (rd *Radar) scan() {
 			}
 			detail := fmt.Sprintf("key %s: %d distinct IPs in 30m", who, s.IPCount)
 			_ = rd.repo.CreateSecurityEvent(ctx, &entity.SecurityEvent{Kind: "new_ip", UserID: s.UserID, APIKeyID: s.KeyID, Detail: detail, Action: "alerted"})
-			rd.alert("radar:ip:"+s.KeyID, "🔑 IP burst — "+detail+". Kalau key bocor, revoke dari Keys.")
+			rd.alert("radar:ip:"+s.KeyID, "🔑 IP burst — "+detail+". If key leaked, revoke from Keys menu.")
 		}
 	}
 }

@@ -489,19 +489,19 @@ func (h *Handler) RegisterPost(w http.ResponseWriter, r *http.Request) {
 	confirm := strings.TrimSpace(r.FormValue("confirm_password"))
 
 	if name == "" {
-		http.Redirect(w, r, "/register?error="+url.QueryEscape("Nama lengkap tidak boleh kosong"), http.StatusSeeOther)
+		http.Redirect(w, r, "/register?error="+url.QueryEscape("Full name is required"), http.StatusSeeOther)
 		return
 	}
 	if username == "" {
-		http.Redirect(w, r, "/register?error="+url.QueryEscape("Username tidak boleh kosong"), http.StatusSeeOther)
+		http.Redirect(w, r, "/register?error="+url.QueryEscape("Username is required"), http.StatusSeeOther)
 		return
 	}
 	if len(password) < 6 {
-		http.Redirect(w, r, "/register?error="+url.QueryEscape("Password minimal 6 karakter"), http.StatusSeeOther)
+		http.Redirect(w, r, "/register?error="+url.QueryEscape("Password must be at least 6 characters"), http.StatusSeeOther)
 		return
 	}
 	if password != confirm {
-		http.Redirect(w, r, "/register?error="+url.QueryEscape("Konfirmasi password tidak cocok"), http.StatusSeeOther)
+		http.Redirect(w, r, "/register?error="+url.QueryEscape("Password confirmation does not match"), http.StatusSeeOther)
 		return
 	}
 

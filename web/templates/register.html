@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Daftar Akun Baru — AI Manager</title>
+  <title>Register New Account — AI Manager</title>
   
-  <meta name="description" content="Daftar akun AI Manager — dapatkan akses instan ke smart model router, 1,000,000 free token quota, dan auto API key management.">
+  <meta name="description" content="Register for AI Manager — get instant access to smart model routing, 1,000,000 free token quota, and automated API key management.">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="https://aimanager.b14.my.id/register">
 
@@ -45,8 +45,8 @@
       <div class="brand-glow mx-auto mb-3" style="width: 54px; height: 54px; font-size: 1.6rem; border-radius: 14px;">
         <i class="bi bi-cpu-fill"></i>
       </div>
-      <h1 class="fw-bold mb-1 text-light tracking-tight fs-4">Bikin Akun Baru</h1>
-      <p class="text-dim small mb-0">Daftar instan & dapatkan 1,000,000 token kuota awal</p>
+      <h1 class="fw-bold mb-1 text-light tracking-tight fs-4">Create New Account</h1>
+      <p class="text-dim small mb-0">Sign up instantly & get 1,000,000 starter tokens</p>
     </header>
 
     {{ if .ErrorMsg }}
@@ -57,7 +57,7 @@
 
     <form method="POST" action="/register">
       <div class="mb-3">
-        <label class="form-label small text-muted">Nama Lengkap</label>
+        <label class="form-label small text-muted">Full Name</label>
         <div class="input-group">
           <span class="input-group-text form-control-modern border-end-0 text-dim"><i class="bi bi-card-text"></i></span>
           <input type="text" name="name" class="form-control form-control-modern border-start-0" placeholder="e.g. Alex Pratama" required autofocus>
@@ -68,7 +68,7 @@
         <label class="form-label small text-muted">Username</label>
         <div class="input-group">
           <span class="input-group-text form-control-modern border-end-0 text-dim"><i class="bi bi-person"></i></span>
-          <input type="text" name="username" class="form-control form-control-modern border-start-0" placeholder="e.g. alexp" required pattern="^[a-zA-Z0-9_\-]+$" title="Huruf, angka, tanda hubung, atau garis bawah (3-32 karakter)">
+          <input type="text" name="username" class="form-control form-control-modern border-start-0" placeholder="e.g. alexp" required pattern="^[a-zA-Z0-9_\-]+$" title="Letters, numbers, hyphens, or underscores (3-32 characters)">
         </div>
       </div>
 
@@ -76,15 +76,15 @@
         <label class="form-label small text-muted">Password</label>
         <div class="input-group">
           <span class="input-group-text form-control-modern border-end-0 text-dim"><i class="bi bi-lock"></i></span>
-          <input type="password" name="password" class="form-control form-control-modern border-start-0" placeholder="Minimal 6 karakter" required minlength="6">
+          <input type="password" name="password" class="form-control form-control-modern border-start-0" placeholder="At least 6 characters" required minlength="6">
         </div>
       </div>
 
       <div class="mb-4">
-        <label class="form-label small text-muted">Konfirmasi Password</label>
+        <label class="form-label small text-muted">Confirm Password</label>
         <div class="input-group">
           <span class="input-group-text form-control-modern border-end-0 text-dim"><i class="bi bi-shield-check"></i></span>
-          <input type="password" name="confirm_password" class="form-control form-control-modern border-start-0" placeholder="Ulangi password" required minlength="6">
+          <input type="password" name="confirm_password" class="form-control form-control-modern border-start-0" placeholder="Repeat password" required minlength="6">
         </div>
       </div>
 
@@ -92,28 +92,28 @@
       <div class="subcard-modern p-3 mb-4">
         <div class="d-flex align-items-center gap-2 mb-2">
           <span class="badge-modern badge-emerald">FREE TIER</span>
-          <span class="small fw-bold text-light">Fasilitas Akun Baru:</span>
+          <span class="small fw-bold text-light">New Account Perks:</span>
         </div>
         <ul class="list-unstyled mb-0 small text-muted d-flex flex-column gap-1">
           <li class="d-flex align-items-center gap-2">
-            <i class="bi bi-check2-circle text-success"></i> <span>1,000,000 token kuota gratis langsung aktif</span>
+            <i class="bi bi-check2-circle text-success"></i> <span>1,000,000 free starter tokens immediately active</span>
           </li>
           <li class="d-flex align-items-center gap-2">
-            <i class="bi bi-check2-circle text-success"></i> <span>Auto API key (<code class="text-primary font-monospace">sk-gw-...</code>) siap pakai</span>
+            <i class="bi bi-check2-circle text-success"></i> <span>Auto-generated API key (<code class="text-primary font-monospace">sk-gw-...</code>) ready to use</span>
           </li>
           <li class="d-flex align-items-center gap-2">
-            <i class="bi bi-check2-circle text-success"></i> <span>Akses model Google Gemini, Claude, &amp; GLM</span>
+            <i class="bi bi-check2-circle text-success"></i> <span>Access to Google Gemini, Claude, &amp; GLM models</span>
           </li>
         </ul>
       </div>
 
       <button type="submit" class="btn-modern-primary w-100 py-2 d-flex align-items-center justify-content-center gap-2">
-        <i class="bi bi-person-plus-fill"></i> Buat Akun &amp; Masuk ke Dashboard
+        <i class="bi bi-person-plus-fill"></i> Create Account &amp; Open Dashboard
       </button>
 
       <div class="text-center mt-3">
-        <span class="text-dim small">Sudah punya akun?</span>
-        <a href="/login" class="small fw-bold text-primary text-decoration-none ms-1">Masuk ke Dashboard</a>
+        <span class="text-dim small">Already have an account?</span>
+        <a href="/login" class="small fw-bold text-primary text-decoration-none ms-1">Sign In to Dashboard</a>
       </div>
     </form>
 
