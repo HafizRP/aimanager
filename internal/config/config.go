@@ -51,8 +51,8 @@ func LoadConfig() *Config {
 	adminPassword := getEnv("ADMIN_PASSWORD", "admin123")
 	sessionSecret := getEnv("SESSION_SECRET", "9router-secret-token-key-change-me")
 
-	midtransServerKey := getEnv("MIDTRANS_SERVER_KEY", "SB-Mid-server-demo-key")
-	midtransClientKey := getEnv("MIDTRANS_CLIENT_KEY", "SB-Mid-client-demo-key")
+	midtransServerKey := getEnv("MIDTRANS_SERVER_KEY", "")
+	midtransClientKey := getEnv("MIDTRANS_CLIENT_KEY", "")
 	midtransIsProduction := getEnvAsBool("MIDTRANS_IS_PRODUCTION", false)
 	midtransMerchantID := getEnv("MIDTRANS_MERCHANT_ID", "")
 

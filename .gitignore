@@ -1,6 +1,7 @@
 # Binaries & Build Output
 bin/
 dist/
+aimanager
 9router-gateway
 gateway
 *.exe

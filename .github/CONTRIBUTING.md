@@ -76,14 +76,14 @@ custom_providers:
 
 ```bash
 # Build binary
-go build -ldflags="-w -s" -o bin/9router-gateway ./cmd/gateway
+go build -ldflags="-w -s" -o bin/aimanager ./cmd/gateway
 # Or with make
 make build
 
 # Run locally
 go run ./cmd/gateway
 # Or with binary
-./bin/9router-gateway
+./bin/aimanager
 
 # Docker deployment
 docker compose up -d --build

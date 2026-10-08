@@ -1,6 +1,6 @@
 # System Architecture & Invariants
 
-This document details the architectural design, security boundaries, and operational invariants of **AI Manager (`9router-gateway`)**.
+This document details the architectural design, security boundaries, and operational invariants of **AI Manager (`aimanager`)**.
 
 ---
 

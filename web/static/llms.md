@@ -4,7 +4,7 @@
 
 ## 1. Project Overview
 
-**AI Manager** (`9router-gateway`) is a Go-based reverse proxy, multi-tenant authentication gateway, FinOps cost analytics tracker, and web administration platform. It is deployed in front of **9router Core** (`127.0.0.1:20128`).
+**AI Manager** (`aimanager`) is a Go-based reverse proxy, multi-tenant authentication gateway, FinOps cost analytics tracker, and web administration platform. It is deployed in front of **9router Core** (`127.0.0.1:20128`).
 
 ### Primary Purpose
 - Route OpenAI-compatible requests (`/v1/chat/completions`, `/v1/models`) to upstream 9router Core
@@ -145,7 +145,7 @@ Clients (Cursor, Claude Code, Cline, Copilot, Python SDKs)
 
 ```bash
 # Build binary
-go build -ldflags="-w -s" -o bin/9router-gateway ./cmd/gateway
+go build -ldflags="-w -s" -o bin/aimanager ./cmd/gateway
 # Or with make
 make build
 

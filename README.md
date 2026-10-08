@@ -1,4 +1,4 @@
-# ⚡ AI Manager (`9router-gateway`)
+# ⚡ AI Manager (`aimanager`)
 
 > **Unified Enterprise LLM Gateway, FinOps Analytics, Multi-Tenant Management & Reverse Proxy Stack**
 
@@ -144,17 +144,17 @@ For production Linux servers running without Docker overhead:
 
 ### 1. Build Gateway Binary
 ```bash
-go build -ldflags="-w -s" -o bin/9router-gateway ./cmd/gateway
+go build -ldflags="-w -s" -o bin/aimanager ./cmd/gateway
 # Or using Makefile
 make build
 ```
 
 ### 2. Configure Service Unit
-Use the provided service unit template in `init/systemd/9router-gateway.service`:
+Use the provided service unit template in `init/systemd/aimanager.service`:
 ```bash
-sudo cp init/systemd/9router-gateway.service /etc/systemd/system/
+sudo cp init/systemd/aimanager.service /etc/systemd/system/
 ```
-Or create `/etc/systemd/system/9router-gateway.service`:
+Or create `/etc/systemd/system/aimanager.service`:
 ```ini
 [Unit]
 Description=AI Manager Gateway & Reverse Proxy
@@ -165,11 +165,11 @@ Wants=docker.service
 Type=simple
 User=b14
 Group=b14
-WorkingDirectory=/home/b14/9router-gateway
-ExecStart=/home/b14/9router-gateway/bin/9router-gateway
+WorkingDirectory=/home/b14/aimanager
+ExecStart=/home/b14/aimanager/bin/aimanager
 Restart=always
 RestartSec=3
-EnvironmentFile=/home/b14/9router-gateway/.env
+EnvironmentFile=/home/b14/aimanager/.env
 LimitNOFILE=65536
 
 [Install]
@@ -179,8 +179,8 @@ WantedBy=multi-user.target
 ### 3. Start & Enable Service
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now 9router-gateway
-sudo systemctl status 9router-gateway
+sudo systemctl enable --now aimanager
+sudo systemctl status aimanager
 ```
 
 ---

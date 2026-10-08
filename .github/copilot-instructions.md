@@ -1,4 +1,4 @@
-# AI Manager (`9router-gateway`) - Copilot Instructions
+# AI Manager (`aimanager`) - Copilot Instructions
 
 Guidelines and architectural standards for AI assistants and developers working with this codebase.
 
@@ -81,7 +81,7 @@ Clients (Cursor, Claude, Cline, Copilot, Python, SDKs)
 
 ```bash
 # Build binary
-go build -ldflags="-w -s" -o bin/9router-gateway ./cmd/gateway
+go build -ldflags="-w -s" -o bin/aimanager ./cmd/gateway
 
 # Run all unit tests
 go test -v ./...

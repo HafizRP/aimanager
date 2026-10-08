@@ -8,7 +8,7 @@ import urllib.request
 import sqlite3
 import sys
 
-CORE_DIR = "/home/b14/9router-gateway/data/core"
+CORE_DIR = "/home/b14/aimanager/data/core"
 DB_PATH = f"{CORE_DIR}/db/data.sqlite"
 SECRET_PATH = f"{CORE_DIR}/jwt-secret"
 
