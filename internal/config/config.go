@@ -48,8 +48,8 @@ func LoadConfig() *Config {
 	nineRouterDataDir := getEnv("NINEROUTER_DATA_DIR", "")
 
 	adminUsername := getEnv("ADMIN_USERNAME", "admin")
-	adminPassword := getEnv("ADMIN_PASSWORD", "admin123")
-	sessionSecret := getEnv("SESSION_SECRET", "9router-secret-token-key-change-me")
+	adminPassword := getEnv("ADMIN_PASSWORD", "")
+	sessionSecret := getEnv("SESSION_SECRET", "")
 
 	midtransServerKey := getEnv("MIDTRANS_SERVER_KEY", "")
 	midtransClientKey := getEnv("MIDTRANS_CLIENT_KEY", "")

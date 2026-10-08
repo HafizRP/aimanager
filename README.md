@@ -193,9 +193,9 @@ sudo systemctl status aimanager
 | `HOST` | `0.0.0.0` | Bind address |
 | `DB_PATH` | `./data/gateway.db` | Path to gateway SQLite database |
 | `NINEROUTER_DATA_DIR` | (auto-derived) | Optional path to 9router Core data directory |
-| `ADMIN_USERNAME` | `admin` | Default admin username |
-| `ADMIN_PASSWORD` | `admin123` | Default admin password |
-| `SESSION_SECRET` | `change_me` | Secret key used for signing session cookies |
+| `ADMIN_USERNAME` | `admin` | Initial admin username |
+| `ADMIN_PASSWORD` | - | Initial admin password (auto-generated if empty) |
+| `SESSION_SECRET` | - | Session signing key (auto-generated 64-char hex if empty) |
 | `MIDTRANS_SERVER_KEY` | - | Midtrans Server Key for payment handling |
 | `MIDTRANS_CLIENT_KEY` | - | Midtrans Client Key for Snap UI popup |
 | `MIDTRANS_IS_PRODUCTION`| `false` | Set to `true` for live payments |
@@ -257,7 +257,7 @@ Content-Type: application/json
 
 ### Cursor IDE
 1. Open **Cursor Settings > Models > OpenAI API Key**.
-2. Set **Override OpenAI Base URL**: `https://aimanager.b14.my.id/v1` (or `http://127.0.0.1:20129/v1`).
+2. Set **Override OpenAI Base URL**: `https://aimanager.b14.my.id/v1` (or your custom gateway URL).
 3. Set **API Key**: `aim_...` (generated from `/keys`).
 4. Configure model: `main` or your allowed combo.
 

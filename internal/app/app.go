@@ -234,7 +234,14 @@ func seedInitialData(repo repository.Repository, sync *syncer.Syncer, cfg *confi
 	}
 	adminPassword := strings.TrimSpace(cfg.AdminPassword)
 	if adminPassword == "" {
-		adminPassword = "admin123"
+		passBytes := make([]byte, 16)
+		if _, err := rand.Read(passBytes); err == nil {
+			adminPassword = hex.EncodeToString(passBytes)
+		} else {
+			adminPassword = uuid.New().String()
+		}
+		log.Warn().Str("username", adminUsername).Str("generated_password", adminPassword).
+			Msg("ADMIN_PASSWORD not set. Generated secure random initial admin password for seeding")
 	}
 	adminHash, err := usecase.HashPassword(adminPassword)
 	if err != nil {
@@ -270,7 +277,8 @@ func seedInitialData(repo repository.Repository, sync *syncer.Syncer, cfg *confi
 	}
 
 	// 2. Demo User with quota & whitelist
-	demoHash, _ := usecase.HashPassword("user123")
+	demoPass := "user-" + uuid.New().String()[:8]
+	demoHash, _ := usecase.HashPassword(demoPass)
 	demoID := uuid.New().String()
 	demoUser := &entity.User{
 		ID:            demoID,
