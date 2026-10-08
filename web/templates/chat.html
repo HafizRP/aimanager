@@ -798,5 +798,22 @@ function renderMarkdownInto(element, rawText) {
 // Initialize sessions and presets on page load
 initSessions();
 renderPresetChips();
+
+// Auto-select model from URL query parameter (?model=...)
+(function() {
+  const params = new URLSearchParams(window.location.search);
+  const targetModel = params.get('model');
+  if (targetModel) {
+    const sel = document.getElementById('chatModelSelect');
+    if (sel) {
+      for (let i = 0; i < sel.options.length; i++) {
+        if (sel.options[i].value === targetModel) {
+          sel.selectedIndex = i;
+          break;
+        }
+      }
+    }
+  }
+})();
 </script>
 {{ end }}

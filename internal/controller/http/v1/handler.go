@@ -217,6 +217,9 @@ func NewHandler(cfg *config.Config, repo repository.Repository, sync *syncer.Syn
 			}
 			return na - nb
 		},
+		"hasPrefix": func(s, prefix string) bool {
+			return strings.HasPrefix(s, prefix)
+		},
 		"formatFloat1": func(v float64) string {
 			return fmt.Sprintf("%.1f", v)
 		},
@@ -489,19 +492,19 @@ func (h *Handler) RegisterPost(w http.ResponseWriter, r *http.Request) {
 	confirm := strings.TrimSpace(r.FormValue("confirm_password"))
 
 	if name == "" {
-		http.Redirect(w, r, "/register?error="+url.QueryEscape("Nama lengkap tidak boleh kosong"), http.StatusSeeOther)
+		http.Redirect(w, r, "/register?error="+url.QueryEscape("Full name is required"), http.StatusSeeOther)
 		return
 	}
 	if username == "" {
-		http.Redirect(w, r, "/register?error="+url.QueryEscape("Username tidak boleh kosong"), http.StatusSeeOther)
+		http.Redirect(w, r, "/register?error="+url.QueryEscape("Username is required"), http.StatusSeeOther)
 		return
 	}
 	if len(password) < 6 {
-		http.Redirect(w, r, "/register?error="+url.QueryEscape("Password minimal 6 karakter"), http.StatusSeeOther)
+		http.Redirect(w, r, "/register?error="+url.QueryEscape("Password must be at least 6 characters"), http.StatusSeeOther)
 		return
 	}
 	if password != confirm {
-		http.Redirect(w, r, "/register?error="+url.QueryEscape("Konfirmasi password tidak cocok"), http.StatusSeeOther)
+		http.Redirect(w, r, "/register?error="+url.QueryEscape("Password confirmation does not match"), http.StatusSeeOther)
 		return
 	}
 
@@ -677,6 +680,10 @@ func (h *Handler) refreshUpstreamModels(ctx context.Context) ([]UpstreamModelIte
 			h.modelsMu.Unlock()
 			return items, nil
 		}
+	}
+
+	if h.cfg == nil {
+		return nil, fmt.Errorf("config is nil")
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, h.cfg.GetUpstreamURL()+"/v1/models", nil)

@@ -111,7 +111,7 @@ function initApp() {
     const toast = document.createElement("div");
     toast.className = "neo-toast";
     const iconHtml = icon ? `<span style="font-size:1.15rem;">${icon}</span>` : '<i class="bi bi-stars text-warning" style="font-size:1.1rem;"></i>';
-    toast.innerHTML = `${iconHtml} <span>${msg || "Tersalin ke clipboard!"}</span>`;
+    toast.innerHTML = `${iconHtml} <span>${msg || "Copied to clipboard!"}</span>`;
     
     container.appendChild(toast);
     setTimeout(() => {
@@ -122,7 +122,7 @@ function initApp() {
   };
 
   function showCopyToast(msg) {
-    window.showToast(msg || "Tersalin ke clipboard! ✨", "📋");
+    window.showToast(msg || "Copied to clipboard! ✨", "📋");
   }
 
   // Global Delegated Copy Handler
@@ -337,27 +337,27 @@ function initApp() {
         href: "",
         iconClass: "bi bi-moon-stars text-cyan",
         badgeText: "Action",
-        keywords: "theme toggle dark light mode tema gelap terang ubah warna switch display tampilan mode",
+        keywords: "theme toggle dark light mode switch display appearance",
         action: function() {
           const btn = document.getElementById("themeToggle") || document.getElementById("themeToggleMobile");
           if (btn) btn.click();
         }
       },
       {
-        title: "Ganti Password / Security Credentials",
+        title: "Change Password & Security Credentials",
         group: "Account Settings",
         href: "/profile",
         iconClass: "bi bi-shield-lock text-warning",
         badgeText: "Setting",
-        keywords: "password ganti ubah sandi kata sandi security credentials profile keamanan akun user pengaturan akun"
+        keywords: "password change update credentials profile account security user settings"
       },
       {
-        title: "Create New API Key (Buat Kunci API)",
+        title: "Create New API Key",
         group: "Access & Billing",
         href: "/keys",
         iconClass: "bi bi-key-fill text-warning",
         badgeText: "Action",
-        keywords: "api key create new buat kunci sk-gw secret token budget generate baru"
+        keywords: "api key create new sk-gw secret token budget generate"
       }
     ];
 
@@ -369,7 +369,7 @@ function initApp() {
           href: "/settings",
           iconClass: "bi bi-gear-fill text-muted",
           badgeText: "Setting",
-          keywords: "upstream url database path core sqlite settings sync port 20128 gateway konfigurasi pengaturan core database"
+          keywords: "upstream url database path core sqlite settings sync port 20128 gateway configuration core database"
         },
         {
           title: "Midtrans Payment Gateway Configuration",
@@ -377,7 +377,7 @@ function initApp() {
           href: "/settings",
           iconClass: "bi bi-credit-card text-emerald",
           badgeText: "Setting",
-          keywords: "midtrans server key client key production sandbox qris gopay va payment gateway pembayaran pengaturan midtrans"
+          keywords: "midtrans server key client key production sandbox qris gopay va payment gateway configuration settings"
         },
         {
           title: "Token Saver: RTK Compression & Thinking Modes",
@@ -385,7 +385,7 @@ function initApp() {
           href: "/token-saver",
           iconClass: "bi bi-magic text-emerald",
           badgeText: "Setting",
-          keywords: "rtk compression thinking intensity antigravity opencode mode ponytail caveman penghemat token pengaturan kompresi"
+          keywords: "rtk compression thinking intensity antigravity opencode mode ponytail caveman token saver settings"
         },
         {
           title: "Setup CLI Tools (Cursor, Claude, Codex, Hermes)",
@@ -393,7 +393,7 @@ function initApp() {
           href: "/cli-tools",
           iconClass: "bi bi-tools text-cyan",
           badgeText: "Tools",
-          keywords: "cli tools setup cursor claude codex cline hermes copilot opencode panduan konfigurasi terminal ide"
+          keywords: "cli tools setup cursor claude codex cline hermes copilot opencode guide configuration terminal ide"
         }
       );
     }
@@ -402,41 +402,41 @@ function initApp() {
     const hubSubpages = [
       // Developer Hub
       { title: "Endpoint Hub (URLs & Loopback)", group: "Developer Hub", href: "/endpoint", iconClass: "bi bi-plug-fill text-info", badgeText: "Endpoint", keywords: "endpoint urls api loopback proxy base completion port" },
-      { title: "API Keys (Secret & Budgets)", group: "Developer Hub", href: "/keys", iconClass: "bi bi-key text-warning", badgeText: "Auth", keywords: "api keys secret token budget rate limit rotate revoke kunci api" },
-      { title: "CLI Tools Hub (Cursor, Claude, Codex, Hermes)", group: "Developer Hub", href: "/cli-tools", iconClass: "bi bi-tools text-cyan", badgeText: "Tools", keywords: "cli tools setup cursor claude codex cline hermes copilot opencode panduan konfigurasi terminal ide" },
-      { title: "Agent Skills (Prompts & System Instructions)", group: "Developer Hub", href: "/skills", iconClass: "bi bi-puzzle-fill text-emerald", badgeText: "Skills", keywords: "agent skills prompt snippets system instructions templates universal keahlian agen" },
+      { title: "API Keys (Secret & Budgets)", group: "Developer Hub", href: "/keys", iconClass: "bi bi-key text-warning", badgeText: "Auth", keywords: "api keys secret token budget rate limit rotate revoke auth key" },
+      { title: "CLI Tools Hub (Cursor, Claude, Codex, Hermes)", group: "Developer Hub", href: "/cli-tools", iconClass: "bi bi-tools text-cyan", badgeText: "Tools", keywords: "cli tools setup cursor claude codex cline hermes copilot opencode guide configuration terminal ide" },
+      { title: "Agent Skills (Prompts & System Instructions)", group: "Developer Hub", href: "/skills", iconClass: "bi bi-puzzle-fill text-emerald", badgeText: "Skills", keywords: "agent skills prompt snippets system instructions templates universal agent skills" },
 
       // Observability & Stats
-      { title: "Request Logs (Audit Traffic & Errors)", group: "Observability", href: "/logs", iconClass: "bi bi-activity text-info", badgeText: "Logs", keywords: "request logs audit traffic history status errors export csv json filter riwayat log" },
-      { title: "Usage Analytics (Cost & Token Breakdown)", group: "Observability", href: "/usage", iconClass: "bi bi-bar-chart-fill text-primary", badgeText: "Usage", keywords: "usage analytics breakdown tokens provider model account cost pemakaian penggunaan statistik" },
-      { title: "Cache Analytics & FinOps (Exact Response Hits)", group: "Observability", href: "/cache-analytics", iconClass: "bi bi-database-check text-cyan", badgeText: "FinOps", keywords: "cache analytics exact response hit ratio sha256 savings finops rtk analisis cache" },
-      { title: "Speed Benchmark (TTFT & Throughput)", group: "Observability", href: "/benchmark", iconClass: "bi bi-speedometer text-warning", badgeText: "Speed", keywords: "speed benchmark ttft latency performance throughput test leaderboard uji kecepatan" },
-      { title: "Replay Lab (Prompt Diff & Model Compare)", group: "Observability", href: "/replay", iconClass: "bi bi-repeat text-info", badgeText: "Lab", keywords: "replay lab prompt diff compare models side by side output latency rerun uji ulang" },
-      { title: "Anomaly Radar & Circuit Breakers", group: "Observability", href: "/radar", iconClass: "bi bi-radar text-rose", badgeText: "Radar", keywords: "anomaly radar circuit breaker breakers fault tolerance upstream health security spike alerts errors baseline detection cutoff reset anomali" },
+      { title: "Request Logs (Audit Traffic & Errors)", group: "Observability", href: "/logs", iconClass: "bi bi-activity text-info", badgeText: "Logs", keywords: "request logs audit traffic history status errors export csv json filter audit logs" },
+      { title: "Usage Analytics (Cost & Token Breakdown)", group: "Observability", href: "/usage", iconClass: "bi bi-bar-chart-fill text-primary", badgeText: "Usage", keywords: "usage analytics breakdown tokens provider model account cost consumption analytics" },
+      { title: "Cache Analytics & FinOps (Exact Response Hits)", group: "Observability", href: "/cache-analytics", iconClass: "bi bi-database-check text-cyan", badgeText: "FinOps", keywords: "cache analytics exact response hit ratio sha256 savings finops rtk cache analytics" },
+      { title: "Speed Benchmark (TTFT & Throughput)", group: "Observability", href: "/benchmark", iconClass: "bi bi-speedometer text-warning", badgeText: "Speed", keywords: "speed benchmark ttft latency performance throughput test leaderboard speed test" },
+      { title: "Replay Lab (Prompt Diff & Model Compare)", group: "Observability", href: "/replay", iconClass: "bi bi-repeat text-info", badgeText: "Lab", keywords: "replay lab prompt diff compare models side by side output latency rerun test" },
+      { title: "Anomaly Radar & Circuit Breakers", group: "Observability", href: "/radar", iconClass: "bi bi-radar text-rose", badgeText: "Radar", keywords: "anomaly radar circuit breaker breakers fault tolerance upstream health security spike alerts errors baseline detection cutoff reset anomaly" },
 
       // Engine & Admin
-      { title: "Models & Aliases (Catalog & Context)", group: "Models & Routing", href: "/models", iconClass: "bi bi-cpu text-primary", badgeText: "Models", keywords: "models aliases upstream mapping context list gpt claude gemini daftar model alias" },
-      { title: "Model Combos (Fallback & Failover Chains)", group: "Models & Routing", href: "/combos", iconClass: "bi bi-diagram-3 text-indigo", badgeText: "Combos", keywords: "model combos fallback chains failover round robin fusion strategy sticky kombo model" },
-      { title: "Pricing Catalog (Rates per Million)", group: "Models & Routing", href: "/pricing", iconClass: "bi bi-tag text-warning", badgeText: "Pricing", keywords: "pricing token rates cost per million upstream catalog harga tarif biaya katalog" },
-      { title: "Protocol Translator (OpenAI / Anthropic / Gemini)", group: "Models & Routing", href: "/translator", iconClass: "bi bi-translate text-emerald", badgeText: "Translator", keywords: "translator protocol format translation convert anthropic openai gemini penerjemah" },
+      { title: "Models & Aliases (Catalog & Context)", group: "Models & Routing", href: "/models", iconClass: "bi bi-cpu text-primary", badgeText: "Models", keywords: "models aliases upstream mapping context list gpt claude gemini catalog model list" },
+      { title: "Model Combos (Fallback & Failover Chains)", group: "Models & Routing", href: "/combos", iconClass: "bi bi-diagram-3 text-indigo", badgeText: "Combos", keywords: "model combos fallback chains failover round robin fusion strategy sticky model combos" },
+      { title: "Pricing Catalog (Rates per Million)", group: "Models & Routing", href: "/pricing", iconClass: "bi bi-tag text-warning", badgeText: "Pricing", keywords: "pricing token rates cost per million upstream catalog rates pricing catalog" },
+      { title: "Protocol Translator (OpenAI / Anthropic / Gemini)", group: "Models & Routing", href: "/translator", iconClass: "bi bi-translate text-emerald", badgeText: "Translator", keywords: "translator protocol format translation convert anthropic openai gemini translator" },
 
-      { title: "Upstream Providers (Accounts & OAuth)", group: "Providers & Networks", href: "/providers", iconClass: "bi bi-cloud-check text-primary", badgeText: "Providers", keywords: "providers connections upstream antigravity kiro openai oauth accounts priority test penyedia akun" },
-      { title: "Provider Nodes (Self-hosted Endpoints)", group: "Providers & Networks", href: "/nodes", iconClass: "bi bi-server text-cyan", badgeText: "Nodes", keywords: "provider nodes openai compatible self hosted endpoints prefix routing node penyedia" },
-      { title: "Quota Overview (Rolling Windows & Reset Timers)", group: "Providers & Networks", href: "/quota", iconClass: "bi bi-pie-chart-fill text-emerald", badgeText: "Quota", keywords: "quota overview rolling windows accounts reset timers limits pools ringkasan kuota" },
-      { title: "Proxy Pools (Outbound IP Rotation)", group: "Providers & Networks", href: "/proxy-pools", iconClass: "bi bi-shield-shaded text-cyan", badgeText: "Proxies", keywords: "proxy pools egress outbound ip rotate socks5 http residential kolam proxy" },
+      { title: "Upstream Providers (Accounts & OAuth)", group: "Providers & Networks", href: "/providers", iconClass: "bi bi-cloud-check text-primary", badgeText: "Providers", keywords: "providers connections upstream antigravity kiro openai oauth accounts priority test accounts connections" },
+      { title: "Provider Nodes (Self-hosted Endpoints)", group: "Providers & Networks", href: "/nodes", iconClass: "bi bi-server text-cyan", badgeText: "Nodes", keywords: "provider nodes openai compatible self hosted endpoints prefix routing provider nodes" },
+      { title: "Quota Overview (Rolling Windows & Reset Timers)", group: "Providers & Networks", href: "/quota", iconClass: "bi bi-pie-chart-fill text-emerald", badgeText: "Quota", keywords: "quota overview rolling windows accounts reset timers limits pools quota overview" },
+      { title: "Proxy Pools (Outbound IP Rotation)", group: "Providers & Networks", href: "/proxy-pools", iconClass: "bi bi-shield-shaded text-cyan", badgeText: "Proxies", keywords: "proxy pools egress outbound ip rotate socks5 http residential proxy pools" },
 
-      { title: "Token Saver & RTK (Compression & Modes)", group: "Optimization & Plugins", href: "/token-saver", iconClass: "bi bi-magic text-emerald", badgeText: "Saver", keywords: "token saver rtk compression thinking intensity ponytail caveman headroom pxpipe penghemat" },
-      { title: "PXPipe (Prompt Transform & Image Compression)", group: "Optimization & Plugins", href: "/pxpipe", iconClass: "bi bi-funnel text-info", badgeText: "PXPipe", keywords: "pxpipe prompt transform images compression pipeline proxy pipa transformasi" },
-      { title: "Media Voices (TTS Audio Synthesis)", group: "Optimization & Plugins", href: "/media", iconClass: "bi bi-speaker text-pink", badgeText: "TTS", keywords: "media voices tts audio speech deepgram elevenlabs minimax voices suara media" },
-      { title: "MITM Bridge (Antigravity DNS Interception)", group: "Optimization & Plugins", href: "/mitm", iconClass: "bi bi-shuffle text-warning", badgeText: "MITM", keywords: "mitm bridge antigravity dns interception proxy certificate tools jembatan mitm" },
-      { title: "MCP Inspector (Model Context Protocol)", group: "Optimization & Plugins", href: "/mcp", iconClass: "bi bi-boxes text-emerald", badgeText: "MCP", keywords: "mcp inspector model context protocol cowork tools registry inspektur mcp" },
+      { title: "Token Saver & RTK (Compression & Modes)", group: "Optimization & Plugins", href: "/token-saver", iconClass: "bi bi-magic text-emerald", badgeText: "Saver", keywords: "token saver rtk compression thinking intensity ponytail caveman headroom pxpipe token saver" },
+      { title: "PXPipe (Prompt Transform & Image Compression)", group: "Optimization & Plugins", href: "/pxpipe", iconClass: "bi bi-funnel text-info", badgeText: "PXPipe", keywords: "pxpipe prompt transform images compression pipeline proxy transform pipeline" },
+      { title: "Media Voices (TTS Audio Synthesis)", group: "Optimization & Plugins", href: "/media", iconClass: "bi bi-speaker text-pink", badgeText: "TTS", keywords: "media voices tts audio speech deepgram elevenlabs minimax voices media voices" },
+      { title: "MITM Bridge (Antigravity DNS Interception)", group: "Optimization & Plugins", href: "/mitm", iconClass: "bi bi-shuffle text-warning", badgeText: "MITM", keywords: "mitm bridge antigravity dns interception proxy certificate tools mitm bridge" },
+      { title: "MCP Inspector (Model Context Protocol)", group: "Optimization & Plugins", href: "/mcp", iconClass: "bi bi-boxes text-emerald", badgeText: "MCP", keywords: "mcp inspector model context protocol cowork tools registry mcp inspector" },
 
-      { title: "Users & Quotas (Accounts & Roles)", group: "System & Settings", href: "/users", iconClass: "bi bi-people-fill text-warning", badgeText: "Users", keywords: "users quotas management accounts role admin active daily reset password pengguna" },
-      { title: "Gateway Settings (Config & Secrets)", group: "System & Settings", href: "/settings", iconClass: "bi bi-gear-fill text-muted", badgeText: "Config", keywords: "gateway settings upstream core midtrans configuration secrets env pengaturan gateway" },
-      { title: "Console Log (Live Engine Stream)", group: "System & Settings", href: "/console-log", iconClass: "bi bi-terminal-split text-info", badgeText: "Console", keywords: "console log server core translator live stream debug output log konsol" },
+      { title: "Users & Quotas (Accounts & Roles)", group: "System & Settings", href: "/users", iconClass: "bi bi-people-fill text-warning", badgeText: "Users", keywords: "users quotas management accounts role admin active daily reset password users" },
+      { title: "Gateway Settings (Config & Secrets)", group: "System & Settings", href: "/settings", iconClass: "bi bi-gear-fill text-muted", badgeText: "Config", keywords: "gateway settings upstream core midtrans configuration secrets env gateway settings" },
+      { title: "Console Log (Live Engine Stream)", group: "System & Settings", href: "/console-log", iconClass: "bi bi-terminal-split text-info", badgeText: "Console", keywords: "console log server core translator live stream debug output console log" },
 
-      { title: "My Profile & Security Settings", group: "Account", href: "/profile", iconClass: "bi bi-person-circle text-muted", badgeText: "Profile", keywords: "profile user account password credentials timezone quota profil saya akun" },
-      { title: "Buy Tokens (Topup & Invoice)", group: "Account", href: "/billing", iconClass: "bi bi-cart text-emerald", badgeText: "Billing", keywords: "billing buy tokens topup payment midtrans qris gopay va credit invoice balance beli token" }
+      { title: "My Profile & Security Settings", group: "Account", href: "/profile", iconClass: "bi bi-person-circle text-muted", badgeText: "Profile", keywords: "profile user account password credentials timezone quota my profile account" },
+      { title: "Buy Tokens (Topup & Invoice)", group: "Account", href: "/billing", iconClass: "bi bi-cart text-emerald", badgeText: "Billing", keywords: "billing buy tokens topup payment midtrans qris gopay va credit invoice balance buy tokens" }
     ];
 
     hubSubpages.forEach(item => {
@@ -626,8 +626,8 @@ function initApp() {
         commandPaletteResults.innerHTML = `
           <div class="text-center py-4 px-2">
             <i class="bi bi-search text-dim fs-4 d-block mb-2"></i>
-            <span class="text-dim small d-block mb-1">Menu atau pengaturan tidak ditemukan</span>
-            <span class="text-muted" style="font-size:0.75rem;">Coba kata kunci: <span class="text-cyan">pengaturan</span>, <span class="text-cyan">keys</span>, <span class="text-cyan">billing</span>, <span class="text-cyan">chat</span>, <span class="text-cyan">tema</span></span>
+            <span class="text-dim small d-block mb-1">No matching menu or settings found</span>
+            <span class="text-muted" style="font-size:0.75rem;">Try searching: <span class="text-cyan">settings</span>, <span class="text-cyan">keys</span>, <span class="text-cyan">billing</span>, <span class="text-cyan">chat</span>, <span class="text-cyan">theme</span></span>
           </div>`;
         if (commandPaletteCount) commandPaletteCount.textContent = "0 items";
         return;

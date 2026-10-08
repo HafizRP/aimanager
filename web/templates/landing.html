@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="id" data-bs-theme="{{ if .UITheme }}{{ .UITheme }}{{ else }}dark{{ end }}">
+<html lang="en" data-bs-theme="{{ if .UITheme }}{{ .UITheme }}{{ else }}dark{{ end }}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AI Manager — Unified LLM Gateway & Smart Model Router</title>
   
-  <meta name="description" content="AI Manager adalah self-hosted enterprise LLM gateway dan smart model router di depan OpenAI, Claude Anthropic, Google Antigravity, Kiro, dan open-source AI. Hemat token hingga 40%, auto-failover, dan zero latency accumulation.">
+  <meta name="description" content="AI Manager is a self-hosted enterprise LLM gateway and intelligent model router in front of OpenAI, Claude Anthropic, Google Antigravity, Kiro, and open-source models. Cut token usage by up to 40%, auto-failover, and zero latency accumulation.">
   <meta name="keywords" content="AI Manager, LLM Gateway, Model Router, AI Proxy, Token Saver, Antigravity, Kiro, Self-Hosted AI">
   <meta name="author" content="HafizRP">
   <meta name="robots" content="index, follow">
@@ -25,7 +25,7 @@
 
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
-  <link href="/static/css/custom.css?v=23" rel="stylesheet">
+  <link href="/static/css/custom.css?v=24" rel="stylesheet">
 
   <!-- PWA: installable app & icons -->
   <link rel="manifest" href="/manifest.webmanifest">
@@ -53,10 +53,10 @@
       </a>
 
       <nav class="d-none d-md-flex align-items-center gap-4 small fw-semibold text-muted">
-        <a href="#features" class="text-decoration-none text-muted hover-text-main">Fitur</a>
+        <a href="#features" class="text-decoration-none text-muted hover-text-main">Features</a>
         <a href="#routing" class="text-decoration-none text-muted hover-text-main">Smart Routing</a>
         <a href="#ha" class="text-decoration-none text-muted hover-text-main">High Availability</a>
-        <a href="#pricing" class="text-decoration-none text-muted hover-text-main">Harga</a>
+        <a href="#pricing" class="text-decoration-none text-muted hover-text-main">Pricing</a>
       </nav>
 
       <div class="d-flex align-items-center gap-2">
@@ -69,9 +69,9 @@
             <i class="bi bi-speedometer2"></i> Dashboard
           </a>
         {{ else }}
-          <a href="/login" class="btn btn-sm btn-modern-ghost d-none d-sm-inline-flex">Masuk</a>
+          <a href="/login" class="btn btn-sm btn-modern-ghost d-none d-sm-inline-flex">Sign In</a>
           <a href="/register" class="btn btn-sm btn-modern-primary d-inline-flex align-items-center gap-1">
-            <i class="bi bi-rocket-takeoff-fill"></i> Mulai Gratis
+            <i class="bi bi-rocket-takeoff-fill"></i> Get Started
           </a>
         {{ end }}
       </div>
@@ -95,25 +95,25 @@
             </div>
 
             <h1 class="display-4 fw-extrabold tracking-tight mb-3 text-body" style="line-height: 1.15; font-weight: 800;">
-              Satu Gateway untuk Semua AI Model.<br>
-              <span class="text-primary">Hemat Token &amp; Anti Down.</span>
+              One Gateway for All AI Models.<br>
+              <span class="text-primary">Cut Token Spend &amp; Stay Online.</span>
             </h1>
 
             <p class="lead text-dim mb-4" style="max-width: 580px; font-size: 1.12rem; line-height: 1.6;">
-              Reverse proxy cerdas di depan OpenAI, Claude Anthropic, Google Antigravity, Kiro, dan open-source models. Dilengkapi auto-failover combo, quota guard, token compression -40%, dan monitoring real-time.
+              Intelligent reverse proxy in front of OpenAI, Claude Anthropic, Google Antigravity, Kiro, and open-source models. Features auto-failover combos, quota guards, -40% token compression, and real-time monitoring.
             </p>
 
             <div class="d-flex flex-wrap items-center justify-content-center justify-content-lg-start gap-3 mb-4">
               {{ if .IsLoggedIn }}
                 <a href="/dashboard" class="btn-modern-primary py-3 px-4 fs-6">
-                  <i class="bi bi-speedometer2 me-2"></i> Buka Dashboard Saya
+                  <i class="bi bi-speedometer2 me-2"></i> Open Dashboard
                 </a>
               {{ else }}
                 <a href="/register" class="btn-modern-primary py-3 px-4 fs-6">
-                  <i class="bi bi-rocket-takeoff-fill me-2"></i> Mulai Gratis (1M Token)
+                  <i class="bi bi-rocket-takeoff-fill me-2"></i> Start Free (1M Tokens)
                 </a>
                 <a href="/login" class="btn-modern-ghost py-3 px-4 fs-6">
-                  <i class="bi bi-box-arrow-in-right me-2"></i> Masuk Akun
+                  <i class="bi bi-box-arrow-in-right me-2"></i> Sign In
                 </a>
               {{ end }}
             </div>
@@ -200,10 +200,10 @@
     <section id="features" class="py-5 bg-body-tertiary" style="border-top: 2.5px solid var(--neo-border); border-bottom: 2.5px solid var(--neo-border);">
       <div class="container-xl py-4">
         <div class="text-center mb-5">
-          <span class="badge-modern badge-indigo mb-2">FITUR UTAMA</span>
-          <h2 class="display-6 fw-extrabold tracking-tight mb-2" style="font-weight: 800;">Kenapa Pakai AI Manager?</h2>
+          <span class="badge-modern badge-indigo mb-2">CORE FEATURES</span>
+          <h2 class="display-6 fw-extrabold tracking-tight mb-2" style="font-weight: 800;">Why Choose AI Manager?</h2>
           <p class="text-dim mx-auto" style="max-width: 520px;">
-            Dirancang khusus untuk developer, engineer, dan tim AI yang butuh kontrol penuh atas kuota, biaya, dan reliabilitas upstream model.
+            Engineered for developers, engineers, and AI teams needing complete control over quotas, costs, and upstream model reliability.
           </p>
         </div>
 
@@ -217,7 +217,7 @@
                 </div>
                 <h3 class="fw-bold fs-5 mb-2">Smart Failover &amp; Combos</h3>
                 <p class="text-dim small mb-0 leading-relaxed">
-                  Jika provider upstream mengalami rate-limit 429 atau 5xx, gateway otomatis mengalihkan request ke model fallback berikutnya dalam combo tanpa error di client.
+                  If an upstream provider hits rate limits (429) or 5xx errors, the gateway automatically routes requests to the next fallback model in the combo with zero client-side interruptions.
                 </p>
               </div>
               <div class="mt-3 pt-2 border-top border-secondary border-opacity-10">
@@ -235,7 +235,7 @@
                 </div>
                 <h3 class="fw-bold fs-5 mb-2">Token Saver &amp; RTK</h3>
                 <p class="text-dim small mb-0 leading-relaxed">
-                  Kompresi token real-time, optimasi reasoning effort (minimal/low/medium), dan adapter Caveman memangkas pemakaian token hingga 40% per request.
+                  Real-time prompt compression, reasoning effort optimization (minimal/low/medium), and Caveman adapters trim token consumption by up to 40% per request.
                 </p>
               </div>
               <div class="mt-3 pt-2 border-top border-secondary border-opacity-10">
@@ -253,7 +253,7 @@
                 </div>
                 <h3 class="fw-bold fs-5 mb-2">Live Quota &amp; Rolling Window</h3>
                 <p class="text-dim small mb-0 leading-relaxed">
-                  Pantau sisa kuota dan jadwal reset window per akun upstream (Google Antigravity, Kiro). Dilengkapi worker auto-reactivation akun otomatis saat kuota pulih.
+                  Monitor remaining quota and rolling reset windows per upstream account (Google Antigravity, Kiro). Includes automated account reactivation when quota recovers.
                 </p>
               </div>
               <div class="mt-3 pt-2 border-top border-secondary border-opacity-10">
@@ -271,7 +271,7 @@
                 </div>
                 <h3 class="fw-bold fs-5 mb-2">Exact Response Cache</h3>
                 <p class="text-dim small mb-0 leading-relaxed">
-                  In-memory TTL cache (15 menit) dengan hashing SHA-256 melayani prompt deterministik berulang dalam <10ms dan 0 token spend upstream.
+                  In-memory TTL cache (15 minutes) with SHA-256 hashing serves repeated deterministic prompts in &lt;10ms with 0 token spend upstream.
                 </p>
               </div>
               <div class="mt-3 pt-2 border-top border-secondary border-opacity-10">
@@ -289,7 +289,7 @@
                 </div>
                 <h3 class="fw-bold fs-5 mb-2">CLI &amp; IDE Setup Hub</h3>
                 <p class="text-dim small mb-0 leading-relaxed">
-                  Panduan konfigurasi pre-filled 1-klik untuk Claude Code, Cursor IDE, Codex, Copilot, Cline, dan Hermes Agent langsung dengan API key aktif lo.
+                  1-click pre-filled configuration guides for Claude Code, Cursor IDE, Codex, Copilot, Cline, and Hermes Agent with your active API key.
                 </p>
               </div>
               <div class="mt-3 pt-2 border-top border-secondary border-opacity-10">
@@ -307,7 +307,7 @@
                 </div>
                 <h3 class="fw-bold fs-5 mb-2">FinOps &amp; Cost Savings</h3>
                 <p class="text-dim small mb-0 leading-relaxed">
-                  Tracking penghematan biaya token vs tarif retail OpenAI ($5/1M token), visualisasi tren pemakaian dengan candle timeframe trading (1H, 4H, 1D, 1W, 1M).
+                  Track token cost savings vs OpenAI retail rates ($5/1M tokens), with usage trend visualization across trading candle timeframes (1H, 4H, 1D, 1W, 1M).
                 </p>
               </div>
               <div class="mt-3 pt-2 border-top border-secondary border-opacity-10">
@@ -326,10 +326,10 @@
           <div class="col-12 col-lg-6">
             <span class="badge-modern badge-emerald mb-2">HIGH AVAILABILITY</span>
             <h2 class="display-6 fw-extrabold tracking-tight mb-3" style="font-weight: 800;">
-              Arsitektur Tangguh &amp; Zero Single Point of Failure
+              Resilient Architecture &amp; Zero Single Point of Failure
             </h2>
             <p class="text-dim mb-4 leading-relaxed">
-              AI Manager dirancang dari level container hingga routing layer untuk menjamin request LLM lo selalu terlayani meskipun provider upstream mengalami gangguan atau kuota habis.
+              AI Manager is engineered from the container layer to the routing engine to guarantee your LLM requests are always fulfilled, even during upstream outages or quota exhaustion.
             </p>
 
             <div class="d-flex flex-column gap-3">
@@ -339,7 +339,7 @@
                 </div>
                 <div>
                   <h4 class="fw-bold fs-6 mb-1">Docker Compose Healthcheck &amp; Restart</h4>
-                  <p class="text-dim small mb-0">Container Gateway dan Core engine diproteksi dengan policy <code>restart: always</code> dan automated health probe setiap 10-15s.</p>
+                  <p class="text-dim small mb-0">Gateway and Core containers are protected by <code>restart: always</code> policies with automated health probes every 10-15s.</p>
                 </div>
               </div>
 
@@ -349,7 +349,7 @@
                 </div>
                 <div>
                   <h4 class="fw-bold fs-6 mb-1">Upstream Circuit Breaker Registry</h4>
-                  <p class="text-dim small mb-0">Memotong latensi saat model upstream 5xx/timeout berturut-turut, langsung mengalihkan ke model alternatif tanpa blocking.</p>
+                  <p class="text-dim small mb-0">Eliminates latency during consecutive upstream 5xx/timeout errors by instantly failing over to alternate models without thread blocking.</p>
                 </div>
               </div>
 
@@ -359,7 +359,7 @@
                 </div>
                 <div>
                   <h4 class="fw-bold fs-6 mb-1">Autonomous Cron Watchdog 24/7</h4>
-                  <p class="text-dim small mb-0">Hermes Background Agent memantau health container, penggunaan disk, dan port loopback secara periodik dengan auto-recovery mandiri.</p>
+                  <p class="text-dim small mb-0">Hermes Background Agent monitors container health, disk usage, and loopback connectivity with automated self-healing.</p>
                 </div>
               </div>
             </div>
@@ -377,7 +377,7 @@
                     <strong class="small text-light">Client Applications</strong>
                     <span class="badge-modern badge-gray">Cursor / Claude / Hermes</span>
                   </div>
-                  <div class="text-dim small">Mengirim request via endpoint standar <code>https://aimanager.b14.my.id/v1</code></div>
+                  <div class="text-dim small">Dispatches requests via standard OpenAI endpoint <code>https://aimanager.b14.my.id/v1</code></div>
                 </div>
 
                 <div class="text-center text-primary fs-5 my-n1"><i class="bi bi-arrow-down"></i></div>
@@ -420,10 +420,10 @@
     <section id="pricing" class="py-5 bg-body-tertiary" style="border-top: 2.5px solid var(--neo-border); border-bottom: 2.5px solid var(--neo-border);">
       <div class="container-xl py-4">
         <div class="text-center mb-5">
-          <span class="badge-modern badge-emerald mb-2">TIER &amp; KUOTA</span>
-          <h2 class="display-6 fw-extrabold tracking-tight mb-2" style="font-weight: 800;">Mulai Gratis Tanpa Kartu Kredit</h2>
+          <span class="badge-modern badge-emerald mb-2">TIERS &amp; QUOTAS</span>
+          <h2 class="display-6 fw-extrabold tracking-tight mb-2" style="font-weight: 800;">Get Started Free Without a Credit Card</h2>
           <p class="text-dim mx-auto" style="max-width: 500px;">
-            Setiap pendaftar baru langsung mendapatkan kuota starter untuk mulai coding dan eksplorasi model AI.
+            Every new account gets starter quota immediately to explore AI models and start coding.
           </p>
         </div>
 
@@ -434,19 +434,19 @@
               <div>
                 <div class="d-flex justify-content-between align-items-center mb-3">
                   <h3 class="fw-bold fs-4 mb-0">Free Starter</h3>
-                  <span class="badge-modern badge-emerald">GRATIS</span>
+                  <span class="badge-modern badge-emerald">FREE</span>
                 </div>
-                <div class="display-6 fw-extrabold mb-1" style="font-weight: 800;">Rp 0</div>
-                <p class="text-dim small mb-4">Cocok untuk personal developer &amp; testing agent.</p>
+                <div class="display-6 fw-extrabold mb-1" style="font-weight: 800;">$0 / Free</div>
+                <p class="text-dim small mb-4">Ideal for individual developers &amp; test agents.</p>
 
                 <ul class="list-unstyled d-flex flex-column gap-2 mb-4 small">
                   <li class="d-flex align-items-center gap-2">
                     <i class="bi bi-check2-circle text-success fs-6"></i>
-                    <span><strong>1,000,000 Token</strong> kuota awal langsung aktif</span>
+                    <span><strong>1,000,000 Tokens</strong> starter quota immediately active</span>
                   </li>
                   <li class="d-flex align-items-center gap-2">
                     <i class="bi bi-check2-circle text-success fs-6"></i>
-                    <span>Akses model combo <code>main</code> &amp; <code>free-only</code></span>
+                    <span>Access to <code>main</code> &amp; <code>free-only</code> model combos</span>
                   </li>
                   <li class="d-flex align-items-center gap-2">
                     <i class="bi bi-check2-circle text-success fs-6"></i>
@@ -454,7 +454,7 @@
                   </li>
                   <li class="d-flex align-items-center gap-2">
                     <i class="bi bi-check2-circle text-success fs-6"></i>
-                    <span>Integrasi Cursor, Claude Code, &amp; Hermes</span>
+                    <span>Integration with Cursor, Claude Code, &amp; Hermes</span>
                   </li>
                   <li class="d-flex align-items-center gap-2">
                     <i class="bi bi-check2-circle text-success fs-6"></i>
@@ -464,7 +464,7 @@
               </div>
 
               <a href="/register" class="btn-modern-primary w-100 py-2.5 text-center">
-                Daftar &amp; Klaim 1M Token
+                Register &amp; Claim 1M Tokens
               </a>
             </div>
           </div>
@@ -477,8 +477,8 @@
                   <h3 class="fw-bold fs-4 mb-0">Developer Pro</h3>
                   <span class="badge-modern badge-indigo">UNLIMITED</span>
                 </div>
-                <div class="display-6 fw-extrabold mb-1" style="font-weight: 800;">Top-Up QRIS</div>
-                <p class="text-dim small mb-4">Untuk workload intensif, scraping, &amp; production coding.</p>
+                <div class="display-6 fw-extrabold mb-1" style="font-weight: 800;">Top-Up / QRIS</div>
+                <p class="text-dim small mb-4">For intensive workloads, scraping, &amp; production coding.</p>
 
                 <ul class="list-unstyled d-flex flex-column gap-2 mb-4 small">
                   <li class="d-flex align-items-center gap-2">
@@ -487,7 +487,7 @@
                   </li>
                   <li class="d-flex align-items-center gap-2">
                     <i class="bi bi-check2-circle text-success fs-6"></i>
-                    <span>Multi API Keys dengan scoping allowed models</span>
+                    <span>Multi API Keys with allowed model scoping</span>
                   </li>
                   <li class="d-flex align-items-center gap-2">
                     <i class="bi bi-check2-circle text-success fs-6"></i>
@@ -495,11 +495,11 @@
                   </li>
                   <li class="d-flex align-items-center gap-2">
                     <i class="bi bi-check2-circle text-success fs-6"></i>
-                    <span>Live Web Playground multi-session dengan export MD</span>
+                    <span>Live multi-session Web Playground with Markdown export</span>
                   </li>
                   <li class="d-flex align-items-center gap-2">
                     <i class="bi bi-check2-circle text-success fs-6"></i>
-                    <span>Audit logs detail &amp; anomaly radar monitoring</span>
+                    <span>Detailed audit logs &amp; anomaly radar monitoring</span>
                   </li>
                 </ul>
               </div>
@@ -518,17 +518,17 @@
       <div class="container-xl py-4 position-relative" style="z-index: 1;">
         <div class="card-modern p-5 mx-auto text-center" style="max-width: 800px;">
           <h2 class="display-6 fw-extrabold tracking-tight mb-3" style="font-weight: 800;">
-            Siap Mengoptimasi Infrastruktur AI Lo?
+            Ready to Optimize Your AI Infrastructure?
           </h2>
           <p class="text-dim lead mb-4 mx-auto" style="max-width: 540px; font-size: 1.05rem;">
-            Daftar sekarang, dapatkan 1,000,000 token gratis, dan hubungkan langsung ke tools coding favorit lo dalam hitungan menit.
+            Sign up now, get 1,000,000 free tokens, and connect your favorite coding tools in minutes.
           </p>
           <div class="d-flex flex-wrap justify-content-center gap-3">
             <a href="/register" class="btn-modern-primary py-3 px-5 fs-6">
-              <i class="bi bi-person-plus-fill me-2"></i> Buat Akun Gratis Sekarang
+              <i class="bi bi-person-plus-fill me-2"></i> Create Free Account Now
             </a>
             <a href="/login" class="btn-modern-ghost py-3 px-4 fs-6">
-              <i class="bi bi-box-arrow-in-right me-2"></i> Masuk Dashboard
+              <i class="bi bi-box-arrow-in-right me-2"></i> Sign In to Dashboard
             </a>
           </div>
         </div>
@@ -548,8 +548,8 @@
       </div>
 
       <div class="d-flex align-items-center gap-3">
-        <a href="/login" class="text-dim text-decoration-none hover-text-main">Masuk</a>
-        <a href="/register" class="text-dim text-decoration-none hover-text-main">Daftar</a>
+        <a href="/login" class="text-dim text-decoration-none hover-text-main">Sign In</a>
+        <a href="/register" class="text-dim text-decoration-none hover-text-main">Sign Up</a>
         <a href="https://github.com/HafizRP/aimanager" target="_blank" class="text-dim text-decoration-none hover-text-main">
           <i class="bi bi-github me-1"></i> GitHub
         </a>
