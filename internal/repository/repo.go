@@ -101,6 +101,16 @@ type LoginAttemptRepository interface {
 	CleanOldLoginAttempts(ctx context.Context) error
 }
 
+// SkillRepository handles CRUD for agent skill registry entries.
+type SkillRepository interface {
+	ListSkills(ctx context.Context, search string) ([]entity.Skill, error)
+	GetSkillByID(ctx context.Context, id string) (*entity.Skill, error)
+	GetSkillByName(ctx context.Context, name string) (*entity.Skill, error)
+	CreateSkill(ctx context.Context, s *entity.Skill) error
+	UpdateSkill(ctx context.Context, s *entity.Skill) error
+	DeleteSkill(ctx context.Context, id string) error
+}
+
 // LoginAuditRepository manages user login audit records.
 type LoginAuditRepository interface {
 	RecordLoginAudit(ctx context.Context, audit *entity.LoginAudit) error
@@ -126,6 +136,7 @@ type Repository interface {
 	SessionRepository
 	LoginAttemptRepository
 	LoginAuditRepository
+	SkillRepository
 	UnitOfWork
 	Ping(ctx context.Context) error
 }

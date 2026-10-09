@@ -219,6 +219,13 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 
 		// Workspace: Skills, Endpoint Hub, Profile, Usage Analytics
 		authRouter.Get("/skills", h.SkillsPage)
+		// Skills Registry (admin CRUD + public raw API)
+		authRouter.Get("/api/skills", h.APIListSkills)
+		authRouter.Post("/api/skills", h.APICreateSkill)
+		authRouter.Get("/api/skills/raw/{name}", h.APIGetSkillRaw)
+		authRouter.Get("/api/skills/{id}", h.APIGetSkill)
+		authRouter.Put("/api/skills/{id}", h.APIUpdateSkill)
+		authRouter.Delete("/api/skills/{id}", h.APIDeleteSkill)
 		authRouter.Get("/endpoint", h.EndpointPage)
 		authRouter.Get("/profile", h.ProfilePage)
 		authRouter.Get("/usage", h.UsagePage)

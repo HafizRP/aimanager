@@ -197,6 +197,18 @@ func migrate(db *sql.DB) error {
 	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_request_logs_api_key_id ON request_logs(api_key_id);`)
 	_, _ = db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username ON users(username);`)
 
+	// Skills registry
+	_, _ = db.Exec(`CREATE TABLE IF NOT EXISTS skills (
+		id TEXT PRIMARY KEY,
+		name TEXT UNIQUE NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
+		tags TEXT NOT NULL DEFAULT '',
+		content TEXT NOT NULL DEFAULT '',
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);`)
+	_, _ = db.Exec(`CREATE INDEX IF NOT EXISTS idx_skills_name ON skills(name);`)
+
 	// Seed default packages if none exist
 	var count int
 	_ = db.QueryRow("SELECT COUNT(*) FROM token_packages").Scan(&count)

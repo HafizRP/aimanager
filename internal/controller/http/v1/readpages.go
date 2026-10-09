@@ -12,7 +12,7 @@ import (
 // Agent Skills, Endpoint hub, own Profile, Quota overview,
 // server Console Log viewer, and Usage analytics.
 
-// SkillsPage renders shareable agent-skill snippets (gateway endpoint + key + model).
+// SkillsPage renders shareable agent-skill snippets plus the skills registry.
 func (h *Handler) SkillsPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	currentUser := GetUserFromContext(ctx)
@@ -41,11 +41,22 @@ func (h *Handler) SkillsPage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	search := strings.TrimSpace(r.URL.Query().Get("q"))
+	skills, err := h.repo.ListSkills(ctx, search)
+	if err != nil {
+		skills = nil
+	}
+
+	isAdmin := currentUser != nil && currentUser.IsAdmin()
+
 	h.render(w, r, "skills.html", "base.html", map[string]interface{}{
 		"ActivePage":     "skills",
 		"CurrentBaseURL": h.deriveCurrentBaseURL(r),
 		"UserKey":        userKey,
 		"UserModel":      userModel,
+		"Skills":         skills,
+		"Search":         search,
+		"IsAdmin":        isAdmin,
 	})
 }
 

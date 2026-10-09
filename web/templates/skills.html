@@ -55,7 +55,7 @@ description: Use the AI Manager gateway for all LLM calls.
 # AI Manager
 - Provider: aimanager (OpenAI-compatible)
 - Base URL: {{ .CurrentBaseURL }}
-- API key: {{ .UserKey }} (header: Authorization: Bearer &lt;key&gt;)
+- API key: {{ .UserKey }} (header: Authorization: Bearer ***
 - Default model: {{ .UserModel }}
 - Chat endpoint: {{ .CurrentBaseURL }}/chat/completions
 - Models endpoint: {{ .CurrentBaseURL }}/models</code></pre>
@@ -67,21 +67,248 @@ description: Use the AI Manager gateway for all LLM calls.
   </div>
 </div>
 
+<!-- ===== SKILLS REGISTRY ===== -->
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mt-5 mb-3">
+  <div>
+    <h5 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
+      <i class="bi bi-archive-fill text-emerald"></i> Skills Registry
+    </h5>
+    <p class="text-dim small mb-0">Browse, search, and sync SKILL.md files to your Hermes agent with one command.</p>
+  </div>
+  {{ if .IsAdmin }}
+  <button class="btn btn-modern btn-sm" onclick="openSkillModal()">
+    <i class="bi bi-plus-lg"></i> Add Skill
+  </button>
+  {{ end }}
+</div>
+
+<!-- Search bar -->
+<form method="GET" action="/skills" class="mb-3 d-flex gap-2">
+  <input type="text" name="q" class="form-control form-control-sm bg-dark text-light border-secondary" placeholder="Search skills…" value="{{ .Search }}">
+  <button class="btn btn-modern btn-sm" type="submit"><i class="bi bi-search"></i></button>
+  {{ if .Search }}<a href="/skills" class="btn btn-outline-secondary btn-sm">Clear</a>{{ end }}
+</form>
+
+{{ if .Skills }}
+<div class="card-modern p-0 overflow-hidden">
+  <table class="table table-dark table-hover mb-0 align-middle">
+    <thead class="border-bottom border-secondary">
+      <tr>
+        <th class="ps-4 py-3 text-dim fw-semibold small">NAME</th>
+        <th class="py-3 text-dim fw-semibold small">DESCRIPTION</th>
+        <th class="py-3 text-dim fw-semibold small">TAGS</th>
+        <th class="py-3 text-dim fw-semibold small text-end pe-4">ACTIONS</th>
+      </tr>
+    </thead>
+    <tbody>
+    {{ range .Skills }}
+    <tr>
+      <td class="ps-4 py-3">
+        <span class="fw-semibold text-light font-monospace small">{{ .Name }}</span>
+      </td>
+      <td class="py-3 text-dim small" style="max-width:320px;">{{ .Description }}</td>
+      <td class="py-3">
+        {{ range .TagList }}
+        <span class="badge bg-secondary text-light me-1 small">{{ . }}</span>
+        {{ end }}
+      </td>
+      <td class="py-3 text-end pe-4">
+        <button class="btn btn-sm btn-modern-ghost me-1" title="Copy sync command"
+          onclick="copyCmd('{{ .Name }}')">
+          <i class="bi bi-terminal"></i>
+        </button>
+        <button class="btn btn-sm btn-modern-ghost me-1" title="View raw SKILL.md"
+          onclick="viewRaw('{{ .ID }}', '{{ .Name }}')">
+          <i class="bi bi-eye"></i>
+        </button>
+        {{ if $.IsAdmin }}
+        <button class="btn btn-sm btn-modern-ghost me-1" title="Edit"
+          onclick="editSkill('{{ .ID }}', '{{ .Name }}', '{{ .Description }}', '{{ .Tags }}')">
+          <i class="bi bi-pencil"></i>
+        </button>
+        <button class="btn btn-sm btn-danger btn-sm" title="Delete"
+          onclick="deleteSkill('{{ .ID }}', '{{ .Name }}')">
+          <i class="bi bi-trash"></i>
+        </button>
+        {{ end }}
+      </td>
+    </tr>
+    {{ end }}
+    </tbody>
+  </table>
+</div>
+{{ else }}
+<div class="card-modern p-5 text-center text-dim">
+  <i class="bi bi-archive fs-1 mb-3 d-block opacity-25"></i>
+  {{ if .Search }}
+  No skills match <strong class="text-light">{{ .Search }}</strong>.
+  {{ else }}
+  No skills yet. {{ if .IsAdmin }}Click <strong class="text-light">Add Skill</strong> to publish your first one.{{ end }}
+  {{ end }}
+</div>
+{{ end }}
+
+<!-- Sync instructions -->
+<div class="card-modern p-4 mt-4">
+  <h6 class="fw-bold text-light mb-2"><i class="bi bi-terminal text-emerald me-1"></i> Auto-sync a skill</h6>
+  <p class="text-dim small mb-2">Pull any skill directly into your Hermes agent with one command:</p>
+  <div class="position-relative">
+    <pre class="code-box p-3 m-0 font-monospace text-light rounded-3" id="syncCmd"><code>curl -sH "Authorization: Bearer {{ .UserKey }}" \
+  {{ .CurrentBaseURL | html }}/api/skills/raw/SKILL_NAME \
+  -o ~/.hermes/skills/SKILL_NAME/SKILL.md</code></pre>
+    <button type="button" class="btn btn-sm btn-modern-ghost position-absolute top-0 end-0 m-2" onclick="copySkill('syncCmd')">
+      <i class="bi bi-clipboard"></i> Copy
+    </button>
+  </div>
+</div>
+
+<!-- ===== MODAL: Add / Edit Skill ===== -->
+{{ if .IsAdmin }}
+<div class="modal fade" id="skillModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content bg-dark border border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title text-light" id="skillModalTitle">Add Skill</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="skillID">
+        <div class="mb-3">
+          <label class="form-label text-dim small">Name <span class="text-danger">*</span></label>
+          <input type="text" class="form-control bg-dark text-light border-secondary" id="skillName" placeholder="e.g. my-skill">
+        </div>
+        <div class="mb-3">
+          <label class="form-label text-dim small">Description</label>
+          <input type="text" class="form-control bg-dark text-light border-secondary" id="skillDesc" placeholder="Short one-line description">
+        </div>
+        <div class="mb-3">
+          <label class="form-label text-dim small">Tags <span class="text-dim">(comma-separated)</span></label>
+          <input type="text" class="form-control bg-dark text-light border-secondary" id="skillTags" placeholder="e.g. go,api,dev">
+        </div>
+        <div class="mb-3">
+          <label class="form-label text-dim small">SKILL.md Content</label>
+          <textarea class="form-control bg-dark text-light border-secondary font-monospace small" id="skillContent" rows="12" placeholder="---&#10;name: my-skill&#10;description: ...&#10;---&#10;&#10;# My Skill&#10;..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer border-secondary">
+        <button class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-modern" id="skillSaveBtn" onclick="saveSkill()">Save Skill</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: View raw -->
+<div class="modal fade" id="rawModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content bg-dark border border-secondary">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title text-light" id="rawModalTitle">SKILL.md</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <pre class="code-box p-3 m-0 font-monospace small text-light rounded-3" id="rawContent" style="max-height:60vh;overflow-y:auto;"></pre>
+      </div>
+    </div>
+  </div>
+</div>
+{{ end }}
+
 <script>
 function copySkill(id) {
   const text = document.getElementById(id).innerText;
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).then(() => {
-      if (window.showToast) window.showToast('Agent skill prompt copied! ✨', '📋');
+      if (window.showToast) window.showToast('Copied! ✨', '📋');
       else alert('Copied!');
     }).catch(() => {
-      if (window.showToast) window.showToast('Failed to copy skill', '⚠️');
-      else alert('Copy failed — select manually.');
+      if (window.showToast) window.showToast('Failed to copy', '⚠️');
     });
-  } else {
-    if (window.showToast) window.showToast('Copy not supported', '⚠️');
-    else alert('Copy not supported — select manually.');
   }
 }
+
+function copyCmd(name) {
+  const baseURL = {{ .CurrentBaseURL | js }};
+  const apiKey  = {{ .UserKey | js }};
+  const cmd = `curl -sH "Authorization: Bearer ${apiKey}" \\\n  ${baseURL}/api/skills/raw/${name} \\\n  -o ~/.hermes/skills/${name}/SKILL.md`;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(cmd).then(() => {
+      if (window.showToast) window.showToast('Sync command copied! 🚀', '📋');
+    });
+  }
+}
+
+{{ if .IsAdmin }}
+let skillModal, rawModal;
+document.addEventListener('DOMContentLoaded', () => {
+  skillModal = new bootstrap.Modal(document.getElementById('skillModal'));
+  rawModal   = new bootstrap.Modal(document.getElementById('rawModal'));
+});
+
+function openSkillModal() {
+  document.getElementById('skillModalTitle').textContent = 'Add Skill';
+  document.getElementById('skillID').value      = '';
+  document.getElementById('skillName').value    = '';
+  document.getElementById('skillDesc').value    = '';
+  document.getElementById('skillTags').value    = '';
+  document.getElementById('skillContent').value = '';
+  skillModal.show();
+}
+
+function editSkill(id, name, desc, tags) {
+  document.getElementById('skillModalTitle').textContent = 'Edit Skill';
+  document.getElementById('skillID').value   = id;
+  document.getElementById('skillName').value = name;
+  document.getElementById('skillDesc').value = desc;
+  document.getElementById('skillTags').value = tags;
+  // Fetch content
+  fetch('/api/skills/' + id)
+    .then(r => r.json())
+    .then(s => { document.getElementById('skillContent').value = s.content || ''; });
+  skillModal.show();
+}
+
+function saveSkill() {
+  const id      = document.getElementById('skillID').value;
+  const payload = {
+    name:        document.getElementById('skillName').value.trim(),
+    description: document.getElementById('skillDesc').value.trim(),
+    tags:        document.getElementById('skillTags').value.trim(),
+    content:     document.getElementById('skillContent').value,
+  };
+  if (!payload.name) { alert('Name is required'); return; }
+
+  const method = id ? 'PUT' : 'POST';
+  const url    = id ? '/api/skills/' + id : '/api/skills';
+  fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) })
+    .then(async r => {
+      if (!r.ok) { const t = await r.text(); throw new Error(t); }
+      return r.json();
+    })
+    .then(() => { skillModal.hide(); window.location.reload(); })
+    .catch(e => alert('Error: ' + e.message));
+}
+
+function viewRaw(id, name) {
+  document.getElementById('rawModalTitle').textContent = name + ' — SKILL.md';
+  document.getElementById('rawContent').textContent = 'Loading…';
+  rawModal.show();
+  fetch('/api/skills/' + id)
+    .then(r => r.json())
+    .then(s => { document.getElementById('rawContent').textContent = s.content || '(empty)'; })
+    .catch(() => { document.getElementById('rawContent').textContent = 'Failed to load.'; });
+}
+
+function deleteSkill(id, name) {
+  if (!confirm('Delete skill "' + name + '"? This cannot be undone.')) return;
+  fetch('/api/skills/' + id, { method: 'DELETE' })
+    .then(async r => {
+      if (!r.ok) { const t = await r.text(); throw new Error(t); }
+      if (window.showToast) window.showToast('Skill deleted', '🗑️');
+      window.location.reload();
+    })
+    .catch(e => alert('Error: ' + e.message));
+}
+{{ end }}
 </script>
 {{ end }}
