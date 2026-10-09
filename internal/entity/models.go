@@ -382,6 +382,33 @@ type KeyRecentRequest struct {
 	CreatedAt    string `json:"created_at"`
 }
 
+// Skill represents a reusable agent skill stored in the registry.
+// The Content field holds the raw SKILL.md file body.
+type Skill struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	Tags        string    `json:"tags"`        // comma-separated
+	Content     string    `json:"content"`     // raw SKILL.md text
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// TagList returns the tags split into a slice.
+func (s *Skill) TagList() []string {
+	if s.Tags == "" {
+		return nil
+	}
+	parts := strings.Split(s.Tags, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if t := strings.TrimSpace(p); t != "" {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
 // KeyStatsResponse encapsulates full analytics and breakdown data for a single API key.
 type KeyStatsResponse struct {
 	Key            APIKey             `json:"key"`
