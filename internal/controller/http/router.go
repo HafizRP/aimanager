@@ -211,6 +211,7 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 		authRouter.Get("/cli-tools", h.CLIToolsPage)
 		authRouter.Get("/benchmark", h.BenchmarkPage)
 		authRouter.Post("/api/benchmark/run", h.APIBenchmarkRun)
+		authRouter.Post("/api/benchmark/export", h.APIBenchmarkExport)
 
 		// Workspace: Request Replay Lab (observability — any authenticated user, self-scoped)
 		authRouter.Get("/replay", h.ReplayPage)

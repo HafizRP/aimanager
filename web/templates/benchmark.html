@@ -9,34 +9,178 @@
     <p class="text-dim small mb-0">Measure round-trip response latency, Time-To-First-Token (TTFT), and throughput across upstream models and combos simultaneously.</p>
   </div>
   <div class="d-flex align-items-center gap-2">
+    <div class="dropdown">
+      <button class="btn-modern-ghost dropdown-toggle d-inline-flex align-items-center gap-2" type="button" data-bs-toggle="dropdown" aria-expanded="false" id="btnExportDropdown">
+        <i class="bi bi-download"></i> Export
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end shadow">
+        <li><a class="dropdown-item small d-flex align-items-center gap-2" href="#" onclick="exportBenchmark('csv'); return false;"><i class="bi bi-filetype-csv text-emerald"></i> Export as CSV</a></li>
+        <li><a class="dropdown-item small d-flex align-items-center gap-2" href="#" onclick="exportBenchmark('json'); return false;"><i class="bi bi-filetype-json text-primary"></i> Export as JSON</a></li>
+      </ul>
+    </div>
     <button type="button" class="btn-modern-primary d-inline-flex align-items-center gap-2" id="btnRunBenchmark" onclick="runBenchmark()">
       <i class="bi bi-lightning-charge-fill"></i> Run Speed Test
     </button>
   </div>
 </div>
 
-<!-- Benchmark Configuration & Selectors -->
-<div class="card-modern p-3 mb-4">
-  <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
-    <div>
-      <span class="small text-muted mb-1 d-block font-monospace">TEST SUITE MODELS</span>
-      <div class="d-flex flex-wrap gap-2" id="benchmarkModelChips">
-        <label class="btn-modern-ghost btn-sm font-monospace d-inline-flex align-items-center gap-1.5 active">
-          <input type="checkbox" class="form-check-input m-0" value="main" checked>
-          <span>main (combo)</span>
-        </label>
-        <label class="btn-modern-ghost btn-sm font-monospace d-inline-flex align-items-center gap-1.5 active">
-          <input type="checkbox" class="form-check-input m-0" value="free-only" checked>
-          <span>free-only</span>
-        </label>
-        <label class="btn-modern-ghost btn-sm font-monospace d-inline-flex align-items-center gap-1.5 active">
-          <input type="checkbox" class="form-check-input m-0" value="ag/gemini-3.8-flash-high" checked>
-          <span>ag/gemini-3.8-flash-high</span>
-        </label>
+<!-- Benchmark Configuration & Presets -->
+<div class="card-modern p-4 mb-4">
+  <div class="d-flex flex-column gap-3">
+    <!-- Presets & Controls -->
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 pb-3 border-bottom border-secondary border-opacity-10">
+      <div class="d-flex flex-wrap align-items-center gap-2">
+        <span class="small text-muted font-monospace me-1">PRESETS:</span>
+        <button type="button" class="btn-modern-ghost btn-sm font-monospace py-1 px-2.5 active" id="preset-ping" onclick="selectPreset('ping')">
+          <i class="bi bi-broadcast text-warning me-1"></i> Quick Ping
+        </button>
+        <button type="button" class="btn-modern-ghost btn-sm font-monospace py-1 px-2.5" id="preset-code" onclick="selectPreset('code')">
+          <i class="bi bi-code-slash text-cyan me-1"></i> Code Generation
+        </button>
+        <button type="button" class="btn-modern-ghost btn-sm font-monospace py-1 px-2.5" id="preset-reasoning" onclick="selectPreset('reasoning')">
+          <i class="bi bi-cpu text-indigo me-1"></i> Reasoning Test
+        </button>
+        <button type="button" class="btn-modern-ghost btn-sm font-monospace py-1 px-2.5" id="preset-custom" onclick="selectPreset('custom')">
+          <i class="bi bi-sliders text-primary me-1"></i> Custom
+        </button>
+      </div>
+      <div class="d-flex flex-wrap align-items-center gap-3">
+        <div class="form-check form-switch mb-0 d-flex align-items-center gap-2">
+          <input class="form-check-input mt-0" type="checkbox" id="benchmarkStream" checked>
+          <label class="form-check-label small text-dim font-monospace" for="benchmarkStream">Streaming (TTFT)</label>
+        </div>
+        <div class="d-flex align-items-center gap-1.5">
+          <label class="small text-muted font-monospace mb-0">Max Tokens:</label>
+          <select class="form-select form-select-sm form-select-modern font-monospace py-0 px-2" id="benchmarkMaxTokens" style="width: 80px; height: 30px;">
+            <option value="10" selected>10</option>
+            <option value="25">25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
+        <div class="d-flex align-items-center gap-1.5">
+          <label class="small text-muted font-monospace mb-0">Temp:</label>
+          <select class="form-select form-select-sm form-select-modern font-monospace py-0 px-2" id="benchmarkTemperature" style="width: 75px; height: 30px;">
+            <option value="0.0">0.0</option>
+            <option value="0.1" selected>0.1</option>
+            <option value="0.7">0.7</option>
+          </select>
+        </div>
       </div>
     </div>
-    <div class="text-dim small font-monospace">
-      Standardized prompt: <code class="text-primary">"Respond with PONG"</code>
+
+    <!-- Custom Prompt Box -->
+    <div>
+      <label class="form-label small text-muted font-monospace mb-1.5">TEST PROMPT</label>
+      <input type="text" class="form-control form-control-modern font-monospace" id="benchmarkPrompt" value="Respond with the single word PONG." placeholder="Enter test prompt...">
+    </div>
+
+    <!-- Target Models & Combos Selector -->
+    <div>
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+        <div class="d-flex align-items-center gap-2">
+          <span class="small text-muted font-monospace">TARGET MODELS & COMBOS</span>
+          <span class="badge-modern badge-indigo font-monospace" id="selectedCountBadge">3 selected</span>
+        </div>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          <input type="text" class="form-control form-control-sm form-control-modern font-monospace py-0 px-2" id="chipSearchInput" placeholder="Filter models..." oninput="filterModelChips(this.value)" style="width: 150px; height: 28px;">
+          <button type="button" class="btn-modern-ghost btn-sm py-0 px-2 font-monospace" style="height: 28px; font-size: 0.75rem;" onclick="quickSelectModels('combos')">Combos</button>
+          <button type="button" class="btn-modern-ghost btn-sm py-0 px-2 font-monospace" style="height: 28px; font-size: 0.75rem;" onclick="quickSelectModels('all')">Select All</button>
+          <button type="button" class="btn-modern-ghost btn-sm py-0 px-2 font-monospace" style="height: 28px; font-size: 0.75rem;" onclick="quickSelectModels('clear')">Clear</button>
+        </div>
+      </div>
+      <div class="d-flex flex-wrap gap-2 p-2.5 rounded-3" style="background: rgba(0, 0, 0, 0.15); max-height: 180px; overflow-y: auto;" id="benchmarkModelChips">
+        {{ if .Combos }}
+          {{ range .Combos }}
+            <label class="btn-modern-ghost btn-sm font-monospace d-inline-flex align-items-center gap-1.5 model-chip active" data-model="{{ .Name }}" data-category="combo">
+              <input type="checkbox" class="form-check-input m-0 d-none" value="{{ .Name }}" checked onchange="updateChipState(this)">
+              <i class="bi bi-shuffle text-indigo"></i>
+              <span>{{ .Name }} <span class="text-dim opacity-75">(combo)</span></span>
+            </label>
+          {{ end }}
+        {{ else }}
+          <label class="btn-modern-ghost btn-sm font-monospace d-inline-flex align-items-center gap-1.5 model-chip active" data-model="main" data-category="combo">
+            <input type="checkbox" class="form-check-input m-0 d-none" value="main" checked onchange="updateChipState(this)">
+            <i class="bi bi-shuffle text-indigo"></i>
+            <span>main (combo)</span>
+          </label>
+          <label class="btn-modern-ghost btn-sm font-monospace d-inline-flex align-items-center gap-1.5 model-chip active" data-model="free-only" data-category="combo">
+            <input type="checkbox" class="form-check-input m-0 d-none" value="free-only" checked onchange="updateChipState(this)">
+            <i class="bi bi-shuffle text-indigo"></i>
+            <span>free-only (combo)</span>
+          </label>
+        {{ end }}
+
+        {{ if .Models }}
+          {{ range .Models }}
+            <label class="btn-modern-ghost btn-sm font-monospace d-inline-flex align-items-center gap-1.5 model-chip" data-model="{{ .ID }}" data-category="model">
+              <input type="checkbox" class="form-check-input m-0 d-none" value="{{ .ID }}" onchange="updateChipState(this)">
+              <i class="bi bi-cpu text-warning"></i>
+              <span>{{ .ID }}</span>
+            </label>
+          {{ end }}
+        {{ else }}
+          <label class="btn-modern-ghost btn-sm font-monospace d-inline-flex align-items-center gap-1.5 model-chip active" data-model="ag/gemini-3.7-flash-high" data-category="model">
+            <input type="checkbox" class="form-check-input m-0 d-none" value="ag/gemini-3.7-flash-high" checked onchange="updateChipState(this)">
+            <i class="bi bi-cpu text-warning"></i>
+            <span>ag/gemini-3.7-flash-high</span>
+          </label>
+        {{ end }}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- KPI Metrics Summary (Appears upon benchmark completion) -->
+<div class="row g-3 mb-4" id="benchmarkKpiRow" style="display: none;">
+  <div class="col-6 col-md-4 col-xl">
+    <div class="card-modern p-3 h-100">
+      <div class="d-flex align-items-center gap-2 mb-1">
+        <i class="bi bi-trophy-fill text-warning"></i>
+        <span class="small text-muted font-monospace">FASTEST MODEL</span>
+      </div>
+      <h5 class="fw-bold text-light mb-0 font-monospace" id="kpiFastestModel">-</h5>
+      <span class="small text-emerald font-monospace" id="kpiFastestLatency">- ms</span>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-xl">
+    <div class="card-modern p-3 h-100">
+      <div class="d-flex align-items-center gap-2 mb-1">
+        <i class="bi bi-lightning-charge-fill text-primary"></i>
+        <span class="small text-muted font-monospace">FASTEST TTFT</span>
+      </div>
+      <h4 class="fw-bold text-light mb-0 font-monospace" id="kpiFastestTTFT">- ms</h4>
+      <span class="small text-dim font-monospace">Time-To-First-Token</span>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-xl">
+    <div class="card-modern p-3 h-100">
+      <div class="d-flex align-items-center gap-2 mb-1">
+        <i class="bi bi-speedometer2 text-cyan"></i>
+        <span class="small text-muted font-monospace">AVG LATENCY</span>
+      </div>
+      <h4 class="fw-bold text-light mb-0 font-monospace" id="kpiAvgLatency">- ms</h4>
+      <span class="small text-dim font-monospace">Across all targets</span>
+    </div>
+  </div>
+  <div class="col-6 col-md-6 col-xl">
+    <div class="card-modern p-3 h-100">
+      <div class="d-flex align-items-center gap-2 mb-1">
+        <i class="bi bi-graph-up-arrow text-emerald"></i>
+        <span class="small text-muted font-monospace">PEAK THROUGHPUT</span>
+      </div>
+      <h4 class="fw-bold text-emerald mb-0 font-monospace" id="kpiPeakThroughput">- tok/s</h4>
+      <span class="small text-dim font-monospace">Max stream speed</span>
+    </div>
+  </div>
+  <div class="col-12 col-md-6 col-xl">
+    <div class="card-modern p-3 h-100">
+      <div class="d-flex align-items-center gap-2 mb-1">
+        <i class="bi bi-shield-check text-emerald"></i>
+        <span class="small text-muted font-monospace">SUCCESS RATE</span>
+      </div>
+      <h4 class="fw-bold text-light mb-0 font-monospace" id="kpiSuccessRate">100%</h4>
+      <span class="small text-dim font-monospace" id="kpiTestedCount">- tested</span>
     </div>
   </div>
 </div>
@@ -50,16 +194,19 @@
           <th>Rank</th>
           <th>Model Identifier</th>
           <th>Round-Trip Latency</th>
+          <th>TTFT</th>
+          <th>Throughput</th>
           <th>Speed Class</th>
           <th>Status</th>
-          <th class="text-end">Sample Output</th>
+          <th>Sample Output</th>
+          <th class="text-end">Actions</th>
         </tr>
       </thead>
       <tbody id="benchmarkTbody">
         <tr>
-          <td colspan="6" class="text-center text-dim py-5" id="benchmarkEmptyState">
-            <i class="bi bi-stopwatch fs-2 d-block mb-2 opacity-50"></i>
-            Click <strong>"Run Speed Test"</strong> above to benchmark latency across models in real-time.
+          <td colspan="9" class="text-center text-dim py-5" id="benchmarkEmptyState">
+            <i class="bi bi-speedometer fs-2 d-block mb-2 opacity-50"></i>
+            Click <strong>"Run Speed Test"</strong> above to benchmark latency and token throughput across models in real-time.
           </td>
         </tr>
       </tbody>
@@ -68,6 +215,90 @@
 </div>
 
 <script>
+let lastBenchmarkResults = [];
+let lastUsedPrompt = '';
+
+function updateChipState(checkbox) {
+  const chip = checkbox.closest('.model-chip');
+  if (checkbox.checked) {
+    chip.classList.add('active');
+  } else {
+    chip.classList.remove('active');
+  }
+  updateSelectedCount();
+}
+
+function updateSelectedCount() {
+  const count = document.querySelectorAll('#benchmarkModelChips input[type="checkbox"]:checked').length;
+  const badge = document.getElementById('selectedCountBadge');
+  if (badge) badge.textContent = `${count} selected`;
+}
+
+function quickSelectModels(type) {
+  const chips = document.querySelectorAll('#benchmarkModelChips .model-chip');
+  chips.forEach(chip => {
+    const cb = chip.querySelector('input[type="checkbox"]');
+    const category = chip.getAttribute('data-category');
+    if (type === 'all') {
+      cb.checked = true;
+      chip.classList.add('active');
+    } else if (type === 'clear') {
+      cb.checked = false;
+      chip.classList.remove('active');
+    } else if (type === 'combos') {
+      if (category === 'combo') {
+        cb.checked = true;
+        chip.classList.add('active');
+      } else {
+        cb.checked = false;
+        chip.classList.remove('active');
+      }
+    }
+  });
+  updateSelectedCount();
+}
+
+function filterModelChips(query) {
+  const q = (query || '').toLowerCase().trim();
+  const chips = document.querySelectorAll('#benchmarkModelChips .model-chip');
+  chips.forEach(chip => {
+    const model = (chip.getAttribute('data-model') || '').toLowerCase();
+    if (!q || model.includes(q)) {
+      chip.classList.remove('d-none');
+    } else {
+      chip.classList.add('d-none');
+    }
+  });
+}
+
+function selectPreset(preset) {
+  document.querySelectorAll('[id^="preset-"]').forEach(btn => btn.classList.remove('active'));
+  const activeBtn = document.getElementById(`preset-${preset}`);
+  if (activeBtn) activeBtn.classList.add('active');
+
+  const promptInput = document.getElementById('benchmarkPrompt');
+  const tokensSelect = document.getElementById('benchmarkMaxTokens');
+  const tempSelect = document.getElementById('benchmarkTemperature');
+  const streamSwitch = document.getElementById('benchmarkStream');
+
+  if (preset === 'ping') {
+    promptInput.value = 'Respond with the single word PONG.';
+    tokensSelect.value = '10';
+    tempSelect.value = '0.1';
+    streamSwitch.checked = true;
+  } else if (preset === 'code') {
+    promptInput.value = 'Write a concise Python function to calculate the Fibonacci sequence.';
+    tokensSelect.value = '50';
+    tempSelect.value = '0.1';
+    streamSwitch.checked = true;
+  } else if (preset === 'reasoning') {
+    promptInput.value = 'Explain the Monty Hall problem in two clear sentences.';
+    tokensSelect.value = '50';
+    tempSelect.value = '0.0';
+    streamSwitch.checked = true;
+  }
+}
+
 async function runBenchmark() {
   const btn = document.getElementById('btnRunBenchmark');
   btn.disabled = true;
@@ -76,12 +307,27 @@ async function runBenchmark() {
   const checkboxes = document.querySelectorAll('#benchmarkModelChips input[type="checkbox"]:checked');
   const selectedModels = Array.from(checkboxes).map(cb => cb.value);
 
+  if (selectedModels.length === 0) {
+    if (window.showToast) window.showToast('Please select at least one model or combo.', '⚠️');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-lightning-charge-fill"></i> Run Speed Test';
+    return;
+  }
+
+  const prompt = document.getElementById('benchmarkPrompt').value.trim() || 'Respond with the single word PONG.';
+  const maxTokens = parseInt(document.getElementById('benchmarkMaxTokens').value) || 10;
+  const temperature = parseFloat(document.getElementById('benchmarkTemperature').value) || 0.1;
+  const isStream = document.getElementById('benchmarkStream').checked;
+
+  lastUsedPrompt = prompt;
+
   const tbody = document.getElementById('benchmarkTbody');
   tbody.innerHTML = `
     <tr>
-      <td colspan="6" class="text-center text-dim py-5">
+      <td colspan="9" class="text-center text-dim py-5">
         <div class="spinner-border text-warning mb-2" role="status"></div>
-        <div>Firing simultaneous requests to upstream models...</div>
+        <div class="fw-bold text-light">Firing simultaneous requests to upstream models...</div>
+        <div class="small text-muted font-monospace mt-1">Benchmarking ${selectedModels.length} models with ${isStream ? 'streaming' : 'standard'} mode</div>
       </td>
     </tr>
   `;
@@ -90,16 +336,26 @@ async function runBenchmark() {
     const res = await fetch('/api/benchmark/run', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({ models: selectedModels })
+      body: JSON.stringify({
+        models: selectedModels,
+        prompt: prompt,
+        max_tokens: maxTokens,
+        temperature: temperature,
+        stream: isStream
+      })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Benchmark failed');
 
-    renderLeaderboard(data.results || []);
+    lastBenchmarkResults = data.results || [];
+    renderLeaderboard(lastBenchmarkResults);
+    renderKpiStats(data.stats);
+
+    if (window.showToast) window.showToast('Speed test complete! ✨', '⚡');
   } catch (err) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="6" class="text-center text-danger py-4">
+        <td colspan="9" class="text-center text-danger py-4">
           <i class="bi bi-exclamation-triangle me-1"></i> Error: ${err.message}
         </td>
       </tr>
@@ -110,14 +366,32 @@ async function runBenchmark() {
   }
 }
 
+function renderKpiStats(stats) {
+  const row = document.getElementById('benchmarkKpiRow');
+  if (!stats) {
+    row.style.display = 'none';
+    return;
+  }
+  row.style.display = 'flex';
+
+  document.getElementById('kpiFastestModel').textContent = stats.fastest_model || '-';
+  document.getElementById('kpiFastestLatency').textContent = stats.fastest_latency_ms ? `${stats.fastest_latency_ms} ms` : '-';
+  document.getElementById('kpiFastestTTFT').textContent = stats.fastest_ttft_ms ? `${stats.fastest_ttft_ms} ms` : '- ms';
+  document.getElementById('kpiAvgLatency').textContent = stats.avg_latency_ms ? `${stats.avg_latency_ms} ms` : '- ms';
+  document.getElementById('kpiPeakThroughput').textContent = stats.peak_tokens_sec ? `${stats.peak_tokens_sec.toFixed(1)} tok/s` : '- tok/s';
+  document.getElementById('kpiSuccessRate').textContent = `${(stats.success_rate_pct || 0).toFixed(0)}%`;
+  document.getElementById('kpiTestedCount').textContent = `${stats.total_tested || 0} models tested`;
+}
+
 function renderLeaderboard(results) {
   const tbody = document.getElementById('benchmarkTbody');
   if (!results || results.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-dim py-4">No results returned.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-dim py-4">No results returned.</td></tr>';
     return;
   }
 
   tbody.innerHTML = '';
+
   results.forEach((r, idx) => {
     const tr = document.createElement('tr');
 
@@ -130,6 +404,13 @@ function renderLeaderboard(results) {
     if (!r.success) speedClass = '<span class="badge-modern badge-rose text-danger">Failed</span>';
     else if (r.latency_ms < 1000) speedClass = '<span class="badge-modern badge-emerald text-emerald">Ultra Fast (<1s)</span>';
     else if (r.latency_ms < 2500) speedClass = '<span class="badge-modern badge-indigo text-primary">Fast (<2.5s)</span>';
+    else if (r.latency_ms < 4000) speedClass = '<span class="badge-modern badge-amber text-warning">Moderate (<4s)</span>';
+
+    const ttftText = r.ttft_ms ? `${r.ttft_ms} ms` : '-';
+    const tpsText = r.tokens_sec > 0 ? `${r.tokens_sec.toFixed(1)} tok/s` : '-';
+
+    const safeOutput = (r.output_text || '').replace(/"/g, '&quot;');
+    const displayOutput = r.output_text ? (r.output_text.length > 35 ? r.output_text.substring(0, 35) + '...' : r.output_text) : '-';
 
     tr.innerHTML = `
       <td>${rankBadge}</td>
@@ -137,23 +418,82 @@ function renderLeaderboard(results) {
         <span class="font-monospace fw-bold text-light">${r.model}</span>
       </td>
       <td>
-        <div class="d-flex align-items-center gap-2">
-          <span class="font-monospace fw-bold ${r.latency_ms < 1500 ? 'text-emerald' : 'text-light'}">${r.latency_ms} ms</span>
-        </div>
+        <span class="font-monospace fw-bold ${r.latency_ms < 1500 ? 'text-emerald' : 'text-light'}">${r.latency_ms} ms</span>
+      </td>
+      <td>
+        <span class="font-monospace text-dim">${ttftText}</span>
+      </td>
+      <td>
+        <span class="font-monospace ${r.tokens_sec > 30 ? 'text-emerald fw-bold' : 'text-dim'}">${tpsText}</span>
       </td>
       <td>${speedClass}</td>
       <td>
         ${r.success 
           ? '<span class="badge-modern badge-emerald"><i class="bi bi-check-circle me-1"></i> 200 OK</span>' 
-          : `<span class="badge-modern badge-rose text-danger"><i class="bi bi-x-circle me-1"></i> ${r.error_msg || 'Error'}</span>`
+          : `<span class="badge-modern badge-rose text-danger" title="${r.error_msg || 'Error'}"><i class="bi bi-x-circle me-1"></i> ${r.error_msg ? (r.error_msg.length > 20 ? r.error_msg.substring(0, 18) + '...' : r.error_msg) : 'Error'}</span>`
         }
       </td>
-      <td class="text-end font-monospace text-dim small">
-        <code>${r.output_text ? r.output_text.substring(0, 30) : '-'}</code>
+      <td class="font-monospace text-dim small">
+        <code title="${safeOutput}">${displayOutput}</code>
+      </td>
+      <td class="text-end">
+        <div class="d-flex justify-content-end align-items-center gap-1">
+          <a href="/chat?model=${encodeURIComponent(r.model)}&prompt=${encodeURIComponent(lastUsedPrompt)}" class="btn-modern-ghost py-1 px-2 text-primary" title="Test in Playground">
+            <i class="bi bi-chat-dots"></i>
+          </a>
+          <button type="button" class="btn-modern-ghost py-1 px-2" onclick="copySnippet('${safeOutput}')" title="Copy Output">
+            <i class="bi bi-clipboard"></i>
+          </button>
+        </div>
       </td>
     `;
     tbody.appendChild(tr);
   });
 }
+
+async function exportBenchmark(format) {
+  if (!lastBenchmarkResults || lastBenchmarkResults.length === 0) {
+    if (window.showToast) window.showToast('Please run a benchmark test before exporting results.', '⚠️');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/benchmark/export', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        format: format,
+        results: lastBenchmarkResults
+      })
+    });
+    if (!res.ok) throw new Error('Export failed');
+
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const timestamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+    a.download = `benchmark_results_${timestamp}.${format}`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    a.remove();
+
+    if (window.showToast) window.showToast(`Exported as ${format.toUpperCase()}! ✨`, '💾');
+  } catch (err) {
+    if (window.showToast) window.showToast(`Export failed: ${err.message}`, '❌');
+  }
+}
+
+function copySnippet(text) {
+  if (!text || text === '-') return;
+  navigator.clipboard.writeText(text).then(() => {
+    if (window.showToast) window.showToast('Output copied to clipboard! ✨', '📋');
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  updateSelectedCount();
+});
 </script>
 {{ end }}
