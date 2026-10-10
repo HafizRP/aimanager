@@ -2669,3 +2669,265 @@ func TestMidtransWebhook(t *testing.T) {
 		t.Errorf("expected 401 when server key is unconfigured, got %d", rrNoKey.Code)
 	}
 }
+
+func TestBenchmarkPage(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test_benchmark_page.db")
+	db, err := database.InitDB(dbPath)
+	if err != nil {
+		t.Fatalf("InitDB failed: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+	cfg := &config.Config{
+		SessionSecret: "test-secret-12345678901234567890",
+		Port:          20129,
+	}
+
+	h, err := NewHandler(cfg, repo, nil, nil)
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+
+	mockCore := &upstream.MockCoreClient{
+		GetCombosFunc: func(ctx context.Context) ([]upstream.Combo, error) {
+			return []upstream.Combo{
+				{ID: "combo-1", Name: "main", Models: []string{"ag/gemini-3.7-flash-high", "ag/claude-sonnet-4-6"}},
+				{ID: "combo-2", Name: "free-only", Models: []string{"kr/glm-5", "oc/muse-spark"}},
+			}, nil
+		},
+	}
+	h.coreClient = mockCore
+
+	ctx := context.Background()
+	admin := &entity.User{
+		ID:       "u-bench-admin",
+		Username: "benchadmin",
+		Role:     "admin",
+		IsActive: true,
+	}
+	_ = repo.CreateUser(ctx, admin)
+
+	user := &entity.User{
+		ID:            "u-bench-user",
+		Username:      "benchuser",
+		Role:          "user",
+		AllowedModels: `["main", "ag/gemini-3.7-flash-high"]`,
+		IsActive:      true,
+	}
+	_ = repo.CreateUser(ctx, user)
+
+	// 1. Admin accesses /benchmark
+	reqAdmin := httptest.NewRequest(http.MethodGet, "/benchmark", nil)
+	reqAdmin = reqAdmin.WithContext(context.WithValue(ctx, userContextKey, admin))
+	rrAdmin := httptest.NewRecorder()
+	h.BenchmarkPage(rrAdmin, reqAdmin)
+	if rrAdmin.Code != http.StatusOK {
+		t.Fatalf("expected 200 for Admin BenchmarkPage, got %d", rrAdmin.Code)
+	}
+	bodyAdmin := rrAdmin.Body.String()
+	if !strings.Contains(bodyAdmin, "Model Benchmark &amp; Speed Test") && !strings.Contains(bodyAdmin, "Model Benchmark & Speed Test") {
+		t.Errorf("expected Benchmark header in Admin body")
+	}
+
+	// 2. Non-admin accesses /benchmark
+	reqUser := httptest.NewRequest(http.MethodGet, "/benchmark", nil)
+	reqUser = reqUser.WithContext(context.WithValue(ctx, userContextKey, user))
+	rrUser := httptest.NewRecorder()
+	h.BenchmarkPage(rrUser, reqUser)
+	if rrUser.Code != http.StatusOK {
+		t.Fatalf("expected 200 for User BenchmarkPage, got %d", rrUser.Code)
+	}
+}
+
+func TestAPIBenchmarkRunAndExport(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test_benchmark_api.db")
+	db, err := database.InitDB(dbPath)
+	if err != nil {
+		t.Fatalf("InitDB failed: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+
+	// Spin up mock test server to act as gateway chat completion endpoint
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			http.NotFound(w, r)
+			return
+		}
+		var payload map[string]interface{}
+		_ = json.NewDecoder(r.Body).Decode(&payload)
+
+		isStream, _ := payload["stream"].(bool)
+		model, _ := payload["model"].(string)
+
+		if model == "error-model" {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": map[string]string{"message": "Upstream error for test"},
+			})
+			return
+		}
+
+		if isStream {
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.WriteHeader(http.StatusOK)
+			flusher, _ := w.(http.Flusher)
+			_, _ = fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"content\":\"P\"}}]}\n\n")
+			if flusher != nil {
+				flusher.Flush()
+			}
+			time.Sleep(10 * time.Millisecond)
+			_, _ = fmt.Fprintf(w, "data: {\"choices\":[{\"delta\":{\"content\":\"ONG\"}}]}\n\n")
+			if flusher != nil {
+				flusher.Flush()
+			}
+			_, _ = fmt.Fprintf(w, "data: [DONE]\n\n")
+			if flusher != nil {
+				flusher.Flush()
+			}
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"choices": []map[string]interface{}{
+				{"message": map[string]string{"content": "PONG"}},
+			},
+			"usage": map[string]int{
+				"completion_tokens": 2,
+			},
+		})
+	}))
+	defer ts.Close()
+
+	// Extract port from ts.URL
+	var testPort int
+	_, _ = fmt.Sscanf(ts.URL, "http://127.0.0.1:%d", &testPort)
+	if testPort == 0 {
+		_, _ = fmt.Sscanf(ts.URL, "http://[::1]:%d", &testPort)
+	}
+
+	cfg := &config.Config{
+		SessionSecret: "test-secret-12345678901234567890",
+		Port:          testPort,
+	}
+
+	h, err := NewHandler(cfg, repo, nil, nil)
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+
+	ctx := context.Background()
+	user := &entity.User{
+		ID:            "u-bench-runner",
+		Username:      "benchrunner",
+		Role:          "user",
+		AllowedModels: `["main", "free-only", "error-model"]`,
+		IsActive:      true,
+	}
+	_ = repo.CreateUser(ctx, user)
+
+	// 1. Unauthenticated or user without API key
+	reqNoKey := httptest.NewRequest(http.MethodPost, "/api/benchmark/run", strings.NewReader(`{"models":["main"]}`))
+	reqNoKey = reqNoKey.WithContext(context.WithValue(ctx, userContextKey, user))
+	rrNoKey := httptest.NewRecorder()
+	h.APIBenchmarkRun(rrNoKey, reqNoKey)
+	if rrNoKey.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 when user has no active key, got %d", rrNoKey.Code)
+	}
+
+	// Create active API key for user
+	key := &entity.APIKey{
+		ID:       "key-bench-1",
+		UserID:   user.ID,
+		Key:      "«redacted:sk-…»",
+		Name:     "Benchmark Key",
+		IsActive: true,
+	}
+	_ = repo.CreateAPIKey(ctx, key)
+
+	// 2. Successful Non-Streaming Benchmark Run
+	reqRun := httptest.NewRequest(http.MethodPost, "/api/benchmark/run", strings.NewReader(`{"models":["main","error-model"],"prompt":"Test ping","stream":false}`))
+	reqRun = reqRun.WithContext(context.WithValue(ctx, userContextKey, user))
+	rrRun := httptest.NewRecorder()
+	h.APIBenchmarkRun(rrRun, reqRun)
+	if rrRun.Code != http.StatusOK {
+		t.Fatalf("expected 200 for APIBenchmarkRun, got %d (body: %s)", rrRun.Code, rrRun.Body.String())
+	}
+
+	var runResp struct {
+		Results []BenchmarkResult `json:"results"`
+		Stats   BenchmarkStats    `json:"stats"`
+	}
+	if err := json.NewDecoder(rrRun.Body).Decode(&runResp); err != nil {
+		t.Fatalf("failed to decode benchmark response: %v", err)
+	}
+	if len(runResp.Results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(runResp.Results))
+	}
+	if runResp.Results[0].Model != "main" || !runResp.Results[0].Success {
+		t.Errorf("expected main to be successful #1 result, got %+v", runResp.Results[0])
+	}
+	if runResp.Stats.TotalTested != 2 {
+		t.Errorf("expected 2 total tested in stats, got %d", runResp.Stats.TotalTested)
+	}
+
+	// 3. Successful Streaming Benchmark Run
+	reqStream := httptest.NewRequest(http.MethodPost, "/api/benchmark/run", strings.NewReader(`{"models":["main"],"prompt":"Stream test","stream":true}`))
+	reqStream = reqStream.WithContext(context.WithValue(ctx, userContextKey, user))
+	rrStream := httptest.NewRecorder()
+	h.APIBenchmarkRun(rrStream, reqStream)
+	if rrStream.Code != http.StatusOK {
+		t.Fatalf("expected 200 for streaming APIBenchmarkRun, got %d", rrStream.Code)
+	}
+	var streamResp struct {
+		Results []BenchmarkResult `json:"results"`
+		Stats   BenchmarkStats    `json:"stats"`
+	}
+	if err := json.NewDecoder(rrStream.Body).Decode(&streamResp); err != nil {
+		t.Fatalf("failed to decode streaming response: %v", err)
+	}
+	if len(streamResp.Results) != 1 || streamResp.Results[0].OutputText != "PONG" {
+		t.Errorf("expected streaming output 'PONG', got %+v", streamResp.Results)
+	}
+
+	// 4. Test Export CSV
+	exportCSVPayload := map[string]interface{}{
+		"format":  "csv",
+		"results": runResp.Results,
+	}
+	bodyCSV, _ := json.Marshal(exportCSVPayload)
+	reqExportCSV := httptest.NewRequest(http.MethodPost, "/api/benchmark/export", bytes.NewReader(bodyCSV))
+	rrExportCSV := httptest.NewRecorder()
+	h.APIBenchmarkExport(rrExportCSV, reqExportCSV)
+	if rrExportCSV.Code != http.StatusOK {
+		t.Fatalf("expected 200 for APIBenchmarkExport CSV, got %d", rrExportCSV.Code)
+	}
+	csvContent := rrExportCSV.Body.String()
+	if !strings.Contains(csvContent, "Rank,Model,Latency_MS") || !strings.Contains(csvContent, "main") {
+		t.Errorf("expected CSV content with header and model, got: %s", csvContent)
+	}
+
+	// 5. Test Export JSON
+	exportJSONPayload := map[string]interface{}{
+		"format":  "json",
+		"results": runResp.Results,
+	}
+	bodyJSON, _ := json.Marshal(exportJSONPayload)
+	reqExportJSON := httptest.NewRequest(http.MethodPost, "/api/benchmark/export", bytes.NewReader(bodyJSON))
+	rrExportJSON := httptest.NewRecorder()
+	h.APIBenchmarkExport(rrExportJSON, reqExportJSON)
+	if rrExportJSON.Code != http.StatusOK {
+		t.Fatalf("expected 200 for APIBenchmarkExport JSON, got %d", rrExportJSON.Code)
+	}
+	var jsonExportResp map[string]interface{}
+	if err := json.NewDecoder(rrExportJSON.Body).Decode(&jsonExportResp); err != nil {
+		t.Fatalf("failed to decode JSON export: %v", err)
+	}
+	if int(jsonExportResp["total_count"].(float64)) != 2 {
+		t.Errorf("expected total_count 2 in JSON export, got %v", jsonExportResp["total_count"])
+	}
+}
