@@ -98,7 +98,7 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 		MaxAge:           300,
 	}))
 
-	// Health Probes
+	// Health Probes & Version Info
 	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("OK"))
@@ -110,6 +110,11 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 		}
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("READY"))
+	})
+	r.Get("/version", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"version":"1.0.0","app":"AI Manager Gateway","status":"ok"}`))
 	})
 
 	// Static Assets from web/static
@@ -146,6 +151,8 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 	// Reverse Proxy / Gateway routes (OpenAI & Anthropic compatible API)
 	r.HandleFunc("/v1", gwProxy.ServeHTTP)
 	r.HandleFunc("/v1/*", gwProxy.ServeHTTP)
+	r.HandleFunc("/api/v1", gwProxy.ServeHTTP)
+	r.HandleFunc("/api/v1/*", gwProxy.ServeHTTP)
 
 	// Public Auth, Registration, Landing & Webhook Routes
 	r.Get("/", h.RootPage)

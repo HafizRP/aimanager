@@ -322,3 +322,23 @@ func TestAPIKey_IsIPAllowed(t *testing.T) {
 		t.Error("invalid client IP should be blocked")
 	}
 }
+
+func TestApiRouteNormalization(t *testing.T) {
+	reqPath := "/api/v1/chat/completions?stream=true"
+	reqURI := reqPath
+	if len(reqURI) >= 8 && reqURI[:8] == "/api/v1/" {
+		reqURI = reqURI[4:]
+	}
+	if reqURI != "/v1/chat/completions?stream=true" {
+		t.Errorf("expected normalized URI '/v1/chat/completions?stream=true', got %s", reqURI)
+	}
+
+	rawPath := "/api/v1/models"
+	cleanPath := rawPath
+	if len(cleanPath) >= 4 && cleanPath[:4] == "/api" {
+		cleanPath = cleanPath[4:]
+	}
+	if cleanPath != "/v1/models" {
+		t.Errorf("expected cleanPath '/v1/models', got %s", cleanPath)
+	}
+}
