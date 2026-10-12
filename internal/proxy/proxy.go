@@ -187,8 +187,9 @@ func (p *GatewayProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 3. Handle Special Endpoint: GET /v1/models (Model Whitelist Filtering)
-	if (r.URL.Path == "/v1/models" || r.URL.Path == "/models") && r.Method == http.MethodGet {
+	// 3. Handle Special Endpoint: GET /v1/models or /api/v1/models (Model Whitelist Filtering)
+	cleanPath := strings.TrimPrefix(r.URL.Path, "/api")
+	if (cleanPath == "/v1/models" || cleanPath == "/models") && r.Method == http.MethodGet {
 		p.handleGetModels(w, r, user, key)
 		return
 	}
@@ -472,7 +473,11 @@ func (p *GatewayProxy) handleForwardRequest(w http.ResponseWriter, r *http.Reque
 	}
 
 	// Prepare outbound upstream request
-	upstreamURL := p.cfg.GetUpstreamURL() + r.URL.RequestURI()
+	reqURI := r.URL.RequestURI()
+	if strings.HasPrefix(reqURI, "/api/v1/") {
+		reqURI = strings.TrimPrefix(reqURI, "/api")
+	}
+	upstreamURL := p.cfg.GetUpstreamURL() + reqURI
 	upstreamReq, err := http.NewRequestWithContext(r.Context(), r.Method, upstreamURL, bytes.NewBuffer(bodyBytes))
 	if err != nil {
 		p.writeJSONError(w, http.StatusInternalServerError, "Failed to build upstream request", "gateway_error")
