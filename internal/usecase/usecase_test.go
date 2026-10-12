@@ -373,6 +373,10 @@ func (f *fakeStore) ListSecurityEvents(ctx context.Context, limit int) ([]entity
 	return nil, nil
 }
 
+func (f *fakeStore) ListFilteredSecurityEvents(ctx context.Context, kind string, limit int) ([]entity.SecurityEvent, error) {
+	return nil, nil
+}
+
 func (f *fakeStore) ExecuteTx(ctx context.Context, fn func(txStore Store) error) error {
 	return fn(f)
 }

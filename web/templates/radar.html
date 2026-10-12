@@ -44,7 +44,40 @@
 </div>
 
 <div class="card-modern p-0 overflow-hidden">
-  <div class="p-3 border-bottom border-secondary border-opacity-10"><h6 class="fw-bold text-light mb-0"><i class="bi bi-shield-exclamation text-indigo me-1"></i> Security & Anomaly Findings</h6></div>
+  <div class="p-3 border-bottom border-secondary border-opacity-10 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+    <div>
+      <h6 class="fw-bold text-light mb-0"><i class="bi bi-shield-exclamation text-indigo me-1"></i> Security & Anomaly Findings</h6>
+      <span class="text-dim small" id="findingsCountLabel">Live findings from security events</span>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <div class="dropdown">
+        <button type="button" class="btn-modern-ghost btn-sm dropdown-toggle py-1 px-3 d-inline-flex align-items-center gap-1" data-bs-toggle="dropdown" aria-expanded="false">
+          <i class="bi bi-download"></i> Export
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end dropdown-menu-dark">
+          <li><a class="dropdown-item small" href="#" onclick="exportFindings('csv'); return false;"><i class="bi bi-filetype-csv me-2 text-emerald"></i>Export as CSV</a></li>
+          <li><a class="dropdown-item small" href="#" onclick="exportFindings('json'); return false;"><i class="bi bi-filetype-json me-2 text-cyan"></i>Export as JSON</a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <!-- Filter bar -->
+  <div class="p-3 border-bottom border-secondary border-opacity-10 bg-black bg-opacity-20 d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+    <div class="d-flex flex-wrap align-items-center gap-1" id="findingKindFilter">
+      <button type="button" class="btn btn-sm btn-modern-primary py-1 px-2 filter-pill active" data-kind="" onclick="setFilterKind('')">All</button>
+      <button type="button" class="btn btn-sm btn-modern-ghost py-1 px-2 filter-pill" data-kind="error_spike" onclick="setFilterKind('error_spike')">Error Spike</button>
+      <button type="button" class="btn btn-sm btn-modern-ghost py-1 px-2 filter-pill" data-kind="usage_spike" onclick="setFilterKind('usage_spike')">Usage Spike</button>
+      <button type="button" class="btn btn-sm btn-modern-ghost py-1 px-2 filter-pill" data-kind="new_ip" onclick="setFilterKind('new_ip')">IP Burst</button>
+      <button type="button" class="btn btn-sm btn-modern-ghost py-1 px-2 filter-pill" data-kind="budget_cutoff" onclick="setFilterKind('budget_cutoff')">Budget Cutoff</button>
+      <button type="button" class="btn btn-sm btn-modern-ghost py-1 px-2 filter-pill" data-kind="self_heal" onclick="setFilterKind('self_heal')">Self-Heal</button>
+    </div>
+    <div class="d-flex align-items-center gap-2" style="max-width: 280px; width: 100%;">
+      <div class="input-group input-group-sm">
+        <span class="input-group-text bg-dark border-secondary text-dim"><i class="bi bi-search"></i></span>
+        <input type="text" class="form-control form-control-modern bg-dark text-light border-secondary" id="searchFindings" placeholder="Search findings…" oninput="filterLocalFindings()">
+      </div>
+    </div>
+  </div>
   <div class="table-responsive"><table class="table table-modern mb-0">
     <thead><tr><th>Time</th><th>Kind</th><th>Detail</th><th>Action</th></tr></thead>
     <tbody id="radarBody"><tr><td colspan="4" class="text-dim small">Loading…</td></tr></tbody>
@@ -77,6 +110,54 @@ function kindBadge(k){
   const v = m[k] || ['gray', k];
   return `<span class="badge-modern badge-${v[0]}">${v[1]}</span>`;
 }
+
+let currentKind = '';
+let allEvents = [];
+
+function setFilterKind(kind) {
+  currentKind = kind;
+  document.querySelectorAll('#findingKindFilter .filter-pill').forEach(btn => {
+    if (btn.getAttribute('data-kind') === kind) {
+      btn.className = 'btn btn-sm btn-modern-primary py-1 px-2 filter-pill active';
+    } else {
+      btn.className = 'btn btn-sm btn-modern-ghost py-1 px-2 filter-pill';
+    }
+  });
+  filterLocalFindings();
+}
+
+function exportFindings(format) {
+  let url = `/api/radar/export?format=${encodeURIComponent(format)}&limit=500`;
+  if (currentKind) {
+    url += `&kind=${encodeURIComponent(currentKind)}`;
+  }
+  window.location.href = url;
+}
+
+function filterLocalFindings() {
+  const query = (document.getElementById('searchFindings') ? document.getElementById('searchFindings').value : '').toLowerCase().trim();
+  const filtered = allEvents.filter(e => {
+    if (currentKind && e.kind !== currentKind) return false;
+    if (!query) return true;
+    return (e.detail || '').toLowerCase().includes(query) ||
+           (e.action || '').toLowerCase().includes(query) ||
+           (e.kind || '').toLowerCase().includes(query) ||
+           (e.user_id || '').toLowerCase().includes(query) ||
+           (e.api_key_id || '').toLowerCase().includes(query);
+  });
+  renderFindingsTable(filtered);
+}
+
+function renderFindingsTable(evs) {
+  const countLabel = document.getElementById('findingsCountLabel');
+  if (countLabel) {
+    countLabel.textContent = `${evs.length} finding${evs.length === 1 ? '' : 's'} displayed`;
+  }
+  document.getElementById('radarBody').innerHTML = evs && evs.length ? evs.map(e =>
+    `<tr><td class="text-dim small font-monospace">${formatWIB(e.created_at)}</td><td>${kindBadge(e.kind)}</td><td class="text-light small">${esc(e.detail)}</td><td class="text-dim small">${esc(e.action)}</td></tr>`).join('')
+    : '<tr><td colspan="4" class="text-dim small">No findings match current filter. Quiet is good.</td></tr>';
+}
+
 function stateBadge(state) {
   const s = String(state || '').toLowerCase();
   if (s === 'closed') {
@@ -131,11 +212,13 @@ async function loadRadar() {
 
   // Security & Radar Findings
   try {
-    const evs = await fetch('/api/radar/events?limit=100').then(r => r.json());
-    document.getElementById('radarBody').innerHTML = evs && evs.length ? evs.map(e =>
-      `<tr><td class="text-dim small font-monospace">${formatWIB(e.created_at)}</td><td>${kindBadge(e.kind)}</td><td class="text-light small">${esc(e.detail)}</td><td class="text-dim small">${esc(e.action)}</td></tr>`).join('')
-      : '<tr><td colspan="4" class="text-dim small">No findings. Quiet is good.</td></tr>';
-  } catch (e) { document.getElementById('radarBody').innerHTML = '<tr><td colspan="4" class="text-rose small">Error: ' + esc(e.message) + '</td></tr>'; }
+    const evs = await fetch('/api/radar/events?limit=200').then(r => r.json());
+    allEvents = Array.isArray(evs) ? evs : [];
+    filterLocalFindings();
+  } catch (e) {
+    allEvents = [];
+    document.getElementById('radarBody').innerHTML = '<tr><td colspan="4" class="text-rose small">Error: ' + esc(e.message) + '</td></tr>';
+  }
 }
 
 async function resetBreaker(name) {

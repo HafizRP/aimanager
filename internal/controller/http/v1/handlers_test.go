@@ -2931,3 +2931,106 @@ func TestAPIBenchmarkRunAndExport(t *testing.T) {
 		t.Errorf("expected total_count 2 in JSON export, got %v", jsonExportResp["total_count"])
 	}
 }
+
+func TestAPIRadarEventsAndExport(t *testing.T) {
+	tempDir := t.TempDir()
+	db, err := database.InitDB(filepath.Join(tempDir, "test.db"))
+	if err != nil {
+		t.Fatalf("failed to init db: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+	cfg := &config.Config{
+		SessionSecret: "secret-12345678901234567890123456789012",
+	}
+	h, err := NewHandler(cfg, repo, nil, nil)
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+
+	ctx := context.Background()
+	_ = repo.CreateSecurityEvent(ctx, &entity.SecurityEvent{
+		Kind:     "error_spike",
+		UserID:   "usr-1",
+		APIKeyID: "key-1",
+		Detail:   "High error rate observed",
+		Action:   "key auto-disabled",
+	})
+	_ = repo.CreateSecurityEvent(ctx, &entity.SecurityEvent{
+		Kind:     "budget_cutoff",
+		UserID:   "usr-2",
+		APIKeyID: "key-2",
+		Detail:   "Daily budget exhausted",
+		Action:   "blocked",
+	})
+
+	// 1. Test APIRadarEvents - All
+	reqAll := httptest.NewRequest(http.MethodGet, "/api/radar/events", nil)
+	rrAll := httptest.NewRecorder()
+	h.APIRadarEvents(rrAll, reqAll)
+	if rrAll.Code != http.StatusOK {
+		t.Fatalf("APIRadarEvents all returned %d", rrAll.Code)
+	}
+	var eventsAll []entity.SecurityEvent
+	if err := json.NewDecoder(rrAll.Body).Decode(&eventsAll); err != nil {
+		t.Fatalf("failed to decode events: %v", err)
+	}
+	if len(eventsAll) != 2 {
+		t.Errorf("expected 2 events, got %d", len(eventsAll))
+	}
+
+	// 2. Test APIRadarEvents - Filtered by kind
+	reqFiltered := httptest.NewRequest(http.MethodGet, "/api/radar/events?kind=error_spike", nil)
+	rrFiltered := httptest.NewRecorder()
+	h.APIRadarEvents(rrFiltered, reqFiltered)
+	if rrFiltered.Code != http.StatusOK {
+		t.Fatalf("APIRadarEvents filtered returned %d", rrFiltered.Code)
+	}
+	var eventsFiltered []entity.SecurityEvent
+	if err := json.NewDecoder(rrFiltered.Body).Decode(&eventsFiltered); err != nil {
+		t.Fatalf("failed to decode filtered events: %v", err)
+	}
+	if len(eventsFiltered) != 1 || eventsFiltered[0].Kind != "error_spike" {
+		t.Errorf("expected 1 error_spike event, got %+v", eventsFiltered)
+	}
+
+	// 3. Test APIRadarExport - CSV
+	reqCSV := httptest.NewRequest(http.MethodGet, "/api/radar/export?format=csv", nil)
+	rrCSV := httptest.NewRecorder()
+	h.APIRadarExport(rrCSV, reqCSV)
+	if rrCSV.Code != http.StatusOK {
+		t.Fatalf("APIRadarExport CSV returned %d", rrCSV.Code)
+	}
+	if ct := rrCSV.Header().Get("Content-Type"); !strings.Contains(ct, "text/csv") {
+		t.Errorf("expected Content-Type text/csv, got %s", ct)
+	}
+	if cd := rrCSV.Header().Get("Content-Disposition"); !strings.Contains(cd, "radar_findings_") {
+		t.Errorf("expected Content-Disposition with filename, got %s", cd)
+	}
+	csvBody := rrCSV.Body.String()
+	if !strings.Contains(csvBody, "ID,Timestamp_WIB,Kind,User_ID,API_Key_ID,Detail,Action") {
+		t.Errorf("expected CSV header row, got %s", csvBody)
+	}
+	if !strings.Contains(csvBody, "error_spike") || !strings.Contains(csvBody, "budget_cutoff") {
+		t.Errorf("expected CSV body to contain event kinds, got %s", csvBody)
+	}
+
+	// 4. Test APIRadarExport - JSON with kind filter
+	reqJSON := httptest.NewRequest(http.MethodGet, "/api/radar/export?format=json&kind=budget_cutoff", nil)
+	rrJSON := httptest.NewRecorder()
+	h.APIRadarExport(rrJSON, reqJSON)
+	if rrJSON.Code != http.StatusOK {
+		t.Fatalf("APIRadarExport JSON returned %d", rrJSON.Code)
+	}
+	if ct := rrJSON.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+		t.Errorf("expected Content-Type application/json, got %s", ct)
+	}
+	var exportEvents []entity.SecurityEvent
+	if err := json.NewDecoder(rrJSON.Body).Decode(&exportEvents); err != nil {
+		t.Fatalf("failed to decode JSON export: %v", err)
+	}
+	if len(exportEvents) != 1 || exportEvents[0].Kind != "budget_cutoff" {
+		t.Errorf("expected 1 budget_cutoff event in export, got %+v", exportEvents)
+	}
+}

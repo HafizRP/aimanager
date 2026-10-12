@@ -1,10 +1,13 @@
 package v1
 
 import (
+	"encoding/csv"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -38,18 +41,71 @@ func (h *Handler) RadarPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// APIRadarEvents returns recent findings as JSON.
+// APIRadarEvents returns recent findings as JSON (optionally filtered by kind).
 func (h *Handler) APIRadarEvents(w http.ResponseWriter, r *http.Request) {
 	limit := 100
 	if v, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && v > 0 {
 		limit = v
 	}
-	events, err := h.repo.ListSecurityEvents(r.Context(), limit)
+	kind := strings.TrimSpace(r.URL.Query().Get("kind"))
+	events, err := h.repo.ListFilteredSecurityEvents(r.Context(), kind, limit)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	writeJSON(w, events)
+}
+
+// APIRadarExport exports security and anomaly findings as CSV or JSON.
+func (h *Handler) APIRadarExport(w http.ResponseWriter, r *http.Request) {
+	limit := 500
+	if v, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && v > 0 {
+		limit = v
+	}
+	kind := strings.TrimSpace(r.URL.Query().Get("kind"))
+	format := strings.ToLower(r.URL.Query().Get("format"))
+	if format != "json" {
+		format = "csv"
+	}
+
+	events, err := h.repo.ListFilteredSecurityEvents(r.Context(), kind, limit)
+	if err != nil {
+		http.Error(w, "Failed to retrieve security events: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	timestamp := time.Now().Format("20060102_150405")
+
+	if format == "json" {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=radar_findings_%s.json", timestamp))
+		_ = json.NewEncoder(w).Encode(events)
+		return
+	}
+
+	// CSV format
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=radar_findings_%s.csv", timestamp))
+
+	writer := csv.NewWriter(w)
+	defer writer.Flush()
+
+	_ = writer.Write([]string{
+		"ID", "Timestamp_WIB", "Kind", "User_ID", "API_Key_ID", "Detail", "Action",
+	})
+
+	for _, ev := range events {
+		timeWIB := ev.CreatedAt.Add(7 * time.Hour).Format("2006-01-02 15:04:05")
+		_ = writer.Write([]string{
+			strconv.FormatInt(ev.ID, 10),
+			timeWIB,
+			ev.Kind,
+			ev.UserID,
+			ev.APIKeyID,
+			ev.Detail,
+			ev.Action,
+		})
+	}
 }
 
 // APIKeyBudget updates a key's lifetime + daily budgets and allowed IP restrictions.
