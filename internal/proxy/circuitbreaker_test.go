@@ -166,3 +166,67 @@ func TestCircuitBreakerRegistry(t *testing.T) {
 	}
 }
 
+func TestCircuitBreaker_OnStateChangeCallback(t *testing.T) {
+	type transition struct {
+		name string
+		from CircuitState
+		to   CircuitState
+	}
+
+	var transitions []transition
+	done := make(chan transition, 10)
+
+	cb := NewCircuitBreaker(CircuitBreakerSettings{
+		Name:             "test-target",
+		FailureThreshold: 2,
+		SuccessThreshold: 1,
+		Timeout:          20 * time.Millisecond,
+		OnStateChange: func(name string, from, to CircuitState) {
+			done <- transition{name: name, from: from, to: to}
+		},
+	})
+
+	// 1. Fail twice to trip to Open
+	cb.RecordFailure()
+	cb.RecordFailure()
+
+	select {
+	case tr := <-done:
+		transitions = append(transitions, tr)
+		if tr.name != "test-target" || tr.from != StateClosed || tr.to != StateOpen {
+			t.Fatalf("unexpected transition: %+v", tr)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("timeout waiting for OnStateChange to Open")
+	}
+
+	// 2. Wait timeout to allow probe -> Half-Open
+	time.Sleep(30 * time.Millisecond)
+	if !cb.Allow() {
+		t.Fatal("expected Allow in Half-Open")
+	}
+
+	// Wait for transition to Half-Open
+	select {
+	case tr := <-done:
+		transitions = append(transitions, tr)
+		if tr.from != StateOpen || tr.to != StateHalfOpen {
+			t.Fatalf("unexpected transition to Half-Open: %+v", tr)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("timeout waiting for OnStateChange to Half-Open")
+	}
+
+	// 3. Success resets to Closed
+	cb.RecordSuccess()
+	select {
+	case tr := <-done:
+		transitions = append(transitions, tr)
+		if tr.from != StateHalfOpen || tr.to != StateClosed {
+			t.Fatalf("unexpected transition to Closed: %+v", tr)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("timeout waiting for OnStateChange to Closed")
+	}
+}
+

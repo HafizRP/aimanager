@@ -156,9 +156,10 @@ func Run() error {
 	// 8. Assemble Router (composition root)
 	r := controllerhttp.NewRouter(cfg, db, repo, h, gwProxy)
 
-	// 9. Background Provider Keeper (Auto-reactivate quota-reset accounts)
+	// 9. Background Provider Keeper (Auto-reactivate quota-reset accounts & graceful circuit breaker)
 	keeper := worker.NewProviderKeeper(cfg, coreClient, quotaMgr)
 	keeper.SetNotifier(notifier)
+	keeper.SetLogRepository(repo)
 	eventbus.RegisterQuotaReactivatorSubscriber(bus, keeper)
 	go keeper.Start()
 
