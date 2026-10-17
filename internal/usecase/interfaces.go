@@ -46,6 +46,7 @@ type (
 		GetRequestLogByID(ctx context.Context, id int64) (*entity.RequestLog, error)
 		CreateSecurityEvent(ctx context.Context, ev *entity.SecurityEvent) error
 		ListSecurityEvents(ctx context.Context, limit int) ([]entity.SecurityEvent, error)
+		ListFilteredSecurityEvents(ctx context.Context, kind string, limit int) ([]entity.SecurityEvent, error)
 	}
 
 	StatsStore interface {

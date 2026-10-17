@@ -55,6 +55,7 @@ type AuditLogRepository interface {
 	CreateRequestLog(ctx context.Context, log *entity.RequestLog) error
 	CreateSecurityEvent(ctx context.Context, ev *entity.SecurityEvent) error
 	ListSecurityEvents(ctx context.Context, limit int) ([]entity.SecurityEvent, error)
+	ListFilteredSecurityEvents(ctx context.Context, kind string, limit int) ([]entity.SecurityEvent, error)
 	GetRequestLogs(ctx context.Context, limit, offset int, userID, modelFilter string, statusFilter int) ([]entity.RequestLog, int, error)
 	GetRequestLogsCursor(ctx context.Context, limit int, cursor, direction, userID, modelFilter string, statusFilter int, startDate, endDate *time.Time) ([]entity.RequestLog, *entity.CursorPageInfo, error)
 	GetRequestLogByID(ctx context.Context, id int64) (*entity.RequestLog, error)
@@ -662,10 +663,24 @@ func (r *SQLiteRepo) CreateSecurityEvent(ctx context.Context, ev *entity.Securit
 
 // ListSecurityEvents returns recent findings, newest first.
 func (r *SQLiteRepo) ListSecurityEvents(ctx context.Context, limit int) ([]entity.SecurityEvent, error) {
+	return r.ListFilteredSecurityEvents(ctx, "", limit)
+}
+
+// ListFilteredSecurityEvents returns recent findings, optionally filtered by kind, newest first.
+func (r *SQLiteRepo) ListFilteredSecurityEvents(ctx context.Context, kind string, limit int) ([]entity.SecurityEvent, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
-	rows, err := r.db.QueryContext(ctx, `SELECT id, kind, user_id, api_key_id, detail, action, created_at FROM security_events ORDER BY id DESC LIMIT ?`, limit)
+	var query string
+	var args []interface{}
+	if kind != "" {
+		query = `SELECT id, kind, user_id, api_key_id, detail, action, created_at FROM security_events WHERE kind = ? ORDER BY id DESC LIMIT ?`
+		args = []interface{}{kind, limit}
+	} else {
+		query = `SELECT id, kind, user_id, api_key_id, detail, action, created_at FROM security_events ORDER BY id DESC LIMIT ?`
+		args = []interface{}{limit}
+	}
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

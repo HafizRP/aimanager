@@ -886,3 +886,65 @@ func TestGetKeyStats(t *testing.T) {
 	}
 }
 
+func TestListFilteredSecurityEvents(t *testing.T) {
+	repo, cleanup := setupTestRepo(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	ev1 := &entity.SecurityEvent{
+		Kind:     "error_spike",
+		UserID:   "u1",
+		APIKeyID: "k1",
+		Detail:   "many errors",
+		Action:   "disabled",
+	}
+	ev2 := &entity.SecurityEvent{
+		Kind:     "budget_cutoff",
+		UserID:   "u2",
+		APIKeyID: "k2",
+		Detail:   "budget reached",
+		Action:   "blocked",
+	}
+	ev3 := &entity.SecurityEvent{
+		Kind:     "error_spike",
+		UserID:   "u1",
+		APIKeyID: "k1",
+		Detail:   "spike 2",
+		Action:   "alerted",
+	}
+
+	if err := repo.CreateSecurityEvent(ctx, ev1); err != nil {
+		t.Fatalf("failed to create ev1: %v", err)
+	}
+	if err := repo.CreateSecurityEvent(ctx, ev2); err != nil {
+		t.Fatalf("failed to create ev2: %v", err)
+	}
+	if err := repo.CreateSecurityEvent(ctx, ev3); err != nil {
+		t.Fatalf("failed to create ev3: %v", err)
+	}
+
+	all, err := repo.ListFilteredSecurityEvents(ctx, "", 10)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(all) != 3 {
+		t.Errorf("expected 3 events, got %d", len(all))
+	}
+
+	errorSpikes, err := repo.ListFilteredSecurityEvents(ctx, "error_spike", 10)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(errorSpikes) != 2 {
+		t.Errorf("expected 2 error_spike events, got %d", len(errorSpikes))
+	}
+
+	budgets, err := repo.ListFilteredSecurityEvents(ctx, "budget_cutoff", 10)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(budgets) != 1 {
+		t.Errorf("expected 1 budget_cutoff event, got %d", len(budgets))
+	}
+}
+

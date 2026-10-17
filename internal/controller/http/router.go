@@ -357,6 +357,7 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 			adminOnly.Post("/api/upstream/circuit-breakers/{name}/reset", h.APICircuitBreakerReset)
 			adminOnly.Get("/radar", h.RadarPage)
 			adminOnly.Get("/api/radar/events", h.APIRadarEvents)
+			adminOnly.Get("/api/radar/export", h.APIRadarExport)
 			adminOnly.Post("/api/keys/{id}/budget", h.APIKeyBudget)
 
 			// Admin Billing Actions
