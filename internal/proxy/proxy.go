@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/zerolog/log"
+
 	"9router-gateway/internal/config"
 	"9router-gateway/internal/entity"
 	"9router-gateway/internal/notify"
@@ -62,7 +64,7 @@ func (p *GatewayProxy) alert(dedup, msg string) {
 
 // NewGatewayProxy builds a GatewayProxy with rate limiting and response caching enabled.
 func NewGatewayProxy(cfg *config.Config, repo repository.Repository) *GatewayProxy {
-	return &GatewayProxy{
+	p := &GatewayProxy{
 		cfg:  cfg,
 		repo: repo,
 		httpClient: &http.Client{
@@ -71,12 +73,22 @@ func NewGatewayProxy(cfg *config.Config, repo repository.Repository) *GatewayPro
 		rateLimiter: NewRateLimiter(),
 		cache:       NewResponseCache(),
 		health:      NewUpstreamHealth(),
-		circuitBreakers: NewCircuitBreakerRegistry(CircuitBreakerSettings{
-			FailureThreshold: 3,
-			SuccessThreshold: 2,
-			Timeout:          30 * time.Second,
-		}),
 	}
+	p.circuitBreakers = NewCircuitBreakerRegistry(CircuitBreakerSettings{
+		FailureThreshold: 3,
+		SuccessThreshold: 2,
+		Timeout:          30 * time.Second,
+		OnStateChange: func(name string, from, to CircuitState) {
+			if to == StateOpen {
+				log.Warn().Str("target", name).Msg("Upstream circuit breaker tripped to OPEN")
+				p.alert("cb:trip:"+name, fmt.Sprintf("⚠️ Circuit breaker tripped to OPEN for '%s' after consecutive failures. Requests will fail fast to prevent timeout latency.", name))
+			} else if from == StateOpen && to == StateClosed {
+				log.Info().Str("target", name).Msg("Upstream circuit breaker recovered to CLOSED")
+				p.alert("cb:reset:"+name, fmt.Sprintf("✅ Circuit breaker recovered to CLOSED for '%s'. Normal traffic restored.", name))
+			}
+		},
+	})
+	return p
 }
 
 // ServeHTTP handles OpenAI/Anthropic-compatible API requests.

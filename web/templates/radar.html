@@ -106,7 +106,7 @@ function formatWIB(isoString) {
   }
 }
 function kindBadge(k){
-  const m = { error_spike: ['rose','Error spike'], usage_spike: ['amber','Usage spike'], new_ip: ['indigo','IP burst'], budget_cutoff: ['gray','Budget cutoff'], self_heal: ['emerald','Self-heal'] };
+  const m = { error_spike: ['rose','Error spike'], usage_spike: ['amber','Usage spike'], new_ip: ['indigo','IP burst'], budget_cutoff: ['gray','Budget cutoff'], self_heal: ['emerald','Self-heal'], circuit_breaker: ['rose','Circuit breaker'] };
   const v = m[k] || ['gray', k];
   return `<span class="badge-modern badge-${v[0]}">${v[1]}</span>`;
 }
