@@ -11,6 +11,7 @@ services:
     restart: always
     ports:
       - "127.0.0.1:20128:20128"
+      - "${CORE_BIND_IP:-100.108.204.127}:20128:20128"
     environment:
       - PORT=20128
       - HOSTNAME=0.0.0.0
