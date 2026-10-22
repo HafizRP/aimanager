@@ -43,6 +43,35 @@ func (s *LogService) List(ctx context.Context, q LogQuery) ([]entity.RequestLog,
 	return s.store.GetRequestLogsCursor(ctx, q.Limit, q.Cursor, q.Direction, q.UserID, q.ModelFilter, q.StatusFilter, q.StartDate, q.EndDate)
 }
 
+// Count returns the total number of stored request logs.
+func (s *LogService) Count(ctx context.Context) (int64, error) {
+	return s.store.CountRequestLogs(ctx)
+}
+
+// PurgeResult reports how many rows each retention sweep removed.
+type PurgeResult struct {
+	RequestLogs    int64
+	SecurityEvents int64
+	LoginAudits    int64
+}
+
+// PurgeBefore deletes request logs, security events, and login audits older than retentionDays.
+// retentionDays <= 0 disables the sweep and returns a zero result.
+func (s *LogService) PurgeBefore(ctx context.Context, retentionDays int) (PurgeResult, error) {
+	var out PurgeResult
+	if retentionDays <= 0 {
+		return out, nil
+	}
+	cutoff := time.Now().UTC().AddDate(0, 0, -retentionDays)
+	var err error
+	if out.RequestLogs, err = s.store.PurgeRequestLogsBefore(ctx, cutoff); err != nil {
+		return out, err
+	}
+	out.SecurityEvents, _ = s.store.PurgeSecurityEventsBefore(ctx, cutoff)
+	out.LoginAudits, _ = s.store.PurgeLoginAuditsBefore(ctx, cutoff)
+	return out, nil
+}
+
 // SettingsService handles runtime config persistence.
 type SettingsService struct {
 	store     Store
