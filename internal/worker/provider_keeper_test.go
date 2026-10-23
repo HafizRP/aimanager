@@ -277,3 +277,51 @@ func TestProviderKeeper_Concurrency(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+func TestProviderKeeper_SkipUnsupportedProviderTest(t *testing.T) {
+	dbPath, db := setupTestDB(t)
+	defer db.Close()
+
+	// Insert active connection for provider like commandcode
+	_, err := db.Exec(`INSERT INTO providerConnections (id, provider, name, email, isActive)
+		VALUES ('conn-cmc', 'commandcode', 'Personal Key', '', 1)`)
+	if err != nil {
+		t.Fatalf("failed to insert conn: %v", err)
+	}
+
+	var mu sync.Mutex
+	toggled := false
+
+	mockCore := &upstream.MockCoreClient{
+		TestProviderFunc: func(ctx context.Context, id string) (map[string]interface{}, error) {
+			// Simulates 9router Core's response for un-testable providers
+			return map[string]interface{}{
+				"valid": false,
+				"error": "Provider test not supported",
+			}, nil
+		},
+		ToggleProviderFunc: func(ctx context.Context, id string, isActive bool) error {
+			mu.Lock()
+			defer mu.Unlock()
+			toggled = true
+			return nil
+		},
+	}
+
+	cfg := &config.Config{NineRouterDBPath: dbPath}
+	keeper := NewProviderKeeper(cfg, mockCore, nil)
+	keeper.SetFailureThreshold(1) // would trip immediately if treated as failure
+
+	// Run auto-disable check
+	keeper.checkAndAutoDisable()
+
+	mu.Lock()
+	if toggled {
+		t.Fatalf("expected unsupported provider to NOT be toggled/disabled")
+	}
+	mu.Unlock()
+
+	if count := keeper.GetFailureCount("conn-cmc"); count != 0 {
+		t.Fatalf("expected failure count to be 0 for unsupported test, got %d", count)
+	}
+}
