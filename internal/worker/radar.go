@@ -4,6 +4,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -101,6 +102,22 @@ func (rd *Radar) scan() {
 				continue
 			}
 			detail := fmt.Sprintf("key %s: %d/%d requests failed in 30m (%.0f%%)", who, s.Errors, s.Requests, float64(s.Errors)/float64(s.Requests)*100)
+
+			// Whitelist protection: do not auto-disable keys owned by admin or named 'hermes' / internal automation
+			isWhitelisted := false
+			if u, err := rd.repo.GetUserByID(ctx, s.UserID); err == nil && u != nil && u.Role == "admin" {
+				isWhitelisted = true
+			}
+			if strings.EqualFold(s.KeyName, "hermes") {
+				isWhitelisted = true
+			}
+
+			if isWhitelisted {
+				_ = rd.repo.CreateSecurityEvent(ctx, &entity.SecurityEvent{Kind: "error_spike", UserID: s.UserID, APIKeyID: s.KeyID, Detail: detail + " [whitelisted: alert only]", Action: "alerted"})
+				rd.alert("radar:error:"+s.KeyID, "⚠️ Error spike (Admin/Hermes Key) — "+detail+". Key kept active (whitelisted).")
+				continue
+			}
+
 			if err := rd.repo.ToggleAPIKeyStatus(ctx, s.KeyID, false); err == nil {
 				_ = rd.repo.CreateSecurityEvent(ctx, &entity.SecurityEvent{Kind: "error_spike", UserID: s.UserID, APIKeyID: s.KeyID, Detail: detail, Action: "key auto-disabled"})
 				rd.alert("radar:error:"+s.KeyID, "🚨 Error spike — "+detail+". Key auto-disabled, re-enable from Keys menu if false alarm.")
