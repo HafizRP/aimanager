@@ -44,6 +44,10 @@ type (
 		GetRequestLogs(ctx context.Context, limit, offset int, userID, modelFilter string, statusFilter int) ([]entity.RequestLog, int, error)
 		GetRequestLogsCursor(ctx context.Context, limit int, cursor, direction, userID, modelFilter string, statusFilter int, startDate, endDate *time.Time) ([]entity.RequestLog, *entity.CursorPageInfo, error)
 		GetRequestLogByID(ctx context.Context, id int64) (*entity.RequestLog, error)
+		CountRequestLogs(ctx context.Context) (int64, error)
+		PurgeRequestLogsBefore(ctx context.Context, before time.Time) (int64, error)
+		PurgeSecurityEventsBefore(ctx context.Context, before time.Time) (int64, error)
+		PurgeLoginAuditsBefore(ctx context.Context, before time.Time) (int64, error)
 		CreateSecurityEvent(ctx context.Context, ev *entity.SecurityEvent) error
 		ListSecurityEvents(ctx context.Context, limit int) ([]entity.SecurityEvent, error)
 		ListFilteredSecurityEvents(ctx context.Context, kind string, limit int) ([]entity.SecurityEvent, error)
