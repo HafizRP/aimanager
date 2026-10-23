@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -304,6 +305,10 @@ func (pk *ProviderKeeper) checkAndAutoDisable() {
 		if err == nil && testRes != nil {
 			if v, ok := testRes["valid"].(bool); ok && v {
 				valid = true
+			}
+			// Skip providers that 9router Core does not support testing for (e.g. commandcode)
+			if errMsg, ok := testRes["error"].(string); ok && strings.Contains(strings.ToLower(errMsg), "not supported") {
+				continue
 			}
 		}
 
