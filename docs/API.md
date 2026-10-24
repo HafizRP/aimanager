@@ -70,7 +70,10 @@ Returns list of available models and combos filtered according to the user's whi
 Requires session authentication (`gw_session` cookie).
 
 ### GET `/api/stats`
-Fetches current dashboard KPI metrics, user quotas, and FinOps calculations.
+Fetches current dashboard KPI metrics, user quotas, FinOps calculations, and latency SLO percentiles.
+
+**Query Parameters:**
+- `timeframe`: `1h` | `4h` | `1d` | `1w` | `1m` | `all` (default `1d`). Scopes both the usage buckets and the latency window.
 
 **Response:**
 ```json
@@ -79,9 +82,21 @@ Fetches current dashboard KPI metrics, user quotas, and FinOps calculations.
   "total_tokens": 243125000,
   "cost_saved_usd": 1139.84,
   "cost_saved_idr": 18237427,
-  "rtk_tokens_saved": 91187137
+  "rtk_tokens_saved": 91187137,
+  "latency_sample": 412,
+  "latency_p50_ms": 4216,
+  "latency_p95_ms": 22721,
+  "latency_p99_ms": 48597,
+  "latency_by_model": [
+    { "model": "ag/gemini-3.8-flash-high", "requests": 253, "p50_ms": 4425, "p95_ms": 13908, "p99_ms": 48597, "max_ms": 61240 }
+  ]
 }
 ```
+
+Latency percentiles use **nearest-rank** over successful (`status_code < 400`) requests with a
+non-zero `duration_ms` in the selected window, so slow upstream failures never inflate the SLO.
+`latency_by_model` is capped at 12 models, ordered by p95 descending. Grades are derived from
+p95: `fast` (< 5s), `ok` (< 15s), `slow` (< 30s), `bad` (>= 30s).
 
 ---
 
