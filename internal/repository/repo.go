@@ -1288,6 +1288,9 @@ func (r *SQLiteRepo) GetDashboardStats(ctx context.Context, timeframe string) (*
 	recentLogs, _, _ := r.GetRequestLogs(ctx, 10, 0, "", "", 0)
 	stats.RecentLogs = recentLogs
 
+	// Latency SLO percentiles (nearest-rank, successful requests only)
+	r.attachLatencySLO(ctx, stats, whereClause, "")
+
 	return stats, nil
 }
 
@@ -1379,7 +1382,93 @@ func (r *SQLiteRepo) GetUserDashboardStats(ctx context.Context, userID string, t
 	recentLogs, _, _ := r.GetRequestLogs(ctx, 10, 0, userID, "", 0)
 	stats.RecentLogs = recentLogs
 
+	// Latency SLO percentiles scoped to this user
+	r.attachLatencySLO(ctx, stats, whereClause, userID)
+
 	return stats, nil
+}
+
+// attachLatencySLO computes nearest-rank latency percentiles (p50/p95/p99) for the
+// dashboard window and attaches both an overall figure and a per-model breakdown.
+//
+// The percentile index is ceil(p * n / 100) in 1-based sorted order, expressed in SQL
+// as (p*n + 99)/100 so integer division rounds up instead of truncating. Only successful
+// (status < 400) requests with a recorded duration count, so slow upstream failures do
+// not inflate the latency SLO. Failures are ignored (percentiles stay zero) rather than
+// failing the whole dashboard render.
+func (r *SQLiteRepo) attachLatencySLO(ctx context.Context, stats *entity.DashboardStats, whereClause, userID string) {
+	scope := whereClause
+	var scopeArgs []any
+	if userID != "" {
+		if scope == "" {
+			scope = "1=1"
+		}
+		scope += " AND user_id = ?"
+		scopeArgs = append(scopeArgs, userID)
+	} else if scope == "" {
+		scope = "1=1"
+	}
+
+	// Overall nearest-rank percentiles across the window.
+	overallQuery := fmt.Sprintf(`
+		WITH ranked AS (
+			SELECT duration_ms,
+			       ROW_NUMBER() OVER (ORDER BY duration_ms) AS rn,
+			       COUNT(*) OVER () AS cnt
+			FROM request_logs
+			WHERE %s AND status_code < 400 AND duration_ms > 0
+		)
+		SELECT
+			COALESCE(MAX(cnt), 0),
+			COALESCE(MAX(CASE WHEN rn = (50 * cnt + 99) / 100 THEN duration_ms END), 0),
+			COALESCE(MAX(CASE WHEN rn = (95 * cnt + 99) / 100 THEN duration_ms END), 0),
+			COALESCE(MAX(CASE WHEN rn = (99 * cnt + 99) / 100 THEN duration_ms END), 0)
+		FROM ranked`, scope)
+
+	if err := r.db.QueryRowContext(ctx, overallQuery, scopeArgs...).Scan(
+		&stats.LatencySample,
+		&stats.LatencyP50Ms,
+		&stats.LatencyP95Ms,
+		&stats.LatencyP99Ms,
+	); err != nil {
+		return
+	}
+
+	// Per-model breakdown, worst p95 first, capped for a readable table.
+	modelQuery := fmt.Sprintf(`
+		WITH filtered AS (
+			SELECT model, duration_ms
+			FROM request_logs
+			WHERE %s AND model != '' AND status_code < 400 AND duration_ms > 0
+		), ranked AS (
+			SELECT model, duration_ms,
+			       ROW_NUMBER() OVER (PARTITION BY model ORDER BY duration_ms) AS rn,
+			       COUNT(*) OVER (PARTITION BY model) AS cnt
+			FROM filtered
+		)
+		SELECT model,
+		       MAX(cnt) AS requests,
+		       COALESCE(MAX(CASE WHEN rn = (50 * cnt + 99) / 100 THEN duration_ms END), 0) AS p50,
+		       COALESCE(MAX(CASE WHEN rn = (95 * cnt + 99) / 100 THEN duration_ms END), 0) AS p95,
+		       COALESCE(MAX(CASE WHEN rn = (99 * cnt + 99) / 100 THEN duration_ms END), 0) AS p99,
+		       MAX(duration_ms) AS max_ms
+		FROM ranked
+		GROUP BY model
+		ORDER BY p95 DESC, requests DESC
+		LIMIT 12`, scope)
+
+	rows, err := r.db.QueryContext(ctx, modelQuery, scopeArgs...)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var m entity.ModelLatencyStat
+		if err := rows.Scan(&m.Model, &m.Requests, &m.P50Ms, &m.P95Ms, &m.P99Ms, &m.MaxMs); err == nil {
+			stats.LatencyByModel = append(stats.LatencyByModel, m)
+		}
+	}
 }
 
 // Billing & Midtrans Transactions
