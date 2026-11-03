@@ -59,6 +59,10 @@ type AuditLogRepository interface {
 	GetRequestLogs(ctx context.Context, limit, offset int, userID, modelFilter string, statusFilter int) ([]entity.RequestLog, int, error)
 	GetRequestLogsCursor(ctx context.Context, limit int, cursor, direction, userID, modelFilter string, statusFilter int, startDate, endDate *time.Time) ([]entity.RequestLog, *entity.CursorPageInfo, error)
 	GetRequestLogByID(ctx context.Context, id int64) (*entity.RequestLog, error)
+	CountRequestLogs(ctx context.Context) (int64, error)
+	PurgeRequestLogsBefore(ctx context.Context, before time.Time) (int64, error)
+	PurgeSecurityEventsBefore(ctx context.Context, before time.Time) (int64, error)
+	PurgeLoginAuditsBefore(ctx context.Context, before time.Time) (int64, error)
 }
 
 // StatsRepository handles dashboard analytics calculations.
@@ -944,6 +948,43 @@ func (r *SQLiteRepo) GetRequestLogByID(ctx context.Context, id int64) (*entity.R
 	l.RequestBody = reqBody.String
 	l.ResponseText = respText.String
 	return &l, nil
+}
+
+// CountRequestLogs returns the total number of stored request logs.
+func (r *SQLiteRepo) CountRequestLogs(ctx context.Context) (int64, error) {
+	var count int64
+	err := r.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM request_logs`).Scan(&count)
+	return count, err
+}
+
+// PurgeRequestLogsBefore deletes request logs created before the given cutoff and returns rows removed.
+func (r *SQLiteRepo) PurgeRequestLogsBefore(ctx context.Context, before time.Time) (int64, error) {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM request_logs WHERE created_at < ?`, before.UTC().Format("2006-01-02 15:04:05"))
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
+// PurgeSecurityEventsBefore deletes security events created before the given cutoff.
+func (r *SQLiteRepo) PurgeSecurityEventsBefore(ctx context.Context, before time.Time) (int64, error) {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM security_events WHERE created_at < ?`, before.UTC().Format("2006-01-02 15:04:05"))
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
+// PurgeLoginAuditsBefore deletes login audit records created before the given cutoff.
+func (r *SQLiteRepo) PurgeLoginAuditsBefore(ctx context.Context, before time.Time) (int64, error) {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM login_audits WHERE created_at < ?`, before.UTC().Format("2006-01-02 15:04:05"))
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
 }
 
 // GetRequestLogs returns paginated request logs with optional filters.

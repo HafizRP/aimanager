@@ -167,6 +167,10 @@ func Run() error {
 	radar := worker.NewRadar(repo, notifier)
 	go radar.Start()
 
+	// 8b. Request Log Retention (prune request_logs/security_events/login_audits older than the window)
+	retention := worker.NewLogRetention(repo)
+	go retention.Start()
+
 	// 8b. Warm caches in background so the first page hits are already fast
 	// (quota report + model list); failures are harmless — pages refetch live.
 	go func() {

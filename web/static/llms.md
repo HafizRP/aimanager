@@ -109,6 +109,7 @@ Clients (Cursor, Claude Code, Cline, Copilot, Python SDKs)
 - `GET /api/stats`: Real-time KPI statistics JSON (`total_requests`, `total_tokens`, `cost_saved_usd`).
 - `GET /keys`, `POST /keys`, `POST /keys/{id}/toggle`, `POST /keys/{id}/delete`: API key management.
 - `GET /logs`, `GET /api/logs`, `GET /api/logs/export`: Request audit logs.
+- `GET /api/logs/retention`, `POST /api/logs/retention`, `POST /api/logs/purge`: Request log retention window config and immediate purge (admin-only).
 - `GET /models`, `GET /api/models/alias`: Models overview and alias inspection.
 - `GET /chat`: Interactive multi-session AI chat playground with SSE streaming.
 - `GET /benchmark`, `POST /api/benchmark/run`: Model latency and throughput benchmark.

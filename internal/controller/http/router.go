@@ -296,7 +296,12 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 			adminOnly.Delete("/api/models/alias", h.APIModelAliasDelete)
 			adminOnly.Post("/api/models/alias/delete", h.APIModelAliasDelete)
 
-			// 9router Core: Quota overview & Console Log viewer
+			// Request log retention (admin)
+		adminOnly.Get("/api/logs/retention", h.APILogRetention)
+		adminOnly.Post("/api/logs/retention", h.APILogRetentionSave)
+		adminOnly.Post("/api/logs/purge", h.APILogsPurge)
+
+		// 9router Core: Quota overview & Console Log viewer
 			adminOnly.Get("/quota", h.QuotaPage)
 			adminOnly.Get("/console-log", h.ConsoleLogPage)
 			adminOnly.Get("/api/console-logs", h.APIConsoleLogs)

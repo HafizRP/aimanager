@@ -211,6 +211,16 @@ func (f *fakeStore) GetRequestLogsCursor(ctx context.Context, limit int, cursor,
 func (f *fakeStore) GetRequestLogByID(ctx context.Context, id int64) (*entity.RequestLog, error) {
 	return nil, nil
 }
+func (f *fakeStore) CountRequestLogs(ctx context.Context) (int64, error) { return 0, nil }
+func (f *fakeStore) PurgeRequestLogsBefore(ctx context.Context, before time.Time) (int64, error) {
+	return 0, nil
+}
+func (f *fakeStore) PurgeSecurityEventsBefore(ctx context.Context, before time.Time) (int64, error) {
+	return 0, nil
+}
+func (f *fakeStore) PurgeLoginAuditsBefore(ctx context.Context, before time.Time) (int64, error) {
+	return 0, nil
+}
 
 // StatsStore
 func (f *fakeStore) GetDashboardStats(ctx context.Context, tf string) (*entity.DashboardStats, error) {
