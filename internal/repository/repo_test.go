@@ -660,6 +660,151 @@ func TestGetDashboardStatsTopModels(t *testing.T) {
 	}
 }
 
+// TestDashboardLatencyPercentiles verifies nearest-rank p50/p95/p99 math, that
+// failed requests are excluded from the SLO sample, and that the per-model
+// breakdown and user scoping behave.
+func TestDashboardLatencyPercentiles(t *testing.T) {
+	repo, cleanup := setupTestRepo(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	for _, id := range []string{"lat-user", "lat-other"} {
+		if err := repo.CreateUser(ctx, &entity.User{
+			ID: id, Username: id, Name: id, PasswordHash: "h",
+			Role: "user", AllowedModels: `["*"]`, IsActive: true,
+		}); err != nil {
+			t.Fatalf("CreateUser %s failed: %v", id, err)
+		}
+	}
+
+	// 10 successful requests, durations 100..1000ms (input already sorted).
+	// Nearest-rank on n=10: p50 -> rank 5 -> 500, p95 -> rank 10 -> 1000, p99 -> rank 10 -> 1000.
+	for i := 1; i <= 10; i++ {
+		if err := repo.CreateRequestLog(ctx, &entity.RequestLog{
+			UserID: "lat-user", APIKeyID: "key-lat", Model: "ag/fast-model",
+			Method: "POST", Path: "/v1/chat/completions", StatusCode: 200,
+			TotalTokens: 100, DurationMs: int64(i * 100),
+		}); err != nil {
+			t.Fatalf("CreateRequestLog (success %d) failed: %v", i, err)
+		}
+	}
+
+	// Failures with huge durations must NOT inflate the percentiles.
+	for i := 0; i < 3; i++ {
+		if err := repo.CreateRequestLog(ctx, &entity.RequestLog{
+			UserID: "lat-user", APIKeyID: "key-lat", Model: "ag/fast-model",
+			Method: "POST", Path: "/v1/chat/completions", StatusCode: 500,
+			TotalTokens: 0, DurationMs: 900000,
+		}); err != nil {
+			t.Fatalf("CreateRequestLog (failure %d) failed: %v", i, err)
+		}
+	}
+
+	// A different user's fast traffic must not leak into the scoped view.
+	if err := repo.CreateRequestLog(ctx, &entity.RequestLog{
+		UserID: "lat-other", APIKeyID: "key-other", Model: "ag/fast-model",
+		Method: "POST", Path: "/v1/chat/completions", StatusCode: 200,
+		TotalTokens: 1, DurationMs: 1,
+	}); err != nil {
+		t.Fatalf("CreateRequestLog (other user) failed: %v", err)
+	}
+
+	// A model with only one sample: every percentile collapses to that value.
+	if err := repo.CreateRequestLog(ctx, &entity.RequestLog{
+		UserID: "lat-user", APIKeyID: "key-lat", Model: "ag/single-model",
+		Method: "POST", Path: "/v1/chat/completions", StatusCode: 200,
+		TotalTokens: 10, DurationMs: 7200,
+	}); err != nil {
+		t.Fatalf("CreateRequestLog (single model) failed: %v", err)
+	}
+
+	global, err := repo.GetDashboardStats(ctx, "all")
+	if err != nil {
+		t.Fatalf("GetDashboardStats failed: %v", err)
+	}
+	if global.LatencySample != 12 {
+		t.Errorf("expected latency sample 12 (10+1+1, failures excluded), got %d", global.LatencySample)
+	}
+	if global.LatencyP50Ms != 500 {
+		t.Errorf("expected global p50 500ms, got %d", global.LatencyP50Ms)
+	}
+	if global.LatencyP95Ms != 7200 {
+		t.Errorf("expected global p95 7200ms (rank 12 of 12), got %d", global.LatencyP95Ms)
+	}
+	if global.LatencyP99Ms != 7200 {
+		t.Errorf("expected global p99 7200ms, got %d", global.LatencyP99Ms)
+	}
+
+	// Per-model rows: ag/fast-model has 11 clean samples across users
+	// (1, 100, 200, ..., 1000). p50 rank = (50*11+99)/100 = 6 -> 500ms.
+	var fast *entity.ModelLatencyStat
+	for i := range global.LatencyByModel {
+		if global.LatencyByModel[i].Model == "ag/fast-model" {
+			fast = &global.LatencyByModel[i]
+		}
+	}
+	if fast == nil {
+		t.Fatalf("expected ag/fast-model in latency breakdown, got %+v", global.LatencyByModel)
+	}
+	if fast.Requests != 11 {
+		t.Errorf("expected 11 fast-model samples, got %d", fast.Requests)
+	}
+	if fast.P50Ms != 500 {
+		t.Errorf("expected fast-model p50 500ms, got %d", fast.P50Ms)
+	}
+	if fast.MaxMs != 1000 {
+		t.Errorf("expected fast-model max 1000ms (failures excluded), got %d", fast.MaxMs)
+	}
+	if fast.SLOGrade() != "fast" {
+		t.Errorf("expected SLO grade 'fast' for p95 1000ms, got %q", fast.SLOGrade())
+	}
+
+	// User-scoped view sees only their own rows.
+	scoped, err := repo.GetUserDashboardStats(ctx, "lat-user", "all")
+	if err != nil {
+		t.Fatalf("GetUserDashboardStats failed: %v", err)
+	}
+	if scoped.LatencySample != 11 {
+		t.Errorf("expected scoped sample 11 (10 fast + 1 single), got %d", scoped.LatencySample)
+	}
+	if len(scoped.LatencyByModel) != 2 {
+		t.Errorf("expected 2 models in scoped breakdown, got %d", len(scoped.LatencyByModel))
+	}
+
+	other, err := repo.GetUserDashboardStats(ctx, "lat-other", "all")
+	if err != nil {
+		t.Fatalf("GetUserDashboardStats (other) failed: %v", err)
+	}
+	if other.LatencySample != 1 {
+		t.Errorf("expected other user sample 1, got %d", other.LatencySample)
+	}
+	if other.LatencyP50Ms != 1 || other.LatencyP95Ms != 1 || other.LatencyP99Ms != 1 {
+		t.Errorf("expected all other-user percentiles 1ms, got p50=%d p95=%d p99=%d",
+			other.LatencyP50Ms, other.LatencyP95Ms, other.LatencyP99Ms)
+	}
+}
+
+// TestModelLatencySLOGrade pins the grade banding boundaries.
+func TestModelLatencySLOGrade(t *testing.T) {
+	cases := []struct {
+		p95  int64
+		want string
+	}{
+		{0, "unknown"},
+		{4999, "fast"},
+		{5000, "ok"},
+		{14999, "ok"},
+		{15000, "slow"},
+		{29999, "slow"},
+		{30000, "bad"},
+	}
+	for _, c := range cases {
+		if got := (entity.ModelLatencyStat{P95Ms: c.p95}).SLOGrade(); got != c.want {
+			t.Errorf("SLOGrade(p95=%d) = %q, want %q", c.p95, got, c.want)
+		}
+	}
+}
+
 func TestSQLiteRepo_LoginAudit(t *testing.T) {
 	repo, cleanup := setupTestRepo(t)
 	defer cleanup()

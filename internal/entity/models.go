@@ -227,6 +227,14 @@ type DashboardStats struct {
 	TopUsers       []TopUserStat  `json:"top_users"`
 	TopModels      []TopModelStat `json:"top_models"`
 	RecentLogs     []RequestLog   `json:"recent_logs"`
+
+	// Latency SLO: overall p50/p95/p99 across all successful requests in the
+	// window plus a per-model percentile breakdown (nearest-rank).
+	LatencyP50Ms   int64              `json:"latency_p50_ms"`
+	LatencyP95Ms   int64              `json:"latency_p95_ms"`
+	LatencyP99Ms   int64              `json:"latency_p99_ms"`
+	LatencySample  int64              `json:"latency_sample"`
+	LatencyByModel []ModelLatencyStat `json:"latency_by_model"`
 }
 
 // CursorPageInfo carries pagination metadata for cursor-based log queries.
@@ -365,6 +373,35 @@ type KeyModelUsage struct {
 	Requests   int     `json:"requests"`
 	Tokens     int64   `json:"tokens"`
 	Percentage float64 `json:"percentage"`
+}
+
+// ModelLatencyStat holds latency percentiles for one model over the active window.
+// Percentiles are computed with nearest-rank over successful (status < 400) requests
+// that recorded a non-zero duration, so slow failures never inflate the SLO numbers.
+type ModelLatencyStat struct {
+	Model    string `json:"model"`
+	Requests int64  `json:"requests"`
+	P50Ms    int64  `json:"p50_ms"`
+	P95Ms    int64  `json:"p95_ms"`
+	P99Ms    int64  `json:"p99_ms"`
+	MaxMs    int64  `json:"max_ms"`
+}
+
+// SLOGrade maps the p95 latency onto a coarse reliability grade:
+// fast (< 5s), ok (< 15s), slow (< 30s), bad (>= 30s).
+func (m ModelLatencyStat) SLOGrade() string {
+	switch {
+	case m.P95Ms == 0:
+		return "unknown"
+	case m.P95Ms < 5000:
+		return "fast"
+	case m.P95Ms < 15000:
+		return "ok"
+	case m.P95Ms < 30000:
+		return "slow"
+	default:
+		return "bad"
+	}
 }
 
 // KeyRecentRequest captures recent request entries for key detail inspection.

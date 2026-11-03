@@ -554,6 +554,78 @@
     </div>
   </div>
 </div>
+
+<!-- Latency SLO: Percentile Breakdown -->
+<div class="row g-3 mt-1">
+  <div class="col-12">
+    <div class="card-modern p-4">
+      <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mb-3">
+        <div>
+          <h6 class="fw-bold mb-0 text-light d-flex align-items-center gap-2">
+            <i class="bi bi-stopwatch text-cyan"></i> Latency SLO
+          </h6>
+          <p class="text-dim small mb-0 mt-1" style="font-size: 0.78rem;">
+            Nearest-rank percentiles over successful requests in the
+            <span class="text-light fw-bold font-monospace">{{ if .Stats.Timeframe }}{{ .Stats.Timeframe }}{{ else }}1D{{ end }}</span> window
+            &middot; sample: <span class="text-light font-monospace">{{ formatNumber .Stats.LatencySample }}</span> reqs
+          </p>
+        </div>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          <div class="subcard-modern px-3 py-2 text-center" style="min-width: 92px;">
+            <div class="text-dim" style="font-size: 0.68rem;">P50</div>
+            <div class="fw-bold text-emerald font-monospace">{{ formatMs .Stats.LatencyP50Ms }}</div>
+          </div>
+          <div class="subcard-modern px-3 py-2 text-center" style="min-width: 92px;">
+            <div class="text-dim" style="font-size: 0.68rem;">P95</div>
+            <div class="fw-bold text-warning font-monospace">{{ formatMs .Stats.LatencyP95Ms }}</div>
+          </div>
+          <div class="subcard-modern px-3 py-2 text-center" style="min-width: 92px;">
+            <div class="text-dim" style="font-size: 0.68rem;">P99</div>
+            <div class="fw-bold text-rose font-monospace">{{ formatMs .Stats.LatencyP99Ms }}</div>
+          </div>
+        </div>
+      </div>
+
+      {{ if .Stats.LatencyByModel }}
+        <div class="table-responsive">
+          <table class="table table-modern mb-0">
+            <thead>
+              <tr>
+                <th>Model</th>
+                <th>Reqs</th>
+                <th>P50</th>
+                <th>P95</th>
+                <th>P99</th>
+                <th>Max</th>
+                <th class="text-end">Grade</th>
+              </tr>
+            </thead>
+            <tbody>
+              {{ range .Stats.LatencyByModel }}
+                <tr>
+                  <td><span class="model-pill">{{ .Model }}</span></td>
+                  <td class="font-monospace small text-light">{{ formatNumber .Requests }}</td>
+                  <td class="font-monospace small text-dim">{{ formatMs .P50Ms }}</td>
+                  <td class="font-monospace small text-light fw-bold">{{ formatMs .P95Ms }}</td>
+                  <td class="font-monospace small text-dim">{{ formatMs .P99Ms }}</td>
+                  <td class="font-monospace small text-dim">{{ formatMs .MaxMs }}</td>
+                  <td class="text-end">
+                    <span class="badge-modern{{ if eq .SLOGrade "fast" }} badge-emerald{{ else if eq .SLOGrade "ok" }} badge-cyan{{ else if eq .SLOGrade "slow" }} badge-amber{{ else if eq .SLOGrade "bad" }} badge-rose{{ else }} badge-gray{{ end }}">{{ .SLOGrade }}</span>
+                  </td>
+                </tr>
+              {{ end }}
+            </tbody>
+          </table>
+        </div>
+      {{ else }}
+        <div class="text-center text-dim py-4 small">
+          <i class="bi bi-stopwatch fs-3 d-block mb-2 opacity-50"></i>
+          No successful requests with a recorded duration in this window.
+        </div>
+      {{ end }}
+    </div>
+  </div>
+</div>
 {{ end }}
 
 {{ define "scripts" }}

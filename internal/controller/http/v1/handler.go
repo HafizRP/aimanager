@@ -164,6 +164,27 @@ func NewHandler(cfg *config.Config, repo repository.Repository, sync *syncer.Syn
 			}
 			return k[:8] + "..." + k[len(k)-4:]
 		},
+		"formatMs": func(v interface{}) string {
+			var ms int64
+			switch val := v.(type) {
+			case int64:
+				ms = val
+			case int:
+				ms = int64(val)
+			default:
+				return "-"
+			}
+			if ms <= 0 {
+				return "-"
+			}
+			if ms >= 60000 {
+				return fmt.Sprintf("%.1fm", float64(ms)/60000.0)
+			}
+			if ms >= 1000 {
+				return fmt.Sprintf("%.1fs", float64(ms)/1000.0)
+			}
+			return fmt.Sprintf("%dms", ms)
+		},
 		"toInt64": func(v int) int64 {
 			return int64(v)
 		},

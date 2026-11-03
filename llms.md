@@ -106,7 +106,7 @@ Clients (Cursor, Claude Code, Cline, Copilot, Python SDKs)
 
 ### Web Dashboard & User APIs (Requires Session Auth)
 - `GET /`: Dashboard page with FinOps analytics and usage metrics.
-- `GET /api/stats`: Real-time KPI statistics JSON (`total_requests`, `total_tokens`, `cost_saved_usd`).
+- `GET /api/stats`: Real-time KPI statistics JSON (`total_requests`, `total_tokens`, `cost_saved_usd`, `latency_p50_ms`/`latency_p95_ms`/`latency_p99_ms` + `latency_by_model`).
 - `GET /keys`, `POST /keys`, `POST /keys/{id}/toggle`, `POST /keys/{id}/delete`: API key management.
 - `GET /logs`, `GET /api/logs`, `GET /api/logs/export`: Request audit logs.
 - `GET /models`, `GET /api/models/alias`: Models overview and alias inspection.

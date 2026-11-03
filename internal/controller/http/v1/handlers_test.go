@@ -1266,6 +1266,82 @@ func TestChatPageHandler(t *testing.T) {
 	}
 }
 
+// TestDashboardLatencySLOCard renders the dashboard with real percentile data and
+// asserts the SLO card is actually present with formatted values. A missing map key or
+// a renamed struct field renders silently empty in Go templates, so this asserts on the
+// rendered bytes rather than on the template compiling.
+func TestDashboardLatencySLOCard(t *testing.T) {
+	db, err := database.InitDB(filepath.Join(t.TempDir(), "test_dash_slo.db"))
+	if err != nil {
+		t.Fatalf("InitDB failed: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+	cfg := &config.Config{
+		SessionSecret: "test-secret-12345678901234567890",
+		Port:          20129,
+	}
+
+	h, err := NewHandler(cfg, repo, nil, nil)
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+
+	ctx := context.Background()
+	admin := &entity.User{
+		ID: "u-slo-admin", Username: "slosadmin", Name: "SLO Admin",
+		PasswordHash: "h", Role: "admin", AllowedModels: `["*"]`, IsActive: true,
+	}
+	if err := repo.CreateUser(ctx, admin); err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+
+	// 100 successful samples 100..10000ms so the percentiles differ from each other:
+	// p50 -> 5000ms, p95 -> 9500ms, p99 -> 9900ms.
+	for i := 1; i <= 100; i++ {
+		if err := repo.CreateRequestLog(ctx, &entity.RequestLog{
+			UserID: admin.ID, APIKeyID: "key-slo", Model: "ag/gemini-3.7-flash-high",
+			Method: "POST", Path: "/v1/chat/completions", StatusCode: 200,
+			TotalTokens: 100, DurationMs: int64(i * 100),
+		}); err != nil {
+			t.Fatalf("CreateRequestLog failed: %v", err)
+		}
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/?timeframe=all", nil)
+	req = req.WithContext(context.WithValue(ctx, userContextKey, admin))
+	rr := httptest.NewRecorder()
+	h.DashboardPage(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for dashboard, got %d", rr.Code)
+	}
+
+	body := rr.Body.String()
+	for _, want := range []string{
+		"Latency SLO",
+		"P50",
+		"P95",
+		"P99",
+		"ag/gemini-3.7-flash-high",
+		"5.0s",       // p50 of 100 samples 100..10000
+		"9.5s",       // p95
+		"9.9s",       // p99
+		"badge-cyan", // SLO grade 'ok' for p95 9500ms (< 15000)
+		">ok<",       // rendered grade label
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("expected dashboard to contain %q", want)
+		}
+	}
+
+	// The empty-state must NOT render when we have data.
+	if strings.Contains(body, "No successful requests with a recorded duration") {
+		t.Errorf("expected populated latency table, got empty state")
+	}
+}
+
 func TestPricingAndCostEstimator(t *testing.T) {
 	tempDir := t.TempDir()
 	db, err := database.InitDB(filepath.Join(tempDir, "test.db"))
