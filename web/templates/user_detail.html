@@ -401,6 +401,12 @@
                           data-bs-toggle="modal" data-bs-target="#budgetModal" title="Edit Budgets & Restrictions">
                     <i class="bi bi-shield-lock"></i>
                   </button>
+                  <!-- Rotate Key Secret -->
+                  <button type="button" class="btn-modern-ghost py-1 px-2 text-warning btn-rotate-key"
+                          data-id="{{ .ID }}" data-name="{{ .Name }}"
+                          data-bs-toggle="modal" data-bs-target="#rotateKeyModal" title="Rotate API Key Secret">
+                    <i class="bi bi-arrow-repeat"></i>
+                  </button>
 
                   <!-- Reset Key Token Usage -->
                   <form action="/keys/{{ .ID }}/reset-usage" method="POST" class="d-inline m-0" onsubmit="return confirm('Reset token usage counter to 0 for key \'{{ .Name }}\'?');">
@@ -933,6 +939,42 @@
     </div>
   </div>
 </div>
+
+<!-- Rotate Key Modal -->
+<div class="modal fade" id="rotateKeyModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content modal-content-modern">
+      <form id="rotateKeyForm" action="/keys" method="POST">
+        <input type="hidden" name="redirect" value="/users/{{ .TargetUser.ID }}">
+        <div class="modal-header modal-header-modern">
+          <h5 class="modal-title fw-bold text-light d-flex align-items-center gap-2">
+            <i class="bi bi-arrow-repeat text-warning"></i> Rotate API Key Secret
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-4">
+          <div class="alert card-modern border-warning border-opacity-50 text-light p-3 mb-3">
+            <div class="d-flex align-items-start gap-2">
+              <i class="bi bi-exclamation-triangle-fill text-warning fs-5 flex-shrink-0 mt-0.5"></i>
+              <div class="small">
+                <strong>Warning:</strong> Rotating this API key will immediately generate a new token string and revoke the existing one. All applications, scripts, or agents currently using this key will immediately fail authentication until updated.
+              </div>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label small text-muted">Key Identifier</label>
+            <input type="text" id="rotateKeyNameDisplay" class="form-control form-control-modern font-monospace" readonly disabled>
+          </div>
+          <p class="text-dim small mb-0">Model whitelist, rate limits, budgets, and IP restrictions will remain completely intact.</p>
+        </div>
+        <div class="modal-footer modal-footer-modern">
+          <button type="button" class="btn-modern-ghost" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn-modern-primary text-warning border-warning"><i class="bi bi-arrow-repeat"></i> Rotate Key Now</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 {{ end }}
 
 {{ define "scripts" }}
@@ -964,6 +1006,17 @@
       document.getElementById("editKeyMax").value = this.getAttribute("data-max") || 0;
       document.getElementById("editKeyDaily").value = this.getAttribute("data-daily") || 0;
       document.getElementById("editKeyExpires").value = this.getAttribute("data-expires") || "";
+    });
+  });
+
+  document.querySelectorAll(".btn-rotate-key").forEach(btn => {
+    btn.addEventListener("click", function() {
+      const keyId = this.getAttribute("data-id");
+      const name = this.getAttribute("data-name") || "API Key";
+      const form = document.getElementById("rotateKeyForm");
+      if (form) form.action = "/keys/" + keyId + "/rotate";
+      const nameInput = document.getElementById("rotateKeyNameDisplay");
+      if (nameInput) nameInput.value = name;
     });
   });
 

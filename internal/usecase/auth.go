@@ -715,6 +715,32 @@ func (s *KeyService) ResetKeyUsage(ctx context.Context, keyID string) error {
 	return s.store.ResetKeyUsage(ctx, keyID)
 }
 
+// RotateKey generates a new secure random secret for an existing key, updates the DB, and syncs to 9router Core.
+func (s *KeyService) RotateKey(ctx context.Context, keyID string) (*entity.APIKey, error) {
+	key, err := s.getKeyByID(ctx, keyID)
+	if err != nil {
+		return nil, err
+	}
+
+	newSecret := GenerateSecureAPIKey("sk-gw-")
+	if err := s.store.RotateAPIKey(ctx, keyID, newSecret); err != nil {
+		return nil, err
+	}
+
+	key.Key = newSecret
+
+	if s.sync != nil {
+		u, _ := s.store.GetUserByID(ctx, key.UserID)
+		uName := ""
+		if u != nil {
+			uName = u.Name
+		}
+		_ = s.sync.SyncKey(key, uName)
+	}
+
+	return key, nil
+}
+
 func (s *KeyService) getKeyByID(ctx context.Context, keyID string) (*entity.APIKey, error) {
 	keys, err := s.store.GetAllAPIKeys(ctx)
 	if err != nil {

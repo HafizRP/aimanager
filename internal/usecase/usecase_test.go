@@ -181,6 +181,13 @@ func (f *fakeStore) ResetKeyUsage(ctx context.Context, id string) error {
 	}
 	return nil
 }
+func (f *fakeStore) RotateAPIKey(ctx context.Context, id, newKey string) error {
+	if k, ok := f.keys[id]; ok {
+		k.Key = newKey
+		return nil
+	}
+	return ErrNotFound
+}
 func (f *fakeStore) GetKeyStats(ctx context.Context, keyID string) (*entity.KeyStatsSummary, []entity.HourlyUsagePoint, []entity.KeyModelUsage, []entity.KeyRecentRequest, error) {
 	return &entity.KeyStatsSummary{
 		TotalRequests:   10,
@@ -614,6 +621,39 @@ func TestKeyService_ResetKeyUsage(t *testing.T) {
 	// Non-existent key returns error
 	if err := svc.ResetKeyUsage(context.Background(), "non-existent"); err == nil {
 		t.Fatal("expected error for non-existent key")
+	}
+}
+
+func TestKeyService_RotateKey(t *testing.T) {
+	store := newFakeStore()
+	store.keys["k1"] = &entity.APIKey{
+		ID:     "k1",
+		UserID: "u1",
+		Key:    "sk-gw-old-token-secret-12345678",
+		Name:   "Production Service Key",
+	}
+	svc := NewKeyService(store, nil)
+
+	rotated, err := svc.RotateKey(context.Background(), "k1")
+	if err != nil {
+		t.Fatalf("RotateKey failed: %v", err)
+	}
+	if rotated == nil {
+		t.Fatal("expected rotated key not nil")
+	}
+	if rotated.Key == "sk-gw-old-token-secret-12345678" {
+		t.Errorf("expected new key token, got unchanged old key %s", rotated.Key)
+	}
+	if !strings.HasPrefix(rotated.Key, "sk-gw-") {
+		t.Errorf("expected key to have sk-gw- prefix, got %s", rotated.Key)
+	}
+	if store.keys["k1"].Key != rotated.Key {
+		t.Errorf("expected store to reflect rotated key %s, got %s", rotated.Key, store.keys["k1"].Key)
+	}
+
+	// Non-existent key returns error
+	if _, err := svc.RotateKey(context.Background(), "non-existent"); err == nil {
+		t.Fatal("expected error rotating non-existent key")
 	}
 }
 

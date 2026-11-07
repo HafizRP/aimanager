@@ -44,6 +44,7 @@ type KeyRepository interface {
 	UpdateKeyBudgets(ctx context.Context, id string, maxTokensLimit, dailyQuota int) error
 	UpdateKeyRestrictions(ctx context.Context, id string, maxTokensLimit, dailyQuota int, allowedIPs string) error
 	ResetKeyUsage(ctx context.Context, id string) error
+	RotateAPIKey(ctx context.Context, id, newKey string) error
 	GetTodayTokenUsageByKey(ctx context.Context, keyID string) (int64, error)
 	GetKeyWindowStats(ctx context.Context, since time.Time) ([]KeyWindowStats, error)
 	GetKeyBaselineTokens(ctx context.Context, days int) (map[string]float64, error)
@@ -638,6 +639,12 @@ func (r *SQLiteRepo) UpdateKeyRestrictions(ctx context.Context, id string, maxTo
 // ResetKeyUsage zeroes an API key's token usage counter.
 func (r *SQLiteRepo) ResetKeyUsage(ctx context.Context, id string) error {
 	_, err := r.db.ExecContext(ctx, `UPDATE api_keys SET tokens_used = 0 WHERE id = ?`, id)
+	return err
+}
+
+// RotateAPIKey replaces an API key's secret token string.
+func (r *SQLiteRepo) RotateAPIKey(ctx context.Context, id, newKey string) error {
+	_, err := r.db.ExecContext(ctx, `UPDATE api_keys SET key = ? WHERE id = ?`, newKey, id)
 	return err
 }
 

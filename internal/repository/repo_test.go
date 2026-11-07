@@ -265,6 +265,19 @@ func TestAPIKeyOperations(t *testing.T) {
 		t.Errorf("unexpected updated key data: %+v", updatedByID)
 	}
 
+	// 5e. Rotate API Key Secret
+	rotatedSecret := "sk-gw-rotated-secret-99998888"
+	if err := repo.RotateAPIKey(ctx, "key-1", rotatedSecret); err != nil {
+		t.Fatalf("RotateAPIKey failed: %v", err)
+	}
+	keyAfterRotate, err := repo.GetAPIKeyByID(ctx, "key-1")
+	if err != nil {
+		t.Fatalf("GetAPIKeyByID after rotate failed: %v", err)
+	}
+	if keyAfterRotate.Key != rotatedSecret {
+		t.Errorf("expected rotated secret %s, got %s", rotatedSecret, keyAfterRotate.Key)
+	}
+
 	// 6. Delete Key
 	if err := repo.DeleteAPIKey(ctx, "key-1"); err != nil {
 		t.Fatalf("DeleteAPIKey failed: %v", err)
