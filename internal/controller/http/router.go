@@ -226,6 +226,7 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 		authRouter.Get("/replay", h.ReplayPage)
 		authRouter.Get("/api/replay/source", h.APIReplaySource)
 		authRouter.Post("/api/replay/run", h.APIReplayRun)
+		authRouter.Post("/api/replay/export", h.APIReplayExport)
 
 		// Workspace: Skills, Endpoint Hub, Profile, Usage Analytics
 		authRouter.Get("/skills", h.SkillsPage)

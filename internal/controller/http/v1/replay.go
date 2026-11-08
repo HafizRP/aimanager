@@ -3,10 +3,12 @@ package v1
 import (
 	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -283,4 +285,100 @@ func (h *Handler) replaySingleModel(path string, basePayload map[string]interfac
 	res.CompletionTokens = parsed.Usage.CompletionTokens
 	res.TotalTokens = parsed.Usage.TotalTokens
 	return res
+}
+
+// APIReplayExport exports replay comparison results to Markdown, JSON, or CSV.
+func (h *Handler) APIReplayExport(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Format  string         `json:"format"`
+		LogID   int64          `json:"log_id"`
+		Prompt  string         `json:"prompt"`
+		Results []ReplayResult `json:"results"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request payload", http.StatusBadRequest)
+		return
+	}
+
+	format := strings.ToLower(strings.TrimSpace(req.Format))
+	if format == "" {
+		format = "markdown"
+	}
+
+	timestamp := time.Now().Format("20060102_150405")
+
+	switch format {
+	case "json":
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=replay_results_%s.json", timestamp))
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"exported_at": time.Now().UTC().Format(time.RFC3339),
+			"log_id":      req.LogID,
+			"prompt":      req.Prompt,
+			"total_count": len(req.Results),
+			"results":     req.Results,
+		})
+
+	case "csv":
+		w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=replay_results_%s.csv", timestamp))
+		writer := csv.NewWriter(w)
+		defer writer.Flush()
+
+		_ = writer.Write([]string{
+			"Model", "Latency_MS", "Prompt_Tokens", "Completion_Tokens", "Total_Tokens", "Status", "Success", "Output", "Error",
+		})
+		for _, res := range req.Results {
+			statusStr := "OK"
+			if !res.Success {
+				statusStr = fmt.Sprintf("HTTP %d", res.StatusCode)
+			}
+			_ = writer.Write([]string{
+				res.Model,
+				strconv.FormatInt(res.LatencyMs, 10),
+				strconv.Itoa(res.PromptTokens),
+				strconv.Itoa(res.CompletionTokens),
+				strconv.Itoa(res.TotalTokens),
+				statusStr,
+				strconv.FormatBool(res.Success),
+				res.OutputText,
+				res.ErrorMsg,
+			})
+		}
+
+	default: // markdown
+		w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=replay_results_%s.md", timestamp))
+		var b strings.Builder
+		fmt.Fprintf(&b, "# Request Replay Lab Comparison Report\n\n")
+		fmt.Fprintf(&b, "- **Source Log ID**: `%d`\n", req.LogID)
+		fmt.Fprintf(&b, "- **Exported At**: `%s`\n", time.Now().Format("2006-01-02 15:04:05 MST"))
+		fmt.Fprintf(&b, "- **Models Tested**: `%d`\n\n", len(req.Results))
+
+		if req.Prompt != "" {
+			fmt.Fprintf(&b, "### Input Prompt\n\n```json\n%s\n```\n\n", req.Prompt)
+		}
+
+		fmt.Fprintf(&b, "### Comparison Summary\n\n")
+		fmt.Fprintf(&b, "| Model | Latency | Tokens (In / Out / Total) | Status |\n")
+		fmt.Fprintf(&b, "| :--- | :---: | :---: | :---: |\n")
+		for _, r := range req.Results {
+			statusBadge := "✅ OK"
+			if !r.Success {
+				statusBadge = fmt.Sprintf("❌ FAIL (%d)", r.StatusCode)
+			}
+			fmt.Fprintf(&b, "| **%s** | %d ms | %d / %d / %d | %s |\n",
+				r.Model, r.LatencyMs, r.PromptTokens, r.CompletionTokens, r.TotalTokens, statusBadge)
+		}
+		fmt.Fprintf(&b, "\n### Model Outputs\n\n")
+		for _, r := range req.Results {
+			fmt.Fprintf(&b, "#### %s\n\n", r.Model)
+			if r.Success {
+				fmt.Fprintf(&b, "```\n%s\n```\n\n", strings.TrimSpace(r.OutputText))
+			} else {
+				fmt.Fprintf(&b, "> ⚠️ Error: %s\n\n", r.ErrorMsg)
+			}
+		}
+		_, _ = w.Write([]byte(b.String()))
+	}
 }
