@@ -3214,3 +3214,138 @@ func TestAPIRadarEventsAndExport(t *testing.T) {
 		t.Errorf("expected 1 budget_cutoff event in export, got %+v", exportEvents)
 	}
 }
+
+func TestAPIReplayExport(t *testing.T) {
+	h := &Handler{}
+
+	sampleResults := []ReplayResult{
+		{
+			Model:            "ag/gemini-3.7-flash-high",
+			OutputText:       "Hello! How can I assist you today?",
+			LatencyMs:        145,
+			PromptTokens:     12,
+			CompletionTokens: 9,
+			TotalTokens:      21,
+			StatusCode:       200,
+			Success:          true,
+		},
+		{
+			Model:            "ag/claude-sonnet-4-6",
+			OutputText:       "Hello! I am ready to help.",
+			LatencyMs:        320,
+			PromptTokens:     12,
+			CompletionTokens: 8,
+			TotalTokens:      20,
+			StatusCode:       200,
+			Success:          true,
+		},
+		{
+			Model:            "cx/gpt-6-luna",
+			OutputText:       "",
+			LatencyMs:        2500,
+			StatusCode:       503,
+			Success:          false,
+			ErrorMsg:         "Upstream circuit breaker open",
+		},
+	}
+
+	t.Run("Markdown Export", func(t *testing.T) {
+		payload := map[string]interface{}{
+			"format":  "markdown",
+			"log_id":  42,
+			"prompt":  `[{"role":"user","content":"Hi"}]`,
+			"results": sampleResults,
+		}
+		bodyBytes, _ := json.Marshal(payload)
+		req := httptest.NewRequest(http.MethodPost, "/api/replay/export", bytes.NewReader(bodyBytes))
+		rr := httptest.NewRecorder()
+
+		h.APIReplayExport(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d", rr.Code)
+		}
+		if ct := rr.Header().Get("Content-Type"); !strings.Contains(ct, "text/markdown") {
+			t.Errorf("expected text/markdown Content-Type, got %s", ct)
+		}
+		if cd := rr.Header().Get("Content-Disposition"); !strings.Contains(cd, "replay_results_") || !strings.Contains(cd, ".md") {
+			t.Errorf("expected .md attachment Content-Disposition, got %s", cd)
+		}
+		md := rr.Body.String()
+		if !strings.Contains(md, "# Request Replay Lab Comparison Report") {
+			t.Errorf("expected markdown header in report, got %s", md)
+		}
+		if !strings.Contains(md, "ag/gemini-3.7-flash-high") || !strings.Contains(md, "ag/claude-sonnet-4-6") {
+			t.Errorf("expected tested model names in markdown, got %s", md)
+		}
+		if !strings.Contains(md, "Upstream circuit breaker open") {
+			t.Errorf("expected error message for failed model in markdown, got %s", md)
+		}
+	})
+
+	t.Run("JSON Export", func(t *testing.T) {
+		payload := map[string]interface{}{
+			"format":  "json",
+			"log_id":  42,
+			"prompt":  `[{"role":"user","content":"Hi"}]`,
+			"results": sampleResults,
+		}
+		bodyBytes, _ := json.Marshal(payload)
+		req := httptest.NewRequest(http.MethodPost, "/api/replay/export", bytes.NewReader(bodyBytes))
+		rr := httptest.NewRecorder()
+
+		h.APIReplayExport(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d", rr.Code)
+		}
+		if ct := rr.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+			t.Errorf("expected application/json Content-Type, got %s", ct)
+		}
+		var parsed map[string]interface{}
+		if err := json.NewDecoder(rr.Body).Decode(&parsed); err != nil {
+			t.Fatalf("failed to decode JSON export response: %v", err)
+		}
+		if count, ok := parsed["total_count"].(float64); !ok || int(count) != 3 {
+			t.Errorf("expected total_count=3, got %v", parsed["total_count"])
+		}
+	})
+
+	t.Run("CSV Export", func(t *testing.T) {
+		payload := map[string]interface{}{
+			"format":  "csv",
+			"log_id":  42,
+			"results": sampleResults,
+		}
+		bodyBytes, _ := json.Marshal(payload)
+		req := httptest.NewRequest(http.MethodPost, "/api/replay/export", bytes.NewReader(bodyBytes))
+		rr := httptest.NewRecorder()
+
+		h.APIReplayExport(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected 200 OK, got %d", rr.Code)
+		}
+		if ct := rr.Header().Get("Content-Type"); !strings.Contains(ct, "text/csv") {
+			t.Errorf("expected text/csv Content-Type, got %s", ct)
+		}
+		csvContent := rr.Body.String()
+		if !strings.Contains(csvContent, "Model,Latency_MS,Prompt_Tokens,Completion_Tokens,Total_Tokens,Status,Success,Output,Error") {
+			t.Errorf("expected CSV header row, got %s", csvContent)
+		}
+		if !strings.Contains(csvContent, "ag/gemini-3.7-flash-high") {
+			t.Errorf("expected model row in CSV, got %s", csvContent)
+		}
+	})
+
+	t.Run("Invalid Payload", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/api/replay/export", bytes.NewReader([]byte("{bad-json")))
+		rr := httptest.NewRecorder()
+
+		h.APIReplayExport(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("expected 400 Bad Request on invalid json, got %d", rr.Code)
+		}
+	})
+}
