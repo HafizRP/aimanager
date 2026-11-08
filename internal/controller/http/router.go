@@ -187,6 +187,8 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 		authRouter.Get("/api/keys/export", h.ExportKeys)
 		authRouter.Post("/keys/{id}/clone", h.CloneKey)
 		authRouter.Post("/api/keys/{id}/clone", h.CloneKey)
+		authRouter.Post("/keys/{id}/rotate", h.RotateKey)
+		authRouter.Post("/api/keys/{id}/rotate", h.RotateKey)
 		authRouter.Post("/keys/{id}/edit", h.EditKey)
 		authRouter.Post("/api/keys/{id}/edit", h.EditKey)
 		authRouter.Put("/api/keys/{id}", h.UpdateKey)

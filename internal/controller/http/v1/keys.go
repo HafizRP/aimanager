@@ -618,6 +618,70 @@ func (h *Handler) CloneKey(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirectURL+"?msg="+url.QueryEscape("Key cloned successfully! Token: "+newKey.Key), http.StatusSeeOther)
 }
 
+// RotateKey generates a new secret token for an existing key and invalidates the previous one.
+func (h *Handler) RotateKey(w http.ResponseWriter, r *http.Request) {
+	_ = r.ParseForm()
+	keyID := chi.URLParam(r, "id")
+	ctx := r.Context()
+	currentUser := GetUserFromContext(ctx)
+
+	redirectURL := safeRedirectURL(r.URL.Query().Get("redirect"), "")
+	if redirectURL == "" {
+		redirectURL = safeRedirectURL(r.FormValue("redirect"), "/keys")
+	}
+	isJSON := strings.Contains(r.Header.Get("Accept"), "application/json") || strings.HasPrefix(r.URL.Path, "/api/")
+
+	// Fetch existing key to check existence and ownership
+	existingKey, err := h.repo.GetAPIKeyByID(ctx, keyID)
+	if err != nil || existingKey == nil {
+		if isJSON {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": "API key not found"})
+			return
+		}
+		http.Redirect(w, r, redirectURL+"?error=API+key+not+found", http.StatusSeeOther)
+		return
+	}
+
+	// Ownership enforcement
+	if currentUser != nil && !currentUser.IsAdmin() && existingKey.UserID != currentUser.ID {
+		if isJSON {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": "Permission denied"})
+			return
+		}
+		http.Redirect(w, r, redirectURL+"?error=Permission+denied", http.StatusSeeOther)
+		return
+	}
+
+	rotatedKey, err := h.keys.RotateKey(ctx, keyID)
+	if err != nil {
+		if isJSON {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"error": err.Error()})
+			return
+		}
+		http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+
+	if isJSON {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"key":     rotatedKey,
+			"new_key": rotatedKey.Key,
+			"message": "API key secret rotated successfully",
+		})
+		return
+	}
+
+	http.Redirect(w, r, redirectURL+"?msg="+url.QueryEscape("API key secret rotated successfully! New Token: "+rotatedKey.Key), http.StatusSeeOther)
+}
+
 // APIKeyStats returns performance metrics, hourly token breakdown, top models, and recent requests for an API key.
 func (h *Handler) APIKeyStats(w http.ResponseWriter, r *http.Request) {
 	keyID := chi.URLParam(r, "id")

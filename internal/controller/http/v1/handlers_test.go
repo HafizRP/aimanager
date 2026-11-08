@@ -2063,6 +2063,110 @@ func TestCloneKey(t *testing.T) {
 	}
 }
 
+func TestRotateKey(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test_rotate_keys.db")
+	db, err := database.InitDB(dbPath)
+	if err != nil {
+		t.Fatalf("InitDB failed: %v", err)
+	}
+	defer db.Close()
+
+	repo := repository.NewSQLiteRepo(db)
+	cfg := &config.Config{
+		SessionSecret: "test-secret-12345678901234567890",
+	}
+
+	h, err := NewHandler(cfg, repo, nil, nil)
+	if err != nil {
+		t.Fatalf("NewHandler failed: %v", err)
+	}
+
+	ctx := context.Background()
+	user := &entity.User{
+		ID:       "user-rotate-1",
+		Username: "alice",
+		Name:     "Alice Smith",
+		Role:     "user",
+		IsActive: true,
+	}
+	otherUser := &entity.User{
+		ID:       "user-rotate-2",
+		Username: "mallory",
+		Name:     "Mallory",
+		Role:     "user",
+		IsActive: true,
+	}
+	_ = repo.CreateUser(ctx, user)
+	_ = repo.CreateUser(ctx, otherUser)
+
+	originalKey := &entity.APIKey{
+		ID:              "key-to-rotate",
+		UserID:          user.ID,
+		Key:             "sk-gw-original-old-secret-token",
+		Name:            "Production Key",
+		AllowedModels:   "main",
+		AllowedIPs:      "192.168.1.1",
+		RateLimitRPM:    60,
+		MaxTokensLimit:  500000,
+		DailyTokenQuota: 50000,
+		IsActive:        true,
+	}
+	_ = repo.CreateAPIKey(ctx, originalKey)
+
+	// 1. Permission denied when mallory attempts to rotate Alice's key
+	reqMal := httptest.NewRequest(http.MethodPost, "/keys/"+originalKey.ID+"/rotate", nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", originalKey.ID)
+	reqMal = reqMal.WithContext(context.WithValue(reqMal.Context(), chi.RouteCtxKey, rctx))
+	reqMal = reqMal.WithContext(context.WithValue(reqMal.Context(), userContextKey, otherUser))
+	rrMal := httptest.NewRecorder()
+
+	h.RotateKey(rrMal, reqMal)
+	if !strings.Contains(rrMal.Header().Get("Location"), "Permission+denied") {
+		t.Errorf("expected redirect with Permission denied, got: %s", rrMal.Header().Get("Location"))
+	}
+
+	// 2. Successful rotation via JSON API
+	reqJSON := httptest.NewRequest(http.MethodPost, "/api/keys/"+originalKey.ID+"/rotate", nil)
+	reqJSON.Header.Set("Accept", "application/json")
+	reqJSON = reqJSON.WithContext(context.WithValue(reqJSON.Context(), chi.RouteCtxKey, rctx))
+	reqJSON = reqJSON.WithContext(context.WithValue(reqJSON.Context(), userContextKey, user))
+	rrJSON := httptest.NewRecorder()
+
+	h.RotateKey(rrJSON, reqJSON)
+	if rrJSON.Code != http.StatusOK {
+		t.Fatalf("expected status 200 OK, got %d (body=%s)", rrJSON.Code, rrJSON.Body.String())
+	}
+
+	var jsonResp map[string]interface{}
+	if err := json.Unmarshal(rrJSON.Body.Bytes(), &jsonResp); err != nil {
+		t.Fatalf("failed to decode JSON response: %v", err)
+	}
+	if jsonResp["success"] != true {
+		t.Errorf("expected success true, got %v", jsonResp["success"])
+	}
+	newKeyStr, ok := jsonResp["new_key"].(string)
+	if !ok || !strings.HasPrefix(newKeyStr, "sk-gw-") {
+		t.Errorf("expected new_key with sk-gw- prefix, got %v", jsonResp["new_key"])
+	}
+	if newKeyStr == originalKey.Key {
+		t.Errorf("expected new key to differ from original key %s", originalKey.Key)
+	}
+
+	// 3. Verify in repository
+	inRepo, err := repo.GetAPIKeyByID(ctx, originalKey.ID)
+	if err != nil {
+		t.Fatalf("GetAPIKeyByID failed: %v", err)
+	}
+	if inRepo.Key != newKeyStr {
+		t.Errorf("expected repo key %s, got %s", newKeyStr, inRepo.Key)
+	}
+	// Verify properties were retained
+	if inRepo.Name != originalKey.Name || inRepo.AllowedModels != originalKey.AllowedModels || inRepo.RateLimitRPM != originalKey.RateLimitRPM {
+		t.Errorf("key properties modified during rotation: %+v", inRepo)
+	}
+}
+
 func TestBulkKeysAction(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "test_bulk_keys.db")
 	db, err := database.InitDB(dbPath)
