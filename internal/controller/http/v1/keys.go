@@ -17,12 +17,40 @@ import (
 	"9router-gateway/internal/usecase"
 )
 
-// parseExpiryInput parses a datetime-local / RFC3339 value into a time.Time.
+// parseExpiryInput parses a datetime-local / RFC3339 value or relative duration shorthand into a time.Time.
+// Supports: "2006-01-02T15:04", RFC3339, "2006-01-02", and relative durations like "7d", "+30d", "90d", "1y", "24h".
 // It assumes the browser submits a local datetime in WIB (Asia/Jakarta).
 func parseExpiryInput(raw string) (time.Time, error) {
 	raw = strings.TrimSpace(raw)
-	if raw == "" {
+	if raw == "" || strings.EqualFold(raw, "never") || strings.EqualFold(raw, "none") || raw == "0" {
 		return time.Time{}, nil
+	}
+
+	loc, err := time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+		loc = time.FixedZone("WIB", 7*3600)
+	}
+
+	// Relative duration shorthand: e.g. "7d", "+7d", "30d", "90d", "1y", "24h", "2w"
+	cleaned := strings.TrimPrefix(raw, "+")
+	if len(cleaned) >= 2 {
+		unit := cleaned[len(cleaned)-1]
+		valStr := cleaned[:len(cleaned)-1]
+		if n, err := strconv.Atoi(valStr); err == nil && n > 0 {
+			now := time.Now().In(loc)
+			switch unit {
+			case 'd', 'D':
+				return now.AddDate(0, 0, n), nil
+			case 'w', 'W':
+				return now.AddDate(0, 0, n*7), nil
+			case 'm', 'M':
+				return now.AddDate(0, n, 0), nil
+			case 'y', 'Y':
+				return now.AddDate(n, 0, 0), nil
+			case 'h', 'H':
+				return now.Add(time.Duration(n) * time.Hour), nil
+			}
+		}
 	}
 
 	layouts := []string{
@@ -30,11 +58,6 @@ func parseExpiryInput(raw string) (time.Time, error) {
 		time.RFC3339,
 		"2006-01-02 15:04",
 		"2006-01-02",
-	}
-
-	loc, err := time.LoadLocation("Asia/Jakarta")
-	if err != nil {
-		loc = time.FixedZone("WIB", 7*3600)
 	}
 
 	var parsed time.Time
