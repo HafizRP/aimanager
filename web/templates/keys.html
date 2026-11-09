@@ -347,8 +347,22 @@
             <div class="text-dim small mt-1">Resets at midnight WIB. Requests are rejected with HTTP 429 once exhausted.</div>
           </div>
           <div class="mb-3">
-            <label class="form-label small text-muted">Expires At (Optional)</label>
-            <input type="datetime-local" name="expires_at" class="form-control form-control-modern font-monospace" value="">
+            <div class="d-flex align-items-center justify-content-between mb-1">
+              <label class="form-label small text-muted mb-0">Expires At (Optional)</label>
+              <div class="d-flex align-items-center gap-1 font-monospace" style="font-size: 0.72rem;">
+                <span class="text-dim me-1">Quick:</span>
+                <button type="button" class="btn btn-link p-0 text-cyan text-decoration-none" onclick="setExpiryPreset('createKeyExpires', 7)">+7d</button>
+                <span class="text-secondary opacity-50">·</span>
+                <button type="button" class="btn btn-link p-0 text-cyan text-decoration-none" onclick="setExpiryPreset('createKeyExpires', 30)">+30d</button>
+                <span class="text-secondary opacity-50">·</span>
+                <button type="button" class="btn btn-link p-0 text-cyan text-decoration-none" onclick="setExpiryPreset('createKeyExpires', 90)">+90d</button>
+                <span class="text-secondary opacity-50">·</span>
+                <button type="button" class="btn btn-link p-0 text-cyan text-decoration-none" onclick="setExpiryPreset('createKeyExpires', 365)">+1y</button>
+                <span class="text-secondary opacity-50">·</span>
+                <button type="button" class="btn btn-link p-0 text-secondary text-decoration-none" onclick="setExpiryPreset('createKeyExpires', 0)">Never</button>
+              </div>
+            </div>
+            <input type="datetime-local" id="createKeyExpires" name="expires_at" class="form-control form-control-modern font-monospace" value="">
             <div class="text-dim small mt-1">Leave empty for a permanent key. Timezone: WIB (Asia/Jakarta).</div>
           </div>
           <div class="mb-3">
@@ -415,7 +429,21 @@
             <div class="text-dim small mt-1">Resets at midnight WIB.</div>
           </div>
           <div class="mb-3">
-            <label class="form-label small text-muted">Expires At (Optional)</label>
+            <div class="d-flex align-items-center justify-content-between mb-1">
+              <label class="form-label small text-muted mb-0">Expires At (Optional)</label>
+              <div class="d-flex align-items-center gap-1 font-monospace" style="font-size: 0.72rem;">
+                <span class="text-dim me-1">Quick:</span>
+                <button type="button" class="btn btn-link p-0 text-cyan text-decoration-none" onclick="setExpiryPreset('editKeyExpires', 7)">+7d</button>
+                <span class="text-secondary opacity-50">·</span>
+                <button type="button" class="btn btn-link p-0 text-cyan text-decoration-none" onclick="setExpiryPreset('editKeyExpires', 30)">+30d</button>
+                <span class="text-secondary opacity-50">·</span>
+                <button type="button" class="btn btn-link p-0 text-cyan text-decoration-none" onclick="setExpiryPreset('editKeyExpires', 90)">+90d</button>
+                <span class="text-secondary opacity-50">·</span>
+                <button type="button" class="btn btn-link p-0 text-cyan text-decoration-none" onclick="setExpiryPreset('editKeyExpires', 365)">+1y</button>
+                <span class="text-secondary opacity-50">·</span>
+                <button type="button" class="btn btn-link p-0 text-secondary text-decoration-none" onclick="setExpiryPreset('editKeyExpires', 0)">Never</button>
+              </div>
+            </div>
             <input type="datetime-local" id="editKeyExpires" name="expires_at" class="form-control form-control-modern font-monospace">
             <div class="text-dim small mt-1">Leave empty for a permanent key. Timezone: WIB (Asia/Jakarta).</div>
           </div>
@@ -863,6 +891,21 @@ document.querySelectorAll('.btn-rotate-key').forEach(btn => {
     if (nameInput) nameInput.value = name;
   });
 });
+
+function setExpiryPreset(targetId, days) {
+  const el = document.getElementById(targetId);
+  if (!el) return;
+  if (!days || days <= 0) {
+    el.value = '';
+    if (window.showToast) window.showToast('Key expiry cleared (permanent key) ✨', '⏳');
+    return;
+  }
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  const pad = n => String(n).padStart(2, '0');
+  el.value = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  if (window.showToast) window.showToast('Expiry preset +' + days + 'd applied ✨', '⏳');
+}
 
 function insertIP(targetId, ip) {
   if (!ip) return;
