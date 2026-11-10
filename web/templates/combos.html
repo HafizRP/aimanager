@@ -15,10 +15,19 @@
   </div>
 </div>
 
-<div class="row g-3 mb-4">
+<div class="row g-2 mb-3">
+  <div class="col-12 col-md-6 col-lg-4">
+    <div class="input-group">
+      <span class="input-group-text bg-transparent border-secondary border-opacity-25 text-muted"><i class="bi bi-search"></i></span>
+      <input type="text" class="form-control form-control-modern font-monospace" id="comboSearchInput" placeholder="Filter combos by name or model..." oninput="filterCombos(this.value)">
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-4" id="combosListContainer">
   {{ if .Combos }}
     {{ range .Combos }}
-      <div class="col-12 col-xl-6" id="combo-card-{{ .ID }}">
+      <div class="col-12 col-xl-6 combo-card-item" id="combo-card-{{ .ID }}" data-combo-name="{{ .Name }}" data-combo-models="{{ range .Models }}{{ . }} {{ end }}">
         <div class="card-modern p-4 h-100 d-flex flex-column justify-content-between">
           <div>
             <div class="d-flex align-items-center justify-content-between mb-3">
@@ -32,10 +41,13 @@
                 </div>
               </div>
               <div class="d-flex align-items-center gap-1">
-                <button type="button" class="btn-modern-ghost btn-sm py-1 px-2" onclick="openEditComboModal('{{ .ID }}', '{{ .Name }}', {{ .Models }})" title="Edit Combo">
-                  <i class="bi bi-pencil-square"></i> Edit
+                <button type="button" class="btn-modern-ghost btn-sm py-1 px-2" onclick="duplicateCombo('{{ .ID }}', '{{ .Name }}')" title="Duplicate Combo">
+                  <i class="bi bi-copy"></i>
                 </button>
-                <button type="button" class="btn-modern-ghost btn-sm text-danger border-0 p-1" onclick="deleteCombo('{{ .ID }}', '{{ .Name }}')" title="Delete Combo">
+                <button type="button" class="btn-modern-ghost btn-sm py-1 px-2" onclick="openEditComboModal('{{ .ID }}', '{{ .Name }}', {{ .Models }})" title="Edit Combo">
+                  <i class="bi bi-pencil-square"></i>
+                </button>
+                <button type="button" class="btn-modern-ghost btn-sm text-danger border-0 py-1 px-2" onclick="deleteCombo('{{ .ID }}', '{{ .Name }}')" title="Delete Combo">
                   <i class="bi bi-trash"></i>
                 </button>
               </div>
@@ -78,6 +90,12 @@
       </div>
     </div>
   {{ end }}
+  <div class="col-12" id="noCombosMatchNotice" style="display: none;">
+    <div class="card-modern p-4 text-center text-dim">
+      <i class="bi bi-search fs-2 d-block mb-2 opacity-50"></i>
+      <p class="mb-0">No model combos match your search criteria.</p>
+    </div>
+  </div>
 </div>
 
 <!-- Combo Create/Edit Modal -->
@@ -171,14 +189,37 @@ function renderSelectedChips() {
   container.innerHTML = '';
   currentSelectedModels.forEach((m, idx) => {
     const chip = document.createElement('div');
-    chip.className = 'badge-modern badge-gray font-monospace d-inline-flex align-items-center gap-2 m-1 py-1.5 px-2.5';
+    chip.className = 'badge-modern badge-gray font-monospace d-inline-flex align-items-center gap-1.5 m-1 py-1.5 px-2';
+    const isFirst = idx === 0;
+    const isLast = idx === currentSelectedModels.length - 1;
+
     chip.innerHTML = `
       <span class="text-primary fw-bold">#${idx + 1}</span>
       <span class="text-light">${m}</span>
-      <button type="button" class="btn-close btn-close-white" style="font-size: 0.55rem;" onclick="removeModelFromCombo(${idx})"></button>
+      <div class="d-inline-flex align-items-center gap-1 ms-1">
+        ${!isFirst ? `<button type="button" class="btn btn-sm p-0 text-muted hover-text-light border-0" style="line-height: 1;" title="Move Up (Higher Priority)" onclick="moveModelUp(${idx})"><i class="bi bi-chevron-up" style="font-size: 0.7rem;"></i></button>` : ''}
+        ${!isLast ? `<button type="button" class="btn btn-sm p-0 text-muted hover-text-light border-0" style="line-height: 1;" title="Move Down (Lower Priority)" onclick="moveModelDown(${idx})"><i class="bi bi-chevron-down" style="font-size: 0.7rem;"></i></button>` : ''}
+        <button type="button" class="btn-close btn-close-white ms-1" style="font-size: 0.55rem;" title="Remove Model" onclick="removeModelFromCombo(${idx})"></button>
+      </div>
     `;
     container.appendChild(chip);
   });
+}
+
+function moveModelUp(idx) {
+  if (idx <= 0 || idx >= currentSelectedModels.length) return;
+  const temp = currentSelectedModels[idx];
+  currentSelectedModels[idx] = currentSelectedModels[idx - 1];
+  currentSelectedModels[idx - 1] = temp;
+  renderSelectedChips();
+}
+
+function moveModelDown(idx) {
+  if (idx < 0 || idx >= currentSelectedModels.length - 1) return;
+  const temp = currentSelectedModels[idx];
+  currentSelectedModels[idx] = currentSelectedModels[idx + 1];
+  currentSelectedModels[idx + 1] = temp;
+  renderSelectedChips();
 }
 
 function addModelToCombo(id) {
@@ -200,6 +241,49 @@ function filterCatalog(q) {
     const id = (item.getAttribute('data-id') || '').toLowerCase();
     item.style.display = id.includes(q) ? 'inline-flex' : 'none';
   });
+}
+
+function filterCombos(q) {
+  q = (q || '').toLowerCase().trim();
+  const cards = document.querySelectorAll('.combo-card-item');
+  let visibleCount = 0;
+  cards.forEach(card => {
+    const name = (card.getAttribute('data-combo-name') || '').toLowerCase();
+    const models = (card.getAttribute('data-combo-models') || '').toLowerCase();
+    const match = !q || name.includes(q) || models.includes(q);
+    card.style.display = match ? '' : 'none';
+    if (match) visibleCount++;
+  });
+  const noMatchNotice = document.getElementById('noCombosMatchNotice');
+  if (noMatchNotice) {
+    noMatchNotice.style.display = (visibleCount === 0 && cards.length > 0) ? 'block' : 'none';
+  }
+}
+
+async function duplicateCombo(id, name) {
+  const newName = prompt(`Enter name for duplicated combo:`, `${name}-copy`);
+  if (!newName || !newName.trim()) return;
+  try {
+    const res = await fetch('/api/combos/duplicate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, name: newName.trim() })
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(err || 'Failed to duplicate combo');
+    }
+    if (window.showToast) {
+      window.showToast(`Combo duplicated as "${newName.trim()}"! ✨`, '📋');
+    }
+    setTimeout(() => window.location.reload(), 600);
+  } catch (err) {
+    if (window.showToast) {
+      window.showToast(`Error: ${err.message}`, '⚠️');
+    } else {
+      alert('Error: ' + err.message);
+    }
+  }
 }
 
 async function submitCombo(e) {

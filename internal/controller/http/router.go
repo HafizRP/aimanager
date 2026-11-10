@@ -274,6 +274,7 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 			adminOnly.Get("/combos", h.CombosPage)
 			adminOnly.Post("/api/combos/create", h.APICombosCreate)
 			adminOnly.Post("/api/combos/update", h.APICombosUpdate)
+			adminOnly.Post("/api/combos/duplicate", h.APICombosDuplicate)
 			adminOnly.Post("/api/combos/delete", h.APICombosDelete)
 
 			// 9router Core: Token Saver, RTK, Provider Thinking, Caveman
