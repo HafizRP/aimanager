@@ -3,6 +3,9 @@ package v1
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
+
+	"9router-gateway/internal/upstream"
 )
 
 // CombosPage renders the provider combo/fallback management page.
@@ -89,3 +92,52 @@ func (h *Handler) APICombosDelete(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
 }
+
+// APICombosDuplicate duplicates an existing combo with a new or auto-generated name.
+func (h *Handler) APICombosDuplicate(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	var req struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.ID) == "" {
+		http.Error(w, "combo id required", http.StatusBadRequest)
+		return
+	}
+
+	combos, err := h.coreClient.GetCombos(ctx)
+	if err != nil {
+		http.Error(w, "failed to fetch combos: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var target *upstream.Combo
+	for i := range combos {
+		if combos[i].ID == req.ID {
+			target = &combos[i]
+			break
+		}
+	}
+	if target == nil {
+		http.Error(w, "combo not found", http.StatusNotFound)
+		return
+	}
+
+	newName := strings.TrimSpace(req.Name)
+	if newName == "" {
+		newName = target.Name + "-copy"
+	}
+
+	if err := h.coreClient.CreateCombo(ctx, newName, target.Models); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"name":    newName,
+		"models":  target.Models,
+	})
+}
+
