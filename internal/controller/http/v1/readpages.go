@@ -96,6 +96,8 @@ func (h *Handler) ProfilePage(w http.ResponseWriter, r *http.Request) {
 		"KeyCount":    keyCount,
 		"UserModel":   userModel,
 		"LoginAudits": loginAudits,
+		"SuccessMsg":  r.URL.Query().Get("msg"),
+		"ErrorMsg":    r.URL.Query().Get("error"),
 	})
 }
 

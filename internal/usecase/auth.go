@@ -439,6 +439,28 @@ func (s *UserService) UpdateUser(ctx context.Context, in UpdateUserInput) (*enti
 	return user, nil
 }
 
+// UpdateProfile updates the display name for a user.
+func (s *UserService) UpdateProfile(ctx context.Context, userID, name string) (*entity.User, error) {
+	user, err := s.store.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, ErrNotFound
+	}
+
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, fmt.Errorf("display name cannot be empty")
+	}
+	if len(name) > 100 {
+		name = name[:100]
+	}
+	user.Name = name
+
+	if err := s.store.UpdateUser(ctx, user); err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
 // ResetPassword resets a user's password, returning the new plaintext password.
 func (s *UserService) ResetPassword(ctx context.Context, userID, newPassword string) (string, error) {
 	if _, err := s.store.GetUserByID(ctx, userID); err != nil {
