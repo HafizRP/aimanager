@@ -520,6 +520,31 @@ func TestUserService_CreateUser(t *testing.T) {
 	}
 }
 
+func TestUserService_UpdateProfile(t *testing.T) {
+	store := newFakeStore()
+	store.users["u1"] = &entity.User{ID: "u1", Username: "hafiz", Name: "Hafiz"}
+	svc := NewUserService(store, nil)
+
+	// Successful update
+	updated, err := svc.UpdateProfile(context.Background(), "u1", "Hafiz New")
+	if err != nil {
+		t.Fatalf("UpdateProfile failed: %v", err)
+	}
+	if updated.Name != "Hafiz New" {
+		t.Errorf("expected updated name 'Hafiz New', got '%s'", updated.Name)
+	}
+
+	// Empty name rejected
+	if _, err := svc.UpdateProfile(context.Background(), "u1", "   "); err == nil {
+		t.Error("expected error for empty name, got nil")
+	}
+
+	// Non-existent user
+	if _, err := svc.UpdateProfile(context.Background(), "u999", "Ghost"); err != ErrNotFound {
+		t.Errorf("expected ErrNotFound, got %v", err)
+	}
+}
+
 func TestKeyService_CreateKey(t *testing.T) {
 	store := newFakeStore()
 	store.users["u1"] = &entity.User{ID: "u1", Username: "hafiz", Name: "Hafiz"}
