@@ -730,6 +730,9 @@ func (p *GatewayProxy) handleNonStreamingResponse(w http.ResponseWriter, r *http
 	errMsg := ""
 	if resp.StatusCode >= 400 {
 		errMsg = fmt.Sprintf("Upstream returned HTTP %d", resp.StatusCode)
+		if detail := extractUpstreamError(respBytes); detail != "" {
+			errMsg += ": " + detail
+		}
 	}
 	_ = p.repo.CreateRequestLog(context.Background(), &entity.RequestLog{
 		UserID:           user.ID,
@@ -748,6 +751,38 @@ func (p *GatewayProxy) handleNonStreamingResponse(w http.ResponseWriter, r *http
 		RequestBody:      reqBody,
 		ResponseText:     extractCompletionText(respBytes),
 	})
+}
+
+// extractUpstreamError pulls the human-readable error message out of an upstream
+// error body — {error:{message}}, {error:"..."}, {message:"..."} or plain text —
+// so request logs keep the real cause (quota reset, model error) instead of a
+// bare status code. Capped at 300 chars.
+func extractUpstreamError(b []byte) string {
+	var m struct {
+		Error   json.RawMessage `json:"error"`
+		Message string          `json:"message"`
+	}
+	if err := json.Unmarshal(b, &m); err == nil {
+		if len(m.Error) > 0 {
+			var s string
+			if json.Unmarshal(m.Error, &s) == nil && s != "" {
+				return truncatePayload([]byte(s), 300)
+			}
+			var inner struct {
+				Message string `json:"message"`
+			}
+			if json.Unmarshal(m.Error, &inner) == nil && inner.Message != "" {
+				return truncatePayload([]byte(inner.Message), 300)
+			}
+		}
+		if m.Message != "" {
+			return truncatePayload([]byte(m.Message), 300)
+		}
+	}
+	if len(b) == 0 {
+		return ""
+	}
+	return truncatePayload(b, 300)
 }
 
 // extractCompletionText pulls the assistant text from a chat-completions
