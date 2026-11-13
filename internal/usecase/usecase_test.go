@@ -320,6 +320,14 @@ func (f *fakeStore) DeleteSession(ctx context.Context, token string) error {
 	return nil
 }
 func (f *fakeStore) CleanExpiredSessions(ctx context.Context) error { return nil }
+func (f *fakeStore) DeleteUserSessions(ctx context.Context, userID string) error {
+	for t, uid := range f.sessions {
+		if uid == userID {
+			delete(f.sessions, t)
+		}
+	}
+	return nil
+}
 
 // LoginAttemptStore
 func (f *fakeStore) RecordLoginAttempt(ctx context.Context, ip string) error {
@@ -517,6 +525,32 @@ func TestUserService_CreateUser(t *testing.T) {
 	}
 	if !CheckPasswordHash("pass123", u.PasswordHash) {
 		t.Error("password hash mismatch")
+	}
+}
+
+// ResetPassword must invalidate existing sessions so a stolen cookie dies with the old password.
+func TestUserService_ResetPasswordRevokesSessions(t *testing.T) {
+	store := newFakeStore()
+	svc := NewUserService(store, nil)
+
+	u, _, _, err := svc.CreateUser(context.Background(), CreateUserInput{
+		Name: "Sari", Username: "sari", Password: "oldpass1", Role: "user", TokenQuota: 1000,
+	})
+	if err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+	store.sessions["tok-1"] = u.ID
+	store.sessions["tok-2"] = u.ID
+	store.sessions["other"] = "someone-else"
+
+	if _, err := svc.ResetPassword(context.Background(), u.ID, "newpass1"); err != nil {
+		t.Fatalf("ResetPassword failed: %v", err)
+	}
+	if _, ok := store.sessions["tok-1"]; ok {
+		t.Error("expected session tok-1 to be revoked after password reset")
+	}
+	if _, ok := store.sessions["other"]; !ok {
+		t.Error("expected unrelated session to survive")
 	}
 }
 

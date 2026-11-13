@@ -80,6 +80,7 @@ type (
 		CreateSession(ctx context.Context, token, userID string, expiresAt time.Time) error
 		GetSessionUser(ctx context.Context, token string) (*entity.User, error)
 		DeleteSession(ctx context.Context, token string) error
+		DeleteUserSessions(ctx context.Context, userID string) error
 		CleanExpiredSessions(ctx context.Context) error
 	}
 

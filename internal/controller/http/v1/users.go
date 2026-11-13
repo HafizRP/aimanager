@@ -259,6 +259,22 @@ func (h *Handler) ToggleUserStatus(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, redirectURL+"?msg="+url.QueryEscape(msg), http.StatusSeeOther)
 }
 
+// RevokeUserSessions force-logs-out a user by deleting all their web sessions (admin).
+func (h *Handler) RevokeUserSessions(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "id")
+	ctx := r.Context()
+	redirectURL := safeRedirectURL(r.URL.Query().Get("redirect"), "")
+	if redirectURL == "" {
+		redirectURL = safeRedirectURL(r.FormValue("redirect"), "/users")
+	}
+
+	if err := h.auth.RevokeUserSessions(ctx, userID); err != nil {
+		http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, redirectURL+"?msg="+url.QueryEscape("All sessions revoked — user must sign in again"), http.StatusSeeOther)
+}
+
 // DeleteUser removes a user and their API keys (admin).
 func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")

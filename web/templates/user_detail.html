@@ -77,6 +77,12 @@
         </button>
       </form>
 
+      <form action="/users/{{ .TargetUser.ID }}/revoke-sessions?redirect=/users/{{ .TargetUser.ID }}" method="POST" class="d-inline m-0" onsubmit="return confirm('Force logout {{ .TargetUser.Name }} from all active web sessions?');">
+        <button type="submit" class="btn-modern-ghost py-1 px-3 d-inline-flex align-items-center gap-2 text-danger" title="Revoke All Sessions">
+          <i class="bi bi-box-arrow-right"></i> Revoke Sessions
+        </button>
+      </form>
+
       <form action="/users/{{ .TargetUser.ID }}/toggle?redirect=/users/{{ .TargetUser.ID }}" method="POST" class="d-inline m-0">
         <button type="submit" class="btn-modern-ghost py-1 px-3 d-inline-flex align-items-center gap-2 {{ if .TargetUser.IsActive }}text-warning{{ else }}text-success{{ end }}">
           <i class="bi {{ if .TargetUser.IsActive }}bi-pause-fill{{ else }}bi-play-fill{{ end }}"></i>
