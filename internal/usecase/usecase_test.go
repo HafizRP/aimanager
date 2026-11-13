@@ -157,9 +157,9 @@ func (f *fakeStore) DeleteAPIKey(ctx context.Context, id string) error {
 	delete(f.keys, id)
 	return nil
 }
-func (f *fakeStore) UpdateKeyLastUsed(ctx context.Context, id string, ip string) error { return nil }
+func (f *fakeStore) UpdateKeyLastUsed(ctx context.Context, id string, ip string) error    { return nil }
 func (f *fakeStore) UpdateKeyTokenUsage(ctx context.Context, id string, tokens int) error { return nil }
-func (f *fakeStore) GetAPIKeyTokenUsage(ctx context.Context, id string) (int64, error) { return 0, nil }
+func (f *fakeStore) GetAPIKeyTokenUsage(ctx context.Context, id string) (int64, error)    { return 0, nil }
 func (f *fakeStore) UpdateKeyBudgets(ctx context.Context, id string, maxTokensLimit, dailyQuota int) error {
 	if k, ok := f.keys[id]; ok {
 		k.MaxTokensLimit = maxTokensLimit
@@ -190,21 +190,21 @@ func (f *fakeStore) RotateAPIKey(ctx context.Context, id, newKey string) error {
 }
 func (f *fakeStore) GetKeyStats(ctx context.Context, keyID string) (*entity.KeyStatsSummary, []entity.HourlyUsagePoint, []entity.KeyModelUsage, []entity.KeyRecentRequest, error) {
 	return &entity.KeyStatsSummary{
-		TotalRequests:   10,
-		SuccessRequests: 9,
-		FailedRequests:  1,
-		SuccessRate:     90.0,
-		TotalTokens:     5000,
-		AvgLatencyMs:    150.0,
-	}, []entity.HourlyUsagePoint{
-		{HourLabel: "14:00", Tokens: 2500, Requests: 5, Errors: 0},
-		{HourLabel: "15:00", Tokens: 2500, Requests: 5, Errors: 1},
-	}, []entity.KeyModelUsage{
-		{Model: "ag/gemini-3.7-flash-high", Requests: 8, Tokens: 4000, Percentage: 80.0},
-		{Model: "kr/glm-5", Requests: 2, Tokens: 1000, Percentage: 20.0},
-	}, []entity.KeyRecentRequest{
-		{ID: 1, Path: "/v1/chat/completions", Method: "POST", Model: "ag/gemini-3.7-flash-high", StatusCode: 200, TotalTokens: 500, DurationMs: 120, CreatedAt: "2026-09-28 15:30:00"},
-	}, nil
+			TotalRequests:   10,
+			SuccessRequests: 9,
+			FailedRequests:  1,
+			SuccessRate:     90.0,
+			TotalTokens:     5000,
+			AvgLatencyMs:    150.0,
+		}, []entity.HourlyUsagePoint{
+			{HourLabel: "14:00", Tokens: 2500, Requests: 5, Errors: 0},
+			{HourLabel: "15:00", Tokens: 2500, Requests: 5, Errors: 1},
+		}, []entity.KeyModelUsage{
+			{Model: "ag/gemini-3.7-flash-high", Requests: 8, Tokens: 4000, Percentage: 80.0},
+			{Model: "kr/glm-5", Requests: 2, Tokens: 1000, Percentage: 20.0},
+		}, []entity.KeyRecentRequest{
+			{ID: 1, Path: "/v1/chat/completions", Method: "POST", Model: "ag/gemini-3.7-flash-high", StatusCode: 200, TotalTokens: 500, DurationMs: 120, CreatedAt: "2026-09-28 15:30:00"},
+		}, nil
 }
 
 // RequestLogStore
@@ -320,6 +320,14 @@ func (f *fakeStore) DeleteSession(ctx context.Context, token string) error {
 	return nil
 }
 func (f *fakeStore) CleanExpiredSessions(ctx context.Context) error { return nil }
+func (f *fakeStore) DeleteUserSessions(ctx context.Context, userID string) error {
+	for t, uid := range f.sessions {
+		if uid == userID {
+			delete(f.sessions, t)
+		}
+	}
+	return nil
+}
 
 // LoginAttemptStore
 func (f *fakeStore) RecordLoginAttempt(ctx context.Context, ip string) error {
@@ -542,6 +550,32 @@ func TestUserService_UpdateProfile(t *testing.T) {
 	// Non-existent user
 	if _, err := svc.UpdateProfile(context.Background(), "u999", "Ghost"); err != ErrNotFound {
 		t.Errorf("expected ErrNotFound, got %v", err)
+	}
+}
+
+// ResetPassword must invalidate existing sessions so a stolen cookie dies with the old password.
+func TestUserService_ResetPasswordRevokesSessions(t *testing.T) {
+	store := newFakeStore()
+	svc := NewUserService(store, nil)
+
+	u, _, _, err := svc.CreateUser(context.Background(), CreateUserInput{
+		Name: "Sari", Username: "sari", Password: "oldpass1", Role: "user", TokenQuota: 1000,
+	})
+	if err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+	store.sessions["tok-1"] = u.ID
+	store.sessions["tok-2"] = u.ID
+	store.sessions["other"] = "someone-else"
+
+	if _, err := svc.ResetPassword(context.Background(), u.ID, "newpass1"); err != nil {
+		t.Fatalf("ResetPassword failed: %v", err)
+	}
+	if _, ok := store.sessions["tok-1"]; ok {
+		t.Error("expected session tok-1 to be revoked after password reset")
+	}
+	if _, ok := store.sessions["other"]; !ok {
+		t.Error("expected unrelated session to survive")
 	}
 }
 
@@ -785,17 +819,17 @@ type fakeConfig struct {
 	upstreamURL string
 }
 
-func (f *fakeConfig) SetUpstreamURL(u string)          { f.upstreamURL = u }
-func (f *fakeConfig) GetUpstreamURL() string           { return f.upstreamURL }
-func (f *fakeConfig) SetUpstreamAPIKey(k string)       {}
-func (f *fakeConfig) SetNineRouterDBPath(p string)     {}
-func (f *fakeConfig) GetNineRouterDBPath() string      { return "" }
-func (f *fakeConfig) GetUpstreamAPIKey() string        { return "" }
-func (f *fakeConfig) MidtransServerKey() string        { return "" }
-func (f *fakeConfig) SetMidtransServerKey(k string)    {}
-func (f *fakeConfig) MidtransClientKey() string        { return "" }
-func (f *fakeConfig) SetMidtransClientKey(k string)    {}
-func (f *fakeConfig) MidtransMerchantID() string       { return "" }
-func (f *fakeConfig) SetMidtransMerchantID(id string)  {}
-func (f *fakeConfig) MidtransIsProduction() bool       { return false }
-func (f *fakeConfig) SetMidtransIsProduction(v bool)   {}
+func (f *fakeConfig) SetUpstreamURL(u string)         { f.upstreamURL = u }
+func (f *fakeConfig) GetUpstreamURL() string          { return f.upstreamURL }
+func (f *fakeConfig) SetUpstreamAPIKey(k string)      {}
+func (f *fakeConfig) SetNineRouterDBPath(p string)    {}
+func (f *fakeConfig) GetNineRouterDBPath() string     { return "" }
+func (f *fakeConfig) GetUpstreamAPIKey() string       { return "" }
+func (f *fakeConfig) MidtransServerKey() string       { return "" }
+func (f *fakeConfig) SetMidtransServerKey(k string)   {}
+func (f *fakeConfig) MidtransClientKey() string       { return "" }
+func (f *fakeConfig) SetMidtransClientKey(k string)   {}
+func (f *fakeConfig) MidtransMerchantID() string      { return "" }
+func (f *fakeConfig) SetMidtransMerchantID(id string) {}
+func (f *fakeConfig) MidtransIsProduction() bool      { return false }
+func (f *fakeConfig) SetMidtransIsProduction(v bool)  {}
