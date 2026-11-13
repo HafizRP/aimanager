@@ -259,6 +259,7 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 			adminOnly.Post("/users/{id}/password", h.ResetPassword)
 			adminOnly.Post("/users/{id}/reset-usage", h.ResetUsage)
 			adminOnly.Post("/users/{id}/toggle", h.ToggleUserStatus)
+			adminOnly.Post("/users/{id}/revoke-sessions", h.RevokeUserSessions)
 			adminOnly.Post("/users/{id}/delete", h.DeleteUser)
 
 			// 9router Core: Upstream Providers Management

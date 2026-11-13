@@ -96,6 +96,7 @@ type SessionRepository interface {
 	CreateSession(ctx context.Context, token, userID string, expiresAt time.Time) error
 	GetSessionUser(ctx context.Context, token string) (*entity.User, error)
 	DeleteSession(ctx context.Context, token string) error
+	DeleteUserSessions(ctx context.Context, userID string) error
 	CleanExpiredSessions(ctx context.Context) error
 }
 
@@ -1779,6 +1780,12 @@ func (r *SQLiteRepo) GetSessionUser(ctx context.Context, token string) (*entity.
 // DeleteSession removes a session by its token.
 func (r *SQLiteRepo) DeleteSession(ctx context.Context, token string) error {
 	_, err := r.db.ExecContext(ctx, "DELETE FROM sessions WHERE token = ?", token)
+	return err
+}
+
+// DeleteUserSessions removes every session belonging to a user (force logout).
+func (r *SQLiteRepo) DeleteUserSessions(ctx context.Context, userID string) error {
+	_, err := r.db.ExecContext(ctx, "DELETE FROM sessions WHERE user_id = ?", userID)
 	return err
 }
 

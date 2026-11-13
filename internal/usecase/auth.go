@@ -193,6 +193,11 @@ func (s *AuthService) DeleteSession(ctx context.Context, token string) error {
 	return s.store.DeleteSession(ctx, token)
 }
 
+// RevokeUserSessions force-logs-out a user by deleting all their session rows.
+func (s *AuthService) RevokeUserSessions(ctx context.Context, userID string) error {
+	return s.store.DeleteUserSessions(ctx, userID)
+}
+
 // SignSession computes an HMAC signature of data using the session secret (used for CSRF tokens).
 func (s *AuthService) SignSession(data string) string {
 	return SignSession(s.sessionSecret, data)
@@ -460,6 +465,8 @@ func (s *UserService) ResetPassword(ctx context.Context, userID, newPassword str
 	if err := s.store.UpdateUserPassword(ctx, userID, hash); err != nil {
 		return "", err
 	}
+	// Invalidate existing sessions so a stolen cookie cannot outlive the password change.
+	_ = s.store.DeleteUserSessions(ctx, userID)
 	return newPassword, nil
 }
 
@@ -472,6 +479,10 @@ func (s *UserService) ToggleUserStatus(ctx context.Context, userID string) (bool
 	newStatus := !user.IsActive
 	if err := s.store.ToggleUserStatus(ctx, userID, newStatus); err != nil {
 		return false, err
+	}
+	if !newStatus {
+		// Suspend also kills live web sessions, not just API keys.
+		_ = s.store.DeleteUserSessions(ctx, userID)
 	}
 	if s.sync != nil {
 		keys, _ := s.store.GetAPIKeysByUserID(ctx, userID)
