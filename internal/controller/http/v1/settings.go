@@ -311,23 +311,28 @@ func (h *Handler) UpdatePasswordPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	redirectURL := r.FormValue("redirect")
+	if redirectURL == "" || !strings.HasPrefix(redirectURL, "/") {
+		redirectURL = "/settings"
+	}
+
 	currentPass := strings.TrimSpace(r.FormValue("current_password"))
 	newPass := strings.TrimSpace(r.FormValue("new_password"))
 
 	if len(newPass) < 6 {
-		http.Redirect(w, r, "/settings?error=New+password+must+be+at+least+6+characters", http.StatusSeeOther)
+		http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape("New password must be at least 6 characters"), http.StatusSeeOther)
 		return
 	}
 
 	// Verify current password
 	if !h.auth.VerifySessionPassword(currentUser, currentPass) {
-		http.Redirect(w, r, "/settings?error=Current+password+does+not+match", http.StatusSeeOther)
+		http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape("Current password does not match"), http.StatusSeeOther)
 		return
 	}
 
 	newHash, err := usecase.HashPassword(newPass)
 	if err != nil {
-		http.Redirect(w, r, "/settings?error=Failed+to+encrypt+password", http.StatusSeeOther)
+		http.Redirect(w, r, redirectURL+"?error="+url.QueryEscape("Failed to encrypt password"), http.StatusSeeOther)
 		return
 	}
 
@@ -336,7 +341,7 @@ func (h *Handler) UpdatePasswordPost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_ = h.repo.UpdateUserPassword(ctx, currentUser.ID, newHash)
-	http.Redirect(w, r, "/settings?msg=Password+updated+successfully", http.StatusSeeOther)
+	http.Redirect(w, r, redirectURL+"?msg="+url.QueryEscape("Password updated successfully"), http.StatusSeeOther)
 }
 
 // UpdateMidtransPost saves Midtrans gateway keys (admin).
