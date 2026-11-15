@@ -201,7 +201,7 @@
     {{ if .IsAdmin }}
     <div class="col-md-3">
       <label class="form-label small text-muted mb-1">Filter by User</label>
-      <select id="txUserFilter" class="form-select form-select-modern form-select-sm">
+      <select data-searchable id="txUserFilter" class="form-select form-select-modern form-select-sm">
         <option value="">All Users</option>
         {{ range .AllUsers }}
           <option value="{{ .Name }}">{{ .Name }} (@{{ .Username }})</option>
@@ -344,7 +344,7 @@
           <div class="modal-body p-4">
             <div class="mb-3">
               <label class="form-label small text-muted">Select User</label>
-              <select name="user_id" class="form-select form-select-modern" required>
+              <select data-searchable name="user_id" class="form-select form-select-modern" required>
                 <option value="" disabled selected>-- Choose User --</option>
                 {{ range .AllUsers }}
                   <option value="{{ .ID }}">{{ .Name }} (@{{ .Username }}) - Quota: {{ formatNumber .TokenQuota }}</option>
@@ -466,7 +466,7 @@
     const statusFilter = document.getElementById('txStatusFilter');
 
     if (searchInput) searchInput.value = '';
-    if (userFilter) userFilter.value = '';
+    if (userFilter) { userFilter.value = ''; userFilter.tomselect?.clear(true); }
     if (statusFilter) statusFilter.value = 'all';
 
     filterTransactions();

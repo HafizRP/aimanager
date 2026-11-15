@@ -1710,3 +1710,64 @@ code {
   background-color: var(--bg-surface-hover) !important;
 }
 
+
+/* Tom Select: match .form-select-modern look */
+.ts-wrapper.form-select-modern { padding: 0; }
+.ts-wrapper .ts-control {
+  background-color: var(--bg-surface-elevated) !important;
+  border: 2.5px solid var(--neo-border) !important;
+  border-radius: var(--neo-radius-md) !important;
+  box-shadow: var(--neo-shadow-sm);
+  color: var(--text-main) !important;
+  font-size: 0.88rem;
+  font-weight: 500;
+  padding: 0.5rem 0.9rem;
+  min-height: 2.6rem;
+  display: flex;
+  align-items: center;
+}
+.ts-wrapper.form-select-sm .ts-control { min-height: 2.1rem; padding: 0.3rem 0.7rem; font-size: 0.8rem; }
+.ts-wrapper.single .ts-control::after { display: none; }
+.ts-wrapper.single .ts-control:after { content: none; }
+.ts-wrapper.focus .ts-control {
+  border-color: var(--primary) !important;
+  box-shadow: 4px 4px 0px var(--primary) !important;
+  background-color: var(--bg-surface-hover) !important;
+}
+.ts-dropdown {
+  background-color: var(--bg-surface-elevated) !important;
+  border: 2.5px solid var(--neo-border) !important;
+  border-radius: var(--neo-radius-md) !important;
+  box-shadow: var(--neo-shadow-sm);
+  color: var(--text-main);
+  font-size: 0.85rem;
+  z-index: 9999;
+}
+.ts-dropdown .ts-dropdown-content { max-height: 320px; }
+.ts-dropdown .option.active { background-color: var(--primary); color: #fff; }
+.ts-dropdown-input { border: 0 !important; background: transparent !important; color: var(--text-main) !important; padding: 0.5rem 0.75rem !important; }
+.ts-wrapper .item .small { font-size: inherit; }
+
+/* Tom Select text colors follow theme (bootstrap5 theme sets its own, fights light/dark) */
+.ts-wrapper .ts-control, .ts-wrapper .ts-control input,
+.ts-wrapper .item, .ts-dropdown, .ts-dropdown .option,
+.ts-dropdown .create, .ts-dropdown .no-results, .ts-dropdown-input {
+  color: var(--text-main) !important;
+}
+.ts-wrapper .ts-control input::placeholder { color: var(--text-muted) !important; opacity: 1; }
+.ts-dropdown .option { background-color: transparent; }
+.ts-dropdown .option:hover, .ts-dropdown .option.active {
+  background-color: var(--primary) !important;
+  color: #ffffff !important;
+}
+.ts-dropdown .optgroup-header {
+  background-color: var(--bg-surface-hover);
+  color: var(--text-muted) !important;
+  font-weight: 700;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ts-wrapper .ts-control .item { background: transparent; }
+[data-bs-theme="light"] .ts-dropdown { background-color: #ffffff !important; }
+[data-bs-theme="light"] .ts-wrapper .ts-control { background-color: #ffffff !important; }

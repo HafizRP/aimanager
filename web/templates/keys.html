@@ -37,7 +37,7 @@
     {{ if .IsAdmin }}
     <div class="col-md-2">
       <label class="form-label small text-muted mb-1">Filter by User</label>
-      <select id="keyUserFilter" class="form-select form-select-modern form-select-sm">
+      <select data-searchable id="keyUserFilter" class="form-select form-select-modern form-select-sm">
         <option value="">All Users</option>
         {{ range .Users }}
           <option value="{{ .Name }}">{{ .Name }}</option>
@@ -131,15 +131,17 @@
               <td>
                 <span class="badge-modern badge-gray">{{ .Name }}</span>
               </td>
-              <td>
+              <td style="min-width: 280px;">
                 <div class="d-flex align-items-center gap-2">
-                  <code class="font-monospace text-warning key-display" style="background: rgba(245, 158, 11, 0.08); padding: 0.2rem 0.5rem; border-radius: 6px; border: 1px solid rgba(245, 158, 11, 0.2);" data-full="{{ .Key }}">{{ maskKey .Key }}</code>
-                  <button type="button" class="btn-modern-ghost p-1 py-0 toggle-key-view" title="Show / Hide full key">
-                    <i class="bi bi-eye"></i>
-                  </button>
-                  <button type="button" class="btn-modern-ghost p-1 py-0 copy-btn" data-copy="{{ .Key }}" title="Copy to clipboard">
-                    <i class="bi bi-clipboard"></i>
-                  </button>
+                  <code class="font-monospace text-warning key-display flex-grow-1 text-truncate d-block" style="background: rgba(245, 158, 11, 0.08); padding: 0.3rem 0.6rem; border-radius: 6px; border: 1px solid rgba(245, 158, 11, 0.2); font-size: 0.8rem; min-width: 0;" data-full="{{ .Key }}">{{ maskKey .Key }}</code>
+                  <div class="d-flex align-items-center flex-shrink-0 gap-1">
+                    <button type="button" class="btn-modern-ghost p-1 toggle-key-view" title="Show / Hide full key">
+                      <i class="bi bi-eye"></i>
+                    </button>
+                    <button type="button" class="btn-modern-ghost p-1 copy-btn" data-copy="{{ .Key }}" title="Copy to clipboard">
+                      <i class="bi bi-clipboard"></i>
+                    </button>
+                  </div>
                 </div>
               </td>
               <td>
@@ -301,7 +303,7 @@
           {{ if .IsAdmin }}
             <div class="mb-3">
               <label class="form-label small text-muted">Assign to User Account</label>
-              <select name="user_id" class="form-select form-select-modern" required>
+              <select data-searchable name="user_id" class="form-select form-select-modern" required>
                 <option value="" disabled selected>-- Select a User --</option>
                 {{ range .Users }}
                   <option value="{{ .ID }}">{{ .Name }} (@{{ .Username }})</option>
@@ -849,7 +851,7 @@ function resetKeyFilters() {
   if (document.getElementById('keySearchInput')) document.getElementById('keySearchInput').value = '';
   if (document.getElementById('keyStatusFilter')) document.getElementById('keyStatusFilter').value = 'all';
   if (document.getElementById('keyScopeFilter')) document.getElementById('keyScopeFilter').value = 'all';
-  if (document.getElementById('keyUserFilter')) document.getElementById('keyUserFilter').value = '';
+  if (document.getElementById('keyUserFilter')) { document.getElementById('keyUserFilter').value = ''; document.getElementById('keyUserFilter').tomselect?.clear(true); }
   filterKeys();
 }
 

@@ -39,6 +39,7 @@ func (h *Handler) DashboardPage(w http.ResponseWriter, r *http.Request) {
 		"Stats":       stats,
 		"Timeframe":   timeframe,
 		"QuotaReport": quotaReport,
+		"QuotaGroups": quotaReport.GroupByProvider(),
 		"SuccessMsg":  successMsg,
 		"ErrorMsg":    errorMsg,
 	})
