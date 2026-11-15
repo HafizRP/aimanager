@@ -329,6 +329,37 @@ func TestSessionAndSettings(t *testing.T) {
 		t.Errorf("expected error getting deleted session, got nil")
 	}
 
+	// 1b. DeleteUserSessions force-logs-out every token owned by one user
+	other := &entity.User{
+		ID:            "user-session-2",
+		Username:      "delta",
+		Name:          "Delta",
+		Role:          "user",
+		AllowedModels: `["*"]`,
+		IsActive:      true,
+	}
+	_ = repo.CreateUser(ctx, other)
+	exp2 := time.Now().Add(24 * time.Hour)
+	for _, tok := range []string{"sess-a-0000000000000000000000000001", "sess-b-0000000000000000000000000002"} {
+		if err := repo.CreateSession(ctx, tok, "user-session", exp2); err != nil {
+			t.Fatalf("CreateSession failed: %v", err)
+		}
+	}
+	if err := repo.CreateSession(ctx, "sess-other-000000000000000000000001", "user-session-2", exp2); err != nil {
+		t.Fatalf("CreateSession failed: %v", err)
+	}
+	if err := repo.DeleteUserSessions(ctx, "user-session"); err != nil {
+		t.Fatalf("DeleteUserSessions failed: %v", err)
+	}
+	for _, tok := range []string{"sess-a-0000000000000000000000000001", "sess-b-0000000000000000000000000002"} {
+		if _, err := repo.GetSessionUser(ctx, tok); err == nil {
+			t.Errorf("expected session %s to be revoked", tok)
+		}
+	}
+	if _, err := repo.GetSessionUser(ctx, "sess-other-000000000000000000000001"); err != nil {
+		t.Errorf("unrelated user's session must survive, got: %v", err)
+	}
+
 	// 2. Settings Save & Get
 	if err := repo.SaveSetting(ctx, "test_setting", "setting_value_123"); err != nil {
 		t.Fatalf("SaveSetting failed: %v", err)
