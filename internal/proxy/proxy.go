@@ -309,11 +309,31 @@ func (p *GatewayProxy) handleGetModels(w http.ResponseWriter, r *http.Request, u
 	_ = json.NewEncoder(w).Encode(modelsResp)
 }
 
-// doUpstreamWithRetry performs one initial attempt plus a single retry on
-// transport errors and retryable statuses (429/502/503/504), recording outcomes into
-// both UpstreamHealth and the target CircuitBreaker.
+// transportRetryDelays bounds automatic retries on transport errors. 9router
+// core takes ~8-10s to boot after a restart (the hourly model-reorder cron used
+// to bounce it), so a single 500ms retry turned every restart into a 502 for
+// users. Backing off up to ~6s converts most restart windows into a success.
+var transportRetryDelays = []time.Duration{500 * time.Millisecond, 1500 * time.Millisecond, 4 * time.Second}
+
+// statusRetryDelay is the single retry used for retryable upstream statuses
+// (429/502/503/504). Kept short: those usually mean throttling, not a reboot.
+const statusRetryDelay = 500 * time.Millisecond
+
+// doUpstreamWithRetry performs one initial attempt, up to len(transportRetryDelays)
+// retries on transport errors, and a single retry on retryable statuses. Health and
+// circuit-breaker outcomes are recorded once per request (not per attempt) so a
+// retried request cannot trip the breaker on its own.
 func (p *GatewayProxy) doUpstreamWithRetry(req *http.Request, bodyBytes []byte, cb *CircuitBreaker) (*http.Response, int) {
 	attempts := 0
+	transportFails := 0
+	statusRetried := false
+	failFinal := func() (*http.Response, int) {
+		p.health.Record(0, true)
+		if cb != nil {
+			cb.RecordFailure()
+		}
+		return nil, attempts
+	}
 	for {
 		attempts++
 		// Re-clone the body each attempt (http.Client consumes it).
@@ -321,35 +341,33 @@ func (p *GatewayProxy) doUpstreamWithRetry(req *http.Request, bodyBytes []byte, 
 		req.ContentLength = int64(len(bodyBytes))
 		resp, err := p.httpClient.Do(req)
 		if err != nil {
-			p.health.Record(0, true)
-			if cb != nil {
-				cb.RecordFailure()
+			if req.Context().Err() != nil || transportFails >= len(transportRetryDelays) {
+				return failFinal()
 			}
-			if attempts < 2 && req.Context().Err() == nil {
-				select {
-				case <-req.Context().Done():
-					return nil, attempts
-				case <-time.After(500 * time.Millisecond):
-				}
-				continue
-			}
-			return nil, attempts
-		}
-		if retryableStatus(resp.StatusCode) && attempts < 2 && req.Context().Err() == nil {
-			p.health.Record(resp.StatusCode, false)
-			if cb != nil {
-				cb.RecordFailure()
-			}
-			_, _ = io.Copy(io.Discard, resp.Body)
-			_ = resp.Body.Close()
+			delay := transportRetryDelays[transportFails]
+			transportFails++
 			select {
 			case <-req.Context().Done():
-				return nil, attempts
-			case <-time.After(500 * time.Millisecond):
+				return failFinal()
+			case <-time.After(delay):
 			}
 			continue
 		}
 		p.health.Record(resp.StatusCode, false)
+		if retryableStatus(resp.StatusCode) && !statusRetried && req.Context().Err() == nil {
+			statusRetried = true
+			_, _ = io.Copy(io.Discard, resp.Body)
+			_ = resp.Body.Close()
+			select {
+			case <-req.Context().Done():
+				if cb != nil {
+					cb.RecordFailure()
+				}
+				return nil, attempts
+			case <-time.After(statusRetryDelay):
+			}
+			continue
+		}
 		if cb != nil {
 			if resp.StatusCode >= 500 || resp.StatusCode == 429 {
 				cb.RecordFailure()
