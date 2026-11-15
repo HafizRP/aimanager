@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -320,6 +321,34 @@ func TestAPIKey_IsIPAllowed(t *testing.T) {
 	}
 	if kCIDR.IsIPAllowed("invalid-ip-string") {
 		t.Error("invalid client IP should be blocked")
+	}
+}
+
+func TestExtractUpstreamError(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		want string
+	}{
+		{"nested message", `{"error":{"message":"[codex/gpt-6-luna] [429]: usage limit reached (reset after 30m)","type":"x"}}`, "[codex/gpt-6-luna] [429]: usage limit reached (reset after 30m)"},
+		{"string error", `{"error":"API key required for remote API access"}`, "API key required for remote API access"},
+		{"top message", `{"message":"model overloaded"}`, "model overloaded"},
+		{"plain text", `upstream unavailable`, "upstream unavailable"},
+		{"empty", ``, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := extractUpstreamError([]byte(tc.body)); got != tc.want {
+				t.Errorf("extractUpstreamError(%q) = %q, want %q", tc.body, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestExtractUpstreamErrorTruncates(t *testing.T) {
+	body := `{"error":{"message":"` + strings.Repeat("x", 1000) + `"}}`
+	if got := extractUpstreamError([]byte(body)); len(got) != 300 {
+		t.Errorf("expected 300-char cap, got %d", len(got))
 	}
 }
 
