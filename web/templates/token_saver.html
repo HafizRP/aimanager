@@ -409,7 +409,10 @@ async function serviceAction(service, action) {
   setBadge(service + 'Status', action + '…', null);
   try {
     const res = await fetch(`/api/services/${service}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-    const data = await res.json();
+    // Gateway returns plain-text errors (http.Error), so read text first.
+    const text = await res.text();
+    let data = {};
+    try { data = JSON.parse(text); } catch (e) { data = { error: text.trim() }; }
     if (!res.ok) throw new Error(data.error || 'Action failed');
     await refreshServiceStatus();
   } catch (err) {
