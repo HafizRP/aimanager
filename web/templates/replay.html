@@ -66,9 +66,23 @@
 
 <!-- Results -->
 <div class="card-modern p-0 overflow-hidden mb-4">
-  <div class="p-3 border-bottom border-secondary border-opacity-10 d-flex justify-content-between align-items-center">
-    <h6 class="fw-bold text-light mb-0">Replay Results</h6>
-    <span class="text-dim small" id="replayResultMeta"></span>
+  <div class="p-3 border-bottom border-secondary border-opacity-10 d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2">
+    <div>
+      <h6 class="fw-bold text-light mb-0">Replay Results</h6>
+      <span class="text-dim small" id="replayResultMeta"></span>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+      <div class="dropdown">
+        <button class="btn-modern-ghost btn-sm dropdown-toggle d-inline-flex align-items-center gap-1.5" type="button" id="btnExportDropdown" data-bs-toggle="dropdown" aria-expanded="false" disabled>
+          <i class="bi bi-download"></i> Export
+        </button>
+        <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end shadow-sm" aria-labelledby="btnExportDropdown">
+          <li><button class="dropdown-item d-flex align-items-center gap-2 small" type="button" onclick="exportReplay('markdown')"><i class="bi bi-markdown text-info"></i> Markdown Report (.md)</button></li>
+          <li><button class="dropdown-item d-flex align-items-center gap-2 small" type="button" onclick="exportReplay('json')"><i class="bi bi-filetype-json text-warning"></i> Structured JSON (.json)</button></li>
+          <li><button class="dropdown-item d-flex align-items-center gap-2 small" type="button" onclick="exportReplay('csv')"><i class="bi bi-file-earmark-spreadsheet text-emerald"></i> CSV Table (.csv)</button></li>
+        </ul>
+      </div>
+    </div>
   </div>
   <div class="table-responsive"><table class="table table-modern mb-0">
     <thead><tr><th>Model</th><th class="text-end">Latency</th><th class="text-end">Tokens In/Out</th><th>Status</th><th>Output</th></tr></thead>
@@ -76,12 +90,48 @@
   </table></div>
 </div>
 
+<!-- Replay Full Output Modal -->
+<div class="modal fade" id="replayOutputModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content modal-content-modern">
+      <div class="modal-header modal-header-modern">
+        <h6 class="modal-title fw-bold text-light d-flex align-items-center gap-2" id="replayOutputModalTitle">
+          <i class="bi bi-chat-text text-primary"></i> Model Output
+        </h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-3">
+        <pre class="code-box-modern p-3 m-0 font-monospace text-light rounded-3" id="replayModalOutputText" style="max-height: 480px; overflow: auto; white-space: pre-wrap; font-size: 0.82rem;"></pre>
+      </div>
+      <div class="modal-footer modal-footer-modern d-flex justify-content-between">
+        <span class="text-dim small font-monospace" id="replayModalMeta"></span>
+        <button type="button" class="btn-modern-ghost btn-sm" onclick="copyModalOutput()">
+          <i class="bi bi-clipboard me-1"></i> Copy
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 let replayLogId = null;
+let lastReplayData = null;
+let lastSourcePrompt = '';
+let currentModalText = '';
+
 function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function notify(msg, icon) {
+  if (window.showToast) {
+    window.showToast(msg, icon || 'ℹ️');
+  } else {
+    alert(msg);
+  }
+}
+
 async function loadReplaySource() {
   const id = document.getElementById('replayLogId').value.trim();
-  if (!id) { alert('Enter a log ID first.'); return; }
+  if (!id) { notify('Please enter a log ID first.', '⚠️'); return; }
   const meta = document.getElementById('replaySourceMeta');
   meta.textContent = 'Loading…';
   try {
@@ -94,17 +144,23 @@ async function loadReplaySource() {
       const body = JSON.parse(d.request_body || '{}');
       msgs = JSON.stringify(body.messages || body, null, 2);
     } catch (e) { msgs = d.request_body || '(empty)'; }
+    lastSourcePrompt = msgs;
     document.getElementById('replayPromptPreview').textContent = msgs;
     document.getElementById('replayOrigPreview').textContent = d.response_text || '(no stored response)';
     document.getElementById('replayOrigModel').textContent = d.model ? ('· ' + d.model) : '';
     meta.innerHTML = `Loaded log <span class="text-light font-monospace">#${d.id}</span> · model <span class="text-primary font-monospace">${esc(d.model || '-')}</span>`;
-  } catch (e) { meta.innerHTML = '<span class="text-rose">Error: ' + esc(e.message) + '</span>'; }
+    notify(`Loaded prompt #${d.id} ✨`, '📥');
+  } catch (e) {
+    meta.innerHTML = '<span class="text-rose">Error: ' + esc(e.message) + '</span>';
+    notify(e.message, '⚠️');
+  }
 }
+
 async function runReplay() {
-  if (!replayLogId) { alert('Load a source prompt first.'); return; }
+  if (!replayLogId) { notify('Please load a source prompt first.', '⚠️'); return; }
   const models = [...document.querySelectorAll('.replay-model-check:checked')].map(c => c.value);
-  if (!models.length) { alert('Pick at least 1 target model.'); return; }
-  if (models.length > 4) { alert('Max 4 models per replay.'); return; }
+  if (!models.length) { notify('Please pick at least 1 target model.', '⚠️'); return; }
+  if (models.length > 4) { notify('Maximum 4 models allowed per replay.', '⚠️'); return; }
   const btn = document.getElementById('btnRunReplay');
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Replaying…';
@@ -115,21 +171,112 @@ async function runReplay() {
     const res = await fetch('/api/replay/run', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
-    const rows = (data.results || []).map(r => {
+    lastReplayData = data;
+    const exportBtn = document.getElementById('btnExportDropdown');
+    if (exportBtn) exportBtn.disabled = !(data.results && data.results.length);
+
+    const rows = (data.results || []).map((r, idx) => {
       const status = r.success ? '<span class="badge-modern badge-emerald">OK</span>' : `<span class="badge-modern badge-rose" title="${esc(r.error_msg)}">FAIL</span>`;
       const out = r.success ? esc(r.output_text || '(empty)') : esc(r.error_msg || 'failed');
       const toks = (r.prompt_tokens || r.completion_tokens) ? `${r.prompt_tokens || 0}/${r.completion_tokens || 0}` : '—';
-      return `<tr><td class="font-monospace small text-primary">${esc(r.model)}</td><td class="text-end font-monospace small text-light">${r.latency_ms}ms</td><td class="text-end font-monospace small text-dim">${toks}</td><td>${status}</td><td class="small text-light" style="max-width: 420px; white-space: pre-wrap;">${out.slice(0, 600)}</td></tr>`;
+      const isLong = r.output_text && r.output_text.length > 300;
+      return `<tr>
+        <td class="font-monospace small text-primary">${esc(r.model)}</td>
+        <td class="text-end font-monospace small text-light">${r.latency_ms}ms</td>
+        <td class="text-end font-monospace small text-dim">${toks}</td>
+        <td>${status}</td>
+        <td>
+          <div class="d-flex justify-content-between align-items-start gap-2">
+            <div class="small text-light" style="max-width: 420px; white-space: pre-wrap;">${out.slice(0, 600)}${out.length > 600 ? '…' : ''}</div>
+            <div class="d-flex gap-1 flex-shrink-0">
+              ${r.success ? `<button type="button" class="btn btn-sm btn-modern-ghost py-0.5 px-1.5 text-dim" title="Copy output" onclick="copyReplayOutput(${idx})"><i class="bi bi-clipboard"></i></button>` : ''}
+              ${isLong ? `<button type="button" class="btn btn-sm btn-modern-ghost py-0.5 px-1.5 text-cyan" title="View full output" onclick="viewFullOutput(${idx})"><i class="bi bi-arrows-fullscreen"></i></button>` : ''}
+            </div>
+          </div>
+        </td>
+      </tr>`;
     }).join('');
     document.getElementById('replayTbody').innerHTML = rows || '<tr><td colspan="5" class="text-dim small text-center py-4">No results.</td></tr>';
     document.getElementById('replayResultMeta').textContent = `${(data.results || []).length} models · source #${data.source?.log_id ?? replayLogId}`;
+    notify('Replay completed! ✨', '🚀');
   } catch (e) {
     document.getElementById('replayTbody').innerHTML = `<tr><td colspan="5" class="text-rose small text-center py-4">Error: ${esc(e.message)}</td></tr>`;
+    notify(e.message, '⚠️');
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<i class="bi bi-play-fill"></i> Run Replay';
   }
 }
+
+function copyReplayOutput(idx) {
+  if (!lastReplayData || !lastReplayData.results || !lastReplayData.results[idx]) return;
+  const text = lastReplayData.results[idx].output_text || '';
+  navigator.clipboard.writeText(text).then(() => {
+    notify('Model output copied! ✨', '📋');
+  }).catch(() => {
+    notify('Failed to copy to clipboard', '⚠️');
+  });
+}
+
+function viewFullOutput(idx) {
+  if (!lastReplayData || !lastReplayData.results || !lastReplayData.results[idx]) return;
+  const r = lastReplayData.results[idx];
+  currentModalText = r.output_text || '';
+  document.getElementById('replayOutputModalTitle').innerHTML = `<i class="bi bi-cpu text-primary"></i> ${esc(r.model)} Output`;
+  document.getElementById('replayModalOutputText').textContent = currentModalText;
+  document.getElementById('replayModalMeta').textContent = `Latency: ${r.latency_ms}ms · Tokens: ${r.prompt_tokens || 0} in / ${r.completion_tokens || 0} out`;
+  const modal = new bootstrap.Modal(document.getElementById('replayOutputModal'));
+  modal.show();
+}
+
+function copyModalOutput() {
+  if (!currentModalText) return;
+  navigator.clipboard.writeText(currentModalText).then(() => {
+    notify('Output copied! ✨', '📋');
+  }).catch(() => {
+    notify('Failed to copy', '⚠️');
+  });
+}
+
+async function exportReplay(format) {
+  if (!lastReplayData || !lastReplayData.results || !lastReplayData.results.length) {
+    notify('No replay results available to export.', '⚠️');
+    return;
+  }
+  const payload = {
+    format: format,
+    log_id: replayLogId || 0,
+    prompt: lastSourcePrompt || '',
+    results: lastReplayData.results
+  };
+  try {
+    const res = await fetch('/api/replay/export', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error('Export failed: ' + res.statusText);
+
+    const blob = await res.blob();
+    const disposition = res.headers.get('Content-Disposition') || '';
+    let filename = `replay_results_${Date.now()}.${format === 'markdown' ? 'md' : format}`;
+    const match = disposition.match(/filename="?([^";]+)"?/);
+    if (match && match[1]) filename = match[1];
+
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+    notify(`Exported as ${format.toUpperCase()}! ✨`, '💾');
+  } catch (err) {
+    notify(err.message, '⚠️');
+  }
+}
+
 document.querySelectorAll('#replayModelChips .replay-model-check').forEach(cb => {
   cb.addEventListener('change', () => cb.closest('label').classList.toggle('active', cb.checked));
 });
