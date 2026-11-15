@@ -205,9 +205,15 @@
     </div>
   </div>
 
-  <div class="row g-3">
-    {{ if and .QuotaReport .QuotaReport.Accounts }}
-      {{ range .QuotaReport.Accounts }}
+  {{ if and .QuotaReport .QuotaReport.Accounts }}
+    {{ range .QuotaGroups }}
+    <div class="mb-4">
+      <div class="d-flex align-items-center gap-2 mb-2">
+        <span class="fw-bold text-light" style="font-size: 0.85rem;">{{ .Label }}</span>
+        <span class="badge-modern badge-gray" style="font-size: 0.62rem;">{{ len .Accounts }} accounts</span>
+      </div>
+      <div class="row g-3">
+      {{ range .Accounts }}
         <div class="col-md-6 col-xl-4">
           <div class="p-3 rounded-3 h-100" style="background: rgba(16, 20, 32, 0.7); border: 1px solid rgba(255, 255, 255, 0.05);">
             <div class="d-flex align-items-start justify-content-between mb-2">
@@ -298,12 +304,14 @@
           </div>
         </div>
       {{ end }}
+      </div>
+    </div>
+    {{ end }}
     {{ else }}
       <div class="col-12 text-center text-dim py-3 small">
         No active upstream provider accounts detected.
       </div>
     {{ end }}
-  </div>
 </div>
 
 <!-- Middle Section: Chart & Top Models -->

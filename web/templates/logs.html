@@ -61,7 +61,7 @@
       <form method="GET" action="/logs" class="row g-2 align-items-end" id="logsFilterForm">
         <div class="col-md-3">
           <label class="form-label small text-muted mb-1">Filter by User</label>
-          <select name="user_id" class="form-select form-select-modern form-select-sm" id="filterUser">
+          <select data-searchable name="user_id" class="form-select form-select-modern form-select-sm" id="filterUser">
             <option value="">All Users</option>
             {{ range .Users }}
               <option value="{{ .ID }}" {{ if eq $.FilterUser .ID }}selected{{ end }}>{{ .Name }}</option>
@@ -229,7 +229,7 @@
         {{ if .IsAdmin }}
           <div class="col-md-4">
             <label class="form-label small text-muted mb-1">Filter by User</label>
-            <select class="form-select form-select-modern form-select-sm" id="authFilterUser">
+            <select data-searchable class="form-select form-select-modern form-select-sm" id="authFilterUser">
               <option value="">All Users</option>
               {{ range .Users }}
                 <option value="{{ .ID }}">{{ .Name }} (@{{ .Username }})</option>

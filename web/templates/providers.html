@@ -118,7 +118,7 @@
         <div class="modal-body d-flex flex-column gap-3">
           <div>
             <label class="form-label small text-muted mb-1">Provider Type</label>
-            <select class="form-select form-select-modern" id="newProvType" required onchange="handleProvTypeChange()">
+            <select class="form-select form-select-modern" data-searchable id="newProvType" required onchange="handleProvTypeChange()">
               <option value="openai-compatible">OpenAI Compatible (Any standard LLM proxy)</option>
               <option value="agnes">Agnes AI</option>
               <option value="alicode">Alibaba</option>

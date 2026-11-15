@@ -774,3 +774,30 @@ func (m *QuotaManager) GetModelSummary(modelID string, report *UpstreamQuotaRepo
 	summary.DescriptionLabel = "Uncapped / Standard"
 	return summary
 }
+
+// ProviderGroup is one provider with its accounts, used to render quotas grouped by provider.
+type ProviderGroup struct {
+	Provider string
+	Label    string
+	Accounts []ProviderAccount
+}
+
+// GroupByProvider groups accounts by provider, keeping first-seen provider order
+// and the original account order within each group. Nil-safe.
+func (r *UpstreamQuotaReport) GroupByProvider() []ProviderGroup {
+	if r == nil {
+		return nil
+	}
+	var groups []ProviderGroup
+	idx := map[string]int{}
+	for _, a := range r.Accounts {
+		i, ok := idx[a.Provider]
+		if !ok {
+			i = len(groups)
+			idx[a.Provider] = i
+			groups = append(groups, ProviderGroup{Provider: a.Provider, Label: a.DisplayProvider()})
+		}
+		groups[i].Accounts = append(groups[i].Accounts, a)
+	}
+	return groups
+}

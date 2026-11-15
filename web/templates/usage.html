@@ -6,9 +6,10 @@
     <h4 class="fw-bold mb-1 text-light d-flex align-items-center gap-2">
       <i class="bi bi-bar-chart-fill text-primary"></i> Usage Analytics
     </h4>
-    <p class="text-dim small mb-0">Upstream request volume, tokens, and cost grouped by provider, model, account, and endpoint.</p>
+    <p class="text-dim small mb-0">Upstream request volume, tokens, and cost per provider, model, and account.</p>
   </div>
   <div class="d-flex align-items-center gap-2">
+    <span class="text-dim small" id="usageUpdated">-</span>
     <button type="button" class="btn btn-sm btn-modern-ghost" onclick="loadUsage()">
       <i class="bi bi-arrow-clockwise"></i> Refresh
     </button>
@@ -17,23 +18,61 @@
 
 <div class="row g-3 mb-4" id="usageCards"></div>
 
+<div class="row g-3 mb-4">
+  <div class="col-lg-6">
+    <div class="card-modern p-4 h-100">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="fw-bold text-light mb-0"><i class="bi bi-hdd-network text-info me-1"></i> By Provider</h6>
+        <span class="text-dim small" id="providerCount"></span>
+      </div>
+      <div id="usageProviders"><div class="text-dim small">Loading…</div></div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card-modern p-4 h-100">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="fw-bold text-light mb-0"><i class="bi bi-cpu text-primary me-1"></i> Top Models</h6>
+        <span class="text-dim small" id="modelCount"></span>
+      </div>
+      <div id="usageTopModels"><div class="text-dim small">Loading…</div></div>
+    </div>
+  </div>
+</div>
+
 <div class="card-modern p-0 overflow-hidden mb-4">
-  <div class="p-3 border-bottom border-secondary border-opacity-10"><h6 class="fw-bold text-light mb-0">By Provider</h6></div>
-  <div class="table-responsive"><table class="table table-modern mb-0">
-    <thead><tr><th>Provider</th><th>Requests</th><th>Prompt Tokens</th><th>Completion Tokens</th><th>Cost</th></tr></thead>
-    <tbody id="usageProviders"><tr><td colspan="5" class="text-dim small">Loading…</td></tr></tbody>
-  </table></div>
+  <div class="p-3 d-flex flex-column flex-md-row justify-content-between gap-2 border-bottom border-secondary border-opacity-10">
+    <h6 class="fw-bold text-light mb-0">By Model</h6>
+    <div class="d-flex gap-2" style="min-width: 260px;">
+      <select id="usageProviderFilter" class="form-select form-select-sm form-select-modern" data-searchable>
+        <option value="">All providers</option>
+      </select>
+      <input type="search" id="usageModelSearch" class="form-control form-control-sm form-control-modern" placeholder="Search model…">
+    </div>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-modern mb-0">
+      <thead><tr><th>Model</th><th>Requests</th><th>Prompt</th><th>Completion</th><th>Share</th></tr></thead>
+      <tbody id="usageModels"><tr><td colspan="5" class="text-dim small">Loading…</td></tr></tbody>
+    </table>
+  </div>
 </div>
 
 <div class="card-modern p-0 overflow-hidden">
-  <div class="p-3 border-bottom border-secondary border-opacity-10"><h6 class="fw-bold text-light mb-0">By Model</h6></div>
-  <div class="table-responsive"><table class="table table-modern mb-0">
-    <thead><tr><th>Model</th><th>Requests</th><th>Tokens</th></tr></thead>
-    <tbody id="usageModels"><tr><td colspan="3" class="text-dim small">Loading…</td></tr></tbody>
-  </table></div>
+  <div class="p-3 border-bottom border-secondary border-opacity-10"><h6 class="fw-bold text-light mb-0">By Account</h6></div>
+  <div class="table-responsive">
+    <table class="table table-modern mb-0">
+      <thead><tr><th>Model (Provider – Account)</th><th>Requests</th><th>Tokens</th></tr></thead>
+      <tbody id="usageAccounts"><tr><td colspan="3" class="text-dim small">Loading…</td></tr></tbody>
+    </table>
+  </div>
 </div>
 
 <script>
+let usageData = null;
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 function fmt(n) {
   n = Number(n) || 0;
   if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
@@ -41,37 +80,127 @@ function fmt(n) {
   if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
   return String(Math.round(n));
 }
-function bar(pct) {
+function bar(pct, cls) {
   const p = Math.max(0, Math.min(100, pct || 0));
-  return `<div class="progress" style="height:6px;background:rgba(255,255,255,0.06);"><div class="progress-bar" style="width:${p}%;background:linear-gradient(90deg,#38bdf8,#818cf8);"></div></div>`;
+  return `<div class="progress" style="height:6px;background:rgba(255,255,255,0.06);"><div class="progress-bar ${cls || ''}" style="width:${p}%;background:linear-gradient(90deg,#38bdf8,#818cf8);"></div></div>`;
 }
+function reqOf(m) { return Number(m.requests) || Number(m.total) || 0; }
+function tokOf(m) { return (Number(m.promptTokens) || 0) + (Number(m.completionTokens) || 0) || Number(m.tokens) || 0; }
+
+function renderCards(d) {
+  const cards = [
+    ['Total Requests', fmt(d.totalRequests), 'bi-activity', 'text-primary'],
+    ['Prompt Tokens', fmt(d.totalPromptTokens), 'bi-arrow-up-right', 'text-info'],
+    ['Completion Tokens', fmt(d.totalCompletionTokens), 'bi-arrow-down-left', 'text-emerald'],
+    ['Cached Tokens', fmt(d.totalCachedTokens), 'bi-lightning-charge', 'text-warning'],
+    ['Est. Cost', '$' + (Number(d.totalCost) || 0).toFixed(2), 'bi-cash-coin', 'text-success'],
+  ];
+  document.getElementById('usageCards').innerHTML = cards.map(([l, v, icon, c]) =>
+    `<div class="col-6 col-lg"><div class="card-modern p-3 h-100">
+       <div class="d-flex justify-content-between align-items-center mb-1">
+         <span class="text-dim small">${l}</span><i class="bi ${icon} ${c}"></i>
+       </div>
+       <div class="fw-bold text-light fs-5 font-monospace">${v}</div>
+     </div></div>`).join('');
+}
+
+function renderProviders(d) {
+  const prov = d.byProvider || {};
+  const entries = Object.entries(prov).sort((a, b) => reqOf(b[1]) - reqOf(a[1]));
+  const max = Math.max(1, ...entries.map(([, p]) => reqOf(p)));
+  document.getElementById('providerCount').textContent = entries.length + ' providers';
+  document.getElementById('usageProviders').innerHTML = entries.length ? entries.map(([k, p]) => {
+    const r = reqOf(p);
+    return `<div class="mb-3">
+      <div class="d-flex justify-content-between small mb-1">
+        <span class="font-monospace text-primary">${esc(k)}</span>
+        <span class="font-monospace text-light">${fmt(r)} req · $${(Number(p.cost) || 0).toFixed(2)}</span>
+      </div>
+      ${bar(r / max * 100)}
+      <div class="d-flex justify-content-between text-dim mt-1" style="font-size:0.72rem;">
+        <span>In ${fmt(p.promptTokens)}</span><span>Out ${fmt(p.completionTokens)}</span>
+      </div>
+    </div>`;
+  }).join('') : '<div class="text-dim small">No data.</div>';
+}
+
+function renderTopModels(d) {
+  const mods = Object.entries(d.byModel || {}).sort((a, b) => reqOf(b[1]) - reqOf(a[1]));
+  const top = mods.slice(0, 5);
+  const max = Math.max(1, ...top.map(([, m]) => reqOf(m)));
+  document.getElementById('modelCount').textContent = mods.length + ' models';
+  document.getElementById('usageTopModels').innerHTML = top.length ? top.map(([k, m]) => {
+    const r = reqOf(m);
+    return `<div class="mb-3">
+      <div class="d-flex justify-content-between small mb-1">
+        <span class="font-monospace text-truncate me-2" title="${esc(k)}">${esc(k)}</span>
+        <span class="font-monospace text-light">${fmt(r)}</span>
+      </div>
+      ${bar(r / max * 100, 'bg-info')}
+    </div>`;
+  }).join('') : '<div class="text-dim small">No data.</div>';
+}
+
+function renderModels() {
+  const d = usageData || {};
+  const provFilter = document.getElementById('usageProviderFilter').value;
+  const q = document.getElementById('usageModelSearch').value.trim().toLowerCase();
+  const mods = Object.entries(d.byModel || {})
+    .filter(([k, m]) => (!q || k.toLowerCase().includes(q)) && (!provFilter || String(m.provider || '') === provFilter))
+    .sort((a, b) => reqOf(b[1]) - reqOf(a[1]));
+  const total = Math.max(1, Number(d.totalRequests) || 0);
+  document.getElementById('usageModels').innerHTML = mods.length ? mods.map(([k, m]) => {
+    const r = reqOf(m);
+    return `<tr>
+      <td class="font-monospace small text-primary">${esc(k)}</td>
+      <td class="small font-monospace">${fmt(r)}</td>
+      <td class="small font-monospace">${fmt(m.promptTokens)}</td>
+      <td class="small font-monospace">${fmt(m.completionTokens)}</td>
+      <td style="min-width:120px;"><span class="small text-dim">${(r / total * 100).toFixed(1)}%</span>${bar(r / total * 100)}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="5" class="text-dim small">No matching models.</td></tr>';
+}
+
+function renderFilterOptions() {
+  const sel = document.getElementById('usageProviderFilter');
+  const hasProv = Object.values(usageData.byModel || {}).some(m => m && m.provider);
+  sel.style.display = hasProv ? '' : 'none';
+  if (sel.tomselect) sel.tomselect.wrapper.style.display = hasProv ? '' : 'none';
+  if (!hasProv) { sel.value = ''; return; }
+  const keep = sel.value;
+  const provs = Object.keys(usageData.byProvider || {}).sort();
+  sel.innerHTML = '<option value="">All providers</option>' + provs.map(p => `<option value="${esc(p)}">${esc(p)}</option>`).join('');
+  sel.value = keep;
+  if (sel.tomselect) { sel.tomselect.clearOptions(); sel.tomselect.addOptions([{ value: '', text: 'All providers' }, ...provs.map(p => ({ value: p, text: p }))]); sel.tomselect.setValue(keep, true); }
+}
+
+function renderAccounts(d) {
+  const acc = Object.entries(d.byAccount || {}).sort((a, b) => reqOf(b[1]) - reqOf(a[1]));
+  document.getElementById('usageAccounts').innerHTML = acc.length ? acc.map(([k, m]) =>
+    `<tr><td class="font-monospace small text-primary">${esc(k)}</td><td class="small font-monospace">${fmt(reqOf(m))}</td><td class="small font-monospace">${fmt(tokOf(m))}</td></tr>`
+  ).join('') : '<tr><td colspan="3" class="text-dim small">No data.</td></tr>';
+}
+
 async function loadUsage() {
   try {
-    const data = await (await fetch('/api/usage/stats')).json();
-    const cards = [
-      ['Total Requests', fmt(data.totalRequests)],
-      ['Prompt Tokens', fmt(data.totalPromptTokens)],
-      ['Completion Tokens', fmt(data.totalCompletionTokens)],
-      ['Cached Tokens', fmt(data.totalCachedTokens)],
-      ['Est. Cost', '$' + (Number(data.totalCost) || 0).toFixed(2)],
-    ];
-    document.getElementById('usageCards').innerHTML = cards.map(([l, v]) =>
-      `<div class="col-6 col-lg"><div class="card-modern p-3"><div class="text-dim small">${l}</div><div class="fw-bold text-light fs-5 font-monospace">${v}</div></div></div>`).join('');
-    const prov = data.byProvider || {};
-    const maxReq = Math.max(1, ...Object.values(prov).map(p => Number(p.requests) || 0));
-    document.getElementById('usageProviders').innerHTML = Object.entries(prov).map(([k, p]) =>
-      `<tr><td class="font-monospace small text-primary">${k}</td><td class="small">${fmt(p.requests)}<div class="mt-1">${bar((Number(p.requests) || 0) / maxReq * 100)}</div></td><td class="small font-monospace">${fmt(p.promptTokens)}</td><td class="small font-monospace">${fmt(p.completionTokens)}</td><td class="small font-monospace">$${(Number(p.cost) || 0).toFixed(2)}</td></tr>`).join('') || '<tr><td colspan="5" class="text-dim small">No data.</td></tr>';
-    const mods = data.byModel || {};
-    const maxM = Math.max(1, ...Object.values(mods).map(m => Number(m.requests) || Number(m.total) || 0));
-    document.getElementById('usageModels').innerHTML = Object.entries(mods).map(([k, m]) => {
-      const req = Number(m.requests) || Number(m.total) || 0;
-      const tok = Number(m.promptTokens || 0) + Number(m.completionTokens || 0) || Number(m.tokens) || 0;
-      return `<tr><td class="font-monospace small text-primary">${k}</td><td class="small">${fmt(req)}<div class="mt-1">${bar(req / maxM * 100)}</div></td><td class="small font-monospace">${fmt(tok)}</td></tr>`;
-    }).join('') || '<tr><td colspan="3" class="text-dim small">No data.</td></tr>';
+    const res = await fetch('/api/usage/stats');
+    if (!res.ok) throw new Error(await res.text());
+    usageData = await res.json();
+    renderCards(usageData);
+    renderProviders(usageData);
+    renderTopModels(usageData);
+    renderFilterOptions();
+    renderModels();
+    renderAccounts(usageData);
+    document.getElementById('usageUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' }) + ' WIB';
   } catch (e) {
-    document.getElementById('usageProviders').innerHTML = '<tr><td colspan="5" class="text-rose small">Failed to load.</td></tr>';
+    document.getElementById('usageModels').innerHTML = '<tr><td colspan="5" class="text-rose small">Failed to load usage data.</td></tr>';
+    document.getElementById('usageProviders').innerHTML = '<div class="text-rose small">Failed to load.</div>';
   }
 }
+
+document.getElementById('usageProviderFilter').addEventListener('change', renderModels);
+document.getElementById('usageModelSearch').addEventListener('input', renderModels);
 document.addEventListener('DOMContentLoaded', loadUsage);
 </script>
 {{ end }}

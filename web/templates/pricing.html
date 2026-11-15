@@ -85,7 +85,7 @@
             </div>
             <div class="col-sm-7" id="modelSelectContainer">
               <label class="form-label small text-muted mb-1">Select Model</label>
-              <select class="form-select form-select-modern form-select-sm font-monospace" id="calcModel" onchange="onModelSelected()">
+              <select data-searchable class="form-select form-select-modern form-select-sm font-monospace" id="calcModel" onchange="onModelSelected()">
                 <option value="">Loading models…</option>
               </select>
             </div>
@@ -374,15 +374,18 @@ function populateModelDropdown() {
 
   if (models.length === 0) {
     modelSelect.innerHTML = '<option value="">No models available</option>';
+    if (modelSelect.tomselect) modelSelect.tomselect.sync();
     return;
   }
 
   modelSelect.innerHTML = models.map(m => `<option value="${m}">${m}</option>`).join('');
+  if (modelSelect.tomselect) modelSelect.tomselect.sync();
   
   // Try to default to claude or gemini or first model
   const preferred = models.find(m => m.includes('claude-3-7') || m.includes('claude') || m.includes('gpt-4o') || m.includes('gemini'));
   if (preferred) {
     modelSelect.value = preferred;
+    if (modelSelect.tomselect) modelSelect.tomselect.setValue(preferred, true);
   }
   onModelSelected();
 }
@@ -497,6 +500,7 @@ function selectModelForCalc(source, modelName) {
     const modelSelect = document.getElementById('calcModel');
     if (modelSelect) {
       modelSelect.value = modelName;
+      if (modelSelect.tomselect) modelSelect.tomselect.setValue(modelName, true);
       onModelSelected();
     }
   }
