@@ -454,3 +454,7 @@ type KeyStatsResponse struct {
 	TopModels      []KeyModelUsage    `json:"top_models"`
 	RecentRequests []KeyRecentRequest `json:"recent_requests"`
 }
+
+// MaxStoredRequestBody caps request_body stored per log. System prompts are ~8KB,
+// so a small cap drops the user message and makes the stored prompt unreadable.
+const MaxStoredRequestBody = 65536

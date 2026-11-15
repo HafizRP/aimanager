@@ -417,7 +417,7 @@ func TestRequestLogPayloadRoundtrip(t *testing.T) {
 
 	ctx := context.Background()
 
-	longBody := `{"model":"m","messages":[{"role":"user","content":"` + strings.Repeat("x", 9000) + `"}]}`
+	longBody := `{"model":"m","messages":[{"role":"user","content":"` + strings.Repeat("x", entity.MaxStoredRequestBody+1000) + `"}]}`
 	longResp := strings.Repeat("y", 5000)
 	logEntry := &entity.RequestLog{
 		UserID:       "user-replay",
@@ -444,8 +444,8 @@ func TestRequestLogPayloadRoundtrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetRequestLogByID failed: %v", err)
 	}
-	if len(got.RequestBody) != 8192 {
-		t.Errorf("expected request_body capped at 8192, got %d", len(got.RequestBody))
+	if len(got.RequestBody) != entity.MaxStoredRequestBody {
+		t.Errorf("expected request_body capped at MaxStoredRequestBody, got %d", len(got.RequestBody))
 	}
 	if len(got.ResponseText) != 4096 {
 		t.Errorf("expected response_text capped at 4096, got %d", len(got.ResponseText))
@@ -1136,4 +1136,3 @@ func TestListFilteredSecurityEvents(t *testing.T) {
 		t.Errorf("expected 1 budget_cutoff event, got %d", len(budgets))
 	}
 }
-

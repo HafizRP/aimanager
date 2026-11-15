@@ -562,12 +562,12 @@ func (p *GatewayProxy) handleForwardRequest(w http.ResponseWriter, r *http.Reque
 	isSSE := strings.Contains(contentType, "text/event-stream") || isStreamRequested
 
 	if isSSE && resp.StatusCode == http.StatusOK {
-		p.handleStreamingResponse(w, r, resp, user, key, requestedModel, startTime, clientIP, truncatePayload(bodyBytes, 8192))
+		p.handleStreamingResponse(w, r, resp, user, key, requestedModel, startTime, clientIP, truncatePayload(bodyBytes, entity.MaxStoredRequestBody))
 		return
 	}
 
 	// Non-streaming response
-	p.handleNonStreamingResponse(w, r, resp, user, key, requestedModel, startTime, clientIP, len(bodyBytes), truncatePayload(bodyBytes, 8192), cacheKey)
+	p.handleNonStreamingResponse(w, r, resp, user, key, requestedModel, startTime, clientIP, len(bodyBytes), truncatePayload(bodyBytes, entity.MaxStoredRequestBody), cacheKey)
 }
 
 func truncatePayload(b []byte, max int) string {

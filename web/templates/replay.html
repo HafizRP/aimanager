@@ -129,6 +129,85 @@ function notify(msg, icon) {
   }
 }
 
+// Render chat messages as readable role-labeled blocks instead of raw JSON.
+// Uses textContent only (no innerHTML) so stored prompts cannot inject markup.
+function messageText(m) {
+  if (typeof m.content === 'string') return m.content;
+  if (Array.isArray(m.content)) {
+    return m.content.map(p => p.type === 'text' ? (p.text || '') : '[' + (p.type || 'part') + ']').join('\n');
+  }
+  if (m.tool_calls) return JSON.stringify(m.tool_calls, null, 2);
+  return JSON.stringify(m, null, 2);
+}
+
+// Stored request_body is cut at 8192 bytes server-side, so it is often not valid JSON.
+// Pull out each complete message object from the truncated text instead.
+function parseMessagesLoose(raw) {
+  const at = raw.indexOf('"messages"');
+  if (at < 0) return null;
+  const start = raw.indexOf('[', at);
+  if (start < 0) return null;
+  const out = [];
+  let depth = 0, inStr = false, esc = false, objStart = -1;
+  for (let i = start + 1; i < raw.length; i++) {
+    const c = raw[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === '\\') esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === '{') { if (depth === 0) objStart = i; depth++; }
+    else if (c === '}') {
+      depth--;
+      if (depth === 0 && objStart >= 0) {
+        try { out.push(JSON.parse(raw.slice(objStart, i + 1))); } catch (e) {}
+        objStart = -1;
+      }
+    }
+  }
+  return out;
+}
+
+function renderPrompt(el, raw) {
+  el.replaceChildren();
+  let body = null;
+  try { body = JSON.parse(raw); } catch (e) { body = null; }
+  let msgs = body && Array.isArray(body.messages) ? body.messages : null;
+  let truncated = false;
+  if (!msgs) {
+    msgs = parseMessagesLoose(raw) || [];
+    truncated = true;
+  }
+  if (!msgs || !msgs.length) {
+    // Truncated before first message closed: show the raw text under a labeled block.
+    const head = document.createElement('div');
+    head.className = 'fw-bold text-info';
+    head.textContent = 'STORED REQUEST (truncated)';
+    const text = document.createElement('div');
+    text.className = 'mt-1';
+    text.textContent = raw.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\t/g, '  ');
+    el.append(head, text);
+    return;
+  }
+  msgs.forEach((m, i) => {
+    const head = document.createElement('div');
+    head.className = 'fw-bold text-info' + (i ? ' mt-3' : '');
+    head.textContent = (m.role || 'unknown').toUpperCase();
+    const text = document.createElement('div');
+    text.className = 'mt-1';
+    text.textContent = messageText(m);
+    el.append(head, text);
+  });
+  if (truncated) {
+    const note = document.createElement('div');
+    note.className = 'mt-3 text-warning small';
+    note.textContent = '… stored prompt truncated at 8192 bytes; later messages not shown.';
+    el.append(note);
+  }
+}
+
 async function loadReplaySource() {
   const id = document.getElementById('replayLogId').value.trim();
   if (!id) { notify('Please enter a log ID first.', '⚠️'); return; }
@@ -145,7 +224,7 @@ async function loadReplaySource() {
       msgs = JSON.stringify(body.messages || body, null, 2);
     } catch (e) { msgs = d.request_body || '(empty)'; }
     lastSourcePrompt = msgs;
-    document.getElementById('replayPromptPreview').textContent = msgs;
+    renderPrompt(document.getElementById('replayPromptPreview'), d.request_body || '{}');
     document.getElementById('replayOrigPreview').textContent = d.response_text || '(no stored response)';
     document.getElementById('replayOrigModel').textContent = d.model ? ('· ' + d.model) : '';
     meta.innerHTML = `Loaded log <span class="text-light font-monospace">#${d.id}</span> · model <span class="text-primary font-monospace">${esc(d.model || '-')}</span>`;

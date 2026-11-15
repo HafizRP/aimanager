@@ -915,7 +915,7 @@ func (r *SQLiteRepo) CreateRequestLog(ctx context.Context, log *entity.RequestLo
 	_, err := r.db.ExecContext(ctx, query,
 		log.UserID, log.APIKeyID, log.Path, log.Method, log.Model, isStream,
 		log.PromptTokens, log.CompletionTokens, log.TotalTokens, log.StatusCode,
-		log.DurationMs, log.ClientIP, log.ErrorMessage, truncateLogText(log.RequestBody, 8192), truncateLogText(log.ResponseText, 4096), createdAt,
+		log.DurationMs, log.ClientIP, log.ErrorMessage, truncateLogText(log.RequestBody, entity.MaxStoredRequestBody), truncateLogText(log.ResponseText, 4096), createdAt,
 	)
 	return err
 }
