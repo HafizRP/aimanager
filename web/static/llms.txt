@@ -8,6 +8,7 @@ AI Manager sits in front of 9router Core (port 20128) to provide OpenAI-compatib
 
 - [Project README](README.md): High-level system architecture, features, and quickstart guide.
 - [API Reference](docs/API.md): Comprehensive reference for OpenAI-compatible endpoints, dashboard metrics, and admin APIs.
+- [OpenAPI 3.1 Spec](/openapi.json): Machine-readable description of the public gateway surface (chat, models, messages, embeddings) — import into Postman, Insomnia, or Swagger UI.
 - [Setup & Deployment Guide](docs/SETUP.md): Docker Compose stack, Cloudflare Tunnel ingress, and server hardening checklist.
 - [System Architecture](docs/ARCHITECTURE.md): Deep-dive into proxy routing, SSE streaming, SQLite WAL concurrency, and background workers.
 - [LLM Context Guide](llms.md): Technical cheat sheet and context document for LLMs and coding agents.
