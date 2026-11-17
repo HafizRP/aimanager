@@ -804,6 +804,8 @@ function exportLoginAudits(format) {
   const status = document.getElementById('authFilterStatus')?.value || '';
   const url = `/api/login-audits/export?format=${format}&user_id=${encodeURIComponent(user)}&status=${encodeURIComponent(status)}`;
   window.location.href = url;
+}
+
 let currentInspectData = null;
 
 async function inspectLog(id) {
