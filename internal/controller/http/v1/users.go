@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -23,13 +24,42 @@ var (
 	validUsernameRegex   = regexp.MustCompile(`^[a-z0-9_.-]{3,32}$`)
 )
 
-// UsersPage renders the user management page (admin).
+// projectUserBurnDown estimates days until each user's lifetime token quota is
+// exhausted, based on the summed 7-day average daily burn of their API keys.
+// Users without a quota or measurable usage are omitted.
+func (h *Handler) projectUserBurnDown(ctx context.Context, users []entity.User) map[string]int {
+	out := map[string]int{}
+	baselines, err := h.repo.GetKeyBaselineTokens(ctx, 7)
+	if err != nil {
+		return out
+	}
+	keys, err := h.repo.GetAllAPIKeys(ctx)
+	if err != nil {
+		return out
+	}
+	burnByUser := map[string]float64{}
+	for _, k := range keys {
+		burnByUser[k.UserID] += baselines[k.ID]
+	}
+	for _, u := range users {
+		if u.TokenQuota <= 0 {
+			continue
+		}
+		if days, ok := projectDaysLeft(u.TokenQuota-u.TokensUsed, burnByUser[u.ID]); ok {
+			out[u.ID] = days
+		}
+	}
+	return out
+}
+
 func (h *Handler) UsersPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	users, err := h.repo.GetAllUsers(ctx)
 	if err != nil {
 		users = []entity.User{}
 	}
+
+	burnDown := h.projectUserBurnDown(ctx, users)
 
 	availableModels := h.FetchUpstreamModels(ctx)
 
@@ -40,6 +70,7 @@ func (h *Handler) UsersPage(w http.ResponseWriter, r *http.Request) {
 		"ActivePage":      "users",
 		"Users":           users,
 		"AvailableModels": availableModels,
+		"BurnDown":        burnDown,
 		"SuccessMsg":      successMsg,
 		"ErrorMsg":        errorMsg,
 	})
@@ -82,6 +113,8 @@ func (h *Handler) UserDetailPage(w http.ResponseWriter, r *http.Request) {
 
 	availableModels := h.FetchUpstreamModels(ctx)
 
+	burnDown := h.projectUserBurnDown(ctx, []entity.User{*user})
+
 	var allowedModelsList []string
 	isAllModels := false
 	trimmed := strings.TrimSpace(user.AllowedModels)
@@ -103,6 +136,7 @@ func (h *Handler) UserDetailPage(w http.ResponseWriter, r *http.Request) {
 		"LoginAudits":       loginAudits,
 		"Stats":             stats,
 		"AvailableModels":   availableModels,
+		"BurnDown":          burnDown,
 		"AllowedModelsList": allowedModelsList,
 		"IsAllModels":       isAllModels,
 		"SuccessMsg":        successMsg,

@@ -120,6 +120,9 @@
         {{ else }}
           {{ $p := .TargetUser.QuotaPercent }}
           / {{ formatNumber .TargetUser.TokenQuota }} ({{ printf "%.1f" $p }}%)
+          {{ with index $.BurnDown .TargetUser.ID }}
+            <span class="badge-modern badge-amber font-monospace" style="font-size: 0.7rem;" title="Projected quota exhaustion from 7-day average burn">~{{ . }}d left</span>
+          {{ end }}
         {{ end }}
       </div>
       {{ if gt .TargetUser.TokenQuota 0 }}

@@ -73,7 +73,22 @@ func parseExpiryInput(raw string) (time.Time, error) {
 	return parsed, nil
 }
 
-// KeysPage renders the API key management page.
+// projectDaysLeft estimates how many days remain before a token budget is
+// exhausted at the given average daily burn. Returns ok=false when there is no
+// budget left, no measurable usage, or the burn is so slow that exhaustion is
+// more than a year away (nothing actionable to show).
+func projectDaysLeft(remaining int64, dailyAvg float64) (int, bool) {
+	if remaining <= 0 || dailyAvg <= 0 {
+		return 0, false
+	}
+	days := int(float64(remaining)/dailyAvg) + 1
+	if days > 365 {
+		return 0, false
+	}
+	return days, true
+}
+
+// KeysPage renders the API key management page (with budget burn-down projections).
 func (h *Handler) KeysPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	currentUser := GetUserFromContext(ctx)
@@ -113,6 +128,21 @@ func (h *Handler) KeysPage(w http.ResponseWriter, r *http.Request) {
 
 	allModels, _ := h.fetchUpstreamModels(ctx)
 
+	// Burn-down projection: estimate days until each key's lifetime token
+	// budget runs out at its 7-day average daily burn.
+	burnDown := map[string]int{}
+	if baselines, bErr := h.repo.GetKeyBaselineTokens(ctx, 7); bErr == nil {
+		for _, k := range keys {
+			if k.MaxTokensLimit <= 0 {
+				continue
+			}
+			remaining := int64(k.MaxTokensLimit) - k.TokenUsage
+			if days, ok := projectDaysLeft(remaining, baselines[k.ID]); ok {
+				burnDown[k.ID] = days
+			}
+		}
+	}
+
 	successMsg := r.URL.Query().Get("msg")
 	errorMsg := r.URL.Query().Get("error")
 
@@ -121,6 +151,7 @@ func (h *Handler) KeysPage(w http.ResponseWriter, r *http.Request) {
 		"Keys":       keys,
 		"Users":      users,
 		"Models":     allModels,
+		"BurnDown":   burnDown,
 		"SuccessMsg": successMsg,
 		"ErrorMsg":   errorMsg,
 		"ClientIP":   proxy.GetClientIP(r),

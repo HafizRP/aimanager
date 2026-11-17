@@ -146,3 +146,28 @@ func TestCreateKeyWithRelativeExpiry(t *testing.T) {
 		t.Errorf("expected expiry around ~30d, got %v", diff)
 	}
 }
+
+func TestProjectDaysLeft(t *testing.T) {
+	cases := []struct {
+		name      string
+		remaining int64
+		dailyAvg  float64
+		wantDays  int
+		wantOK    bool
+	}{
+		{"no budget left", 0, 1000, 0, false},
+		{"negative remaining", -50, 1000, 0, false},
+		{"no usage yet", 100000, 0, 0, false},
+		{"ten days", 100000, 10000, 11, true},
+		{"fractional day rounds up", 5000, 3000, 2, true},
+		{"huge budget capped", 100000000, 1, 0, false},
+		{"beyond a year hidden", 1000000000, 1000, 0, false},
+	}
+	for _, tc := range cases {
+		days, ok := projectDaysLeft(tc.remaining, tc.dailyAvg)
+		if ok != tc.wantOK || (ok && days != tc.wantDays) {
+			t.Errorf("%s: projectDaysLeft(%d, %v) = (%d, %v), want (%d, %v)",
+				tc.name, tc.remaining, tc.dailyAvg, days, ok, tc.wantDays, tc.wantOK)
+		}
+	}
+}
