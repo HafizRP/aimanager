@@ -164,6 +164,9 @@
                     <span class="badge-modern badge-indigo font-monospace" style="font-size: 0.68rem;" title="{{ .TokenUsage }} / {{ .MaxTokensLimit }} tokens used">
                       {{ .TokenUsage }}/{{ .MaxTokensLimit }}
                     </span>
+                    {{ with index $.BurnDown .ID }}
+                      <span class="badge-modern badge-amber font-monospace" style="font-size: 0.68rem;" title="Projected exhaustion based on 7-day average burn">~{{ . }}d left</span>
+                    {{ end }}
                   {{ end }}
                 {{ else }}
                   <span class="text-dim font-monospace small" style="font-size: 0.72rem;">&infin;</span>
