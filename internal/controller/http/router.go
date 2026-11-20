@@ -146,6 +146,11 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 			w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
 			http.ServeFileFS(w, r, staticFS, "llms.md")
 		}))
+		// OpenAPI spec for the public OpenAI/Anthropic-compatible surface (importable in Postman/Insomnia/Swagger).
+		r.Handle("/openapi.json", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			http.ServeFileFS(w, r, staticFS, "openapi.json")
+		}))
 	}
 
 	// Reverse Proxy / Gateway routes (OpenAI & Anthropic compatible API)

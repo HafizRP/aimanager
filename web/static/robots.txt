@@ -4,6 +4,7 @@ Allow: /login
 Allow: /static/
 Allow: /llms.txt
 Allow: /llms.md
+Allow: /openapi.json
 Disallow: /api/
 Disallow: /v1/
 Disallow: /users
