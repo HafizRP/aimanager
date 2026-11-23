@@ -1,0 +1,214 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AI Manager Gateway API",
+    "version": "1.0.0",
+    "description": "OpenAI- and Anthropic-compatible gateway in front of 9router Core. Authenticate with a gateway API key: `Authorization: Bearer sk-gw-...` (also accepts `x-api-key`).",
+    "license": { "name": "MIT" }
+  },
+  "servers": [{ "url": "/", "description": "Current gateway host (override with your deployment origin)" }],
+  "security": [{ "bearerAuth": [] }],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer", "description": "Gateway API key (sk-gw-...)" },
+      "apiKeyHeader": { "type": "apiKey", "in": "header", "name": "x-api-key" }
+    },
+    "schemas": {
+      "ChatMessage": {
+        "type": "object",
+        "required": ["role", "content"],
+        "properties": {
+          "role": { "type": "string", "enum": ["system", "user", "assistant", "tool"] },
+          "content": { "type": "string" },
+          "name": { "type": "string" }
+        }
+      },
+      "ChatCompletionRequest": {
+        "type": "object",
+        "required": ["model", "messages"],
+        "properties": {
+          "model": { "type": "string", "description": "Model or combo id listed by GET /models" },
+          "messages": { "type": "array", "items": { "$ref": "#/components/schemas/ChatMessage" }, "minItems": 1 },
+          "stream": { "type": "boolean", "default": false, "description": "SSE stream when true" },
+          "temperature": { "type": "number", "minimum": 0, "maximum": 2, "default": 1 },
+          "max_tokens": { "type": "integer", "minimum": 1 },
+          "top_p": { "type": "number", "minimum": 0, "maximum": 1 }
+        }
+      },
+      "Model": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "object": { "type": "string", "const": "model" },
+          "owned_by": { "type": "string" },
+          "context_length": { "type": "integer" }
+        }
+      },
+      "Usage": {
+        "type": "object",
+        "properties": {
+          "prompt_tokens": { "type": "integer" },
+          "completion_tokens": { "type": "integer" },
+          "total_tokens": { "type": "integer" }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "message": { "type": "string" },
+              "type": { "type": "string" },
+              "code": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Missing or invalid gateway API key",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      },
+      "TooManyRequests": {
+        "description": "Rate limit, token quota, or daily budget exhausted (see Retry-After)",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      }
+    }
+  },
+  "paths": {
+    "/chat/completions": {
+      "post": {
+        "summary": "Create a chat completion",
+        "operationId": "createChatCompletion",
+        "tags": ["OpenAI compatible"],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ChatCompletionRequest" } } }
+        },
+        "responses": {
+          "200": {
+            "description": "Completion, or an SSE `text/event-stream` when `stream` is true",
+            "content": { "application/json": { "schema": { "type": "object" } } }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "description": "Model not allowed for this key or user" },
+          "429": { "$ref": "#/components/responses/TooManyRequests" },
+          "502": { "description": "Upstream 9router Core unreachable after retries" },
+          "503": { "description": "Circuit breaker open for the selected upstream model" }
+        }
+      }
+    },
+    "/models": {
+      "get": {
+        "summary": "List models available to the caller",
+        "operationId": "listModels",
+        "tags": ["OpenAI compatible"],
+        "responses": {
+          "200": {
+            "description": "Model list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "object": { "type": "string", "const": "list" },
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/Model" } }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/messages": {
+      "post": {
+        "summary": "Anthropic-compatible messages API",
+        "operationId": "createMessage",
+        "tags": ["Anthropic compatible"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["model", "messages", "max_tokens"],
+                "properties": {
+                  "model": { "type": "string" },
+                  "max_tokens": { "type": "integer", "minimum": 1 },
+                  "messages": { "type": "array", "items": { "$ref": "#/components/schemas/ChatMessage" } },
+                  "system": { "type": "string" },
+                  "stream": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Message response (or SSE stream)", "content": { "application/json": { "schema": { "type": "object" } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "429": { "$ref": "#/components/responses/TooManyRequests" }
+        }
+      }
+    },
+    "/embeddings": {
+      "post": {
+        "summary": "Create embeddings",
+        "operationId": "createEmbedding",
+        "tags": ["OpenAI compatible"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["model", "input"],
+                "properties": {
+                  "model": { "type": "string" },
+                  "input": { "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }] }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Embedding vectors", "content": { "application/json": { "schema": { "type": "object" } } } },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "summary": "Liveness probe",
+        "operationId": "healthz",
+        "tags": ["System"],
+        "security": [],
+        "responses": { "200": { "description": "Gateway alive", "content": { "text/plain": { "schema": { "type": "string", "const": "OK" } } } } }
+      }
+    },
+    "/version": {
+      "get": {
+        "summary": "Gateway version",
+        "operationId": "version",
+        "tags": ["System"],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Version payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "version": { "type": "string" }, "app": { "type": "string" }, "status": { "type": "string" } }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

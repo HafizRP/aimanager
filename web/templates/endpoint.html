@@ -45,6 +45,15 @@
           <td><button class="btn btn-sm btn-modern-ghost" onclick="copyEp(this)" data-copy="{{ .CurrentBaseURL }}/embeddings">Copy</button></td>
         </tr>
         <tr>
+          <td>OpenAPI Spec</td>
+          <td class="font-monospace small text-primary">{{ .CurrentBaseURL }}/openapi.json</td>
+          <td class="text-dim small">OpenAPI 3.1 description of this API — import into Postman, Insomnia, or Swagger UI</td>
+          <td><div class="d-flex justify-content-end align-items-center gap-1">
+            <button class="btn btn-sm btn-modern-ghost" onclick="copyEp(this)" data-copy="{{ .CurrentBaseURL }}/openapi.json" title="Copy URL"><i class="bi bi-clipboard"></i></button>
+            <a class="btn btn-sm btn-modern-ghost" href="/openapi.json" target="_blank" rel="noopener" title="Open spec"><i class="bi bi-box-arrow-up-right"></i></a>
+          </div></td>
+        </tr>
+        <tr>
           <td>Upstream Core</td>
           <td class="font-monospace small text-dim">{{ .UpstreamURL }}</td>
           <td class="text-dim small">Internal 9router Core (loopback only, never public)</td>
