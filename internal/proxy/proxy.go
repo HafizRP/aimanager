@@ -10,6 +10,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -148,6 +149,7 @@ func (p *GatewayProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 1b. Rate Limiting Check (Key-level & User-level)
+	p.setRateLimitHeaders(w, key, user)
 	if key.RateLimitRPM > 0 {
 		allowed, msg := p.rateLimiter.Allow("key:"+key.ID, key.RateLimitRPM, 0, 0)
 		if !allowed {
@@ -208,6 +210,35 @@ func (p *GatewayProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// 4. Handle Completions / Upstream Forwarding
 	p.handleForwardRequest(w, r, user, key, startTime, clientIP)
+}
+
+// setRateLimitHeaders advertises the caller's current minute-window budget so
+// SDKs can self-throttle instead of waiting for a 429. When both key and user
+// limits apply, the tighter remaining budget wins. Unlimited callers get none.
+func (p *GatewayProxy) setRateLimitHeaders(w http.ResponseWriter, key *entity.APIKey, user *entity.User) {
+	limit, used, reset, found := 0, 0, 0, false
+	check := func(id string, rpm int) {
+		if rpm <= 0 {
+			return
+		}
+		u, r := p.rateLimiter.Used(id)
+		if !found || rpm-u < limit-used {
+			limit, used, reset, found = rpm, u, r, true
+		}
+	}
+	check("key:"+key.ID, key.RateLimitRPM)
+	check("user:"+user.ID, user.RateLimitRPM)
+	if !found {
+		return
+	}
+	remaining := limit - used
+	if remaining < 0 {
+		remaining = 0
+	}
+	h := w.Header()
+	h.Set("X-RateLimit-Limit", strconv.Itoa(limit))
+	h.Set("X-RateLimit-Remaining", strconv.Itoa(remaining))
+	h.Set("X-RateLimit-Reset", strconv.Itoa(reset))
 }
 
 func (p *GatewayProxy) handleGetModels(w http.ResponseWriter, r *http.Request, user *entity.User, key *entity.APIKey) {

@@ -73,3 +73,21 @@ func (rl *RateLimiter) Allow(identifier string, limitRPM int, limitTPM int64, es
 	b.tokenCount += estTokens
 	return true, ""
 }
+
+// Used reports how many requests the identifier has made in the current
+// minute window and the seconds remaining until the window resets.
+// Unknown identifiers report 0 requests and a full 60s window.
+func (rl *RateLimiter) Used(identifier string) (int, int) {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	b, ok := rl.buckets[identifier]
+	if !ok || time.Since(b.windowStart) >= time.Minute {
+		return 0, 60
+	}
+	reset := int(time.Until(b.windowStart.Add(time.Minute)).Seconds())
+	if reset < 0 {
+		reset = 0
+	}
+	return b.reqCount, reset
+}
