@@ -149,17 +149,23 @@
 
   <!-- Chat Input Bar -->
   <div class="card-modern p-2 p-md-3">
-    <form id="chatForm" onsubmit="handleSendChat(event)" class="d-flex align-items-end gap-2">
-      <div class="flex-grow-1">
-        <textarea class="form-control form-control-modern border-0 py-2" id="chatInput" rows="1" placeholder="Type a message... (Press Enter to send, Shift+Enter for new line)" style="resize: none; max-height: 160px; overflow-y: auto;" onkeydown="handleInputKey(event)" oninput="autoResizeTextarea(this)"></textarea>
+    <form id="chatForm" onsubmit="handleSendChat(event)" class="d-flex flex-column gap-2">
+      <div class="d-flex align-items-end gap-2">
+        <div class="flex-grow-1">
+          <textarea class="form-control form-control-modern border-0 py-2" id="chatInput" rows="1" placeholder="Type a message... (Press Enter to send, Shift+Enter for new line)" style="resize: none; max-height: 160px; overflow-y: auto;" onkeydown="handleInputKey(event)" oninput="autoResizeTextarea(this); updatePromptCounter(this);"></textarea>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+          <button type="button" class="btn-modern-ghost text-danger border-0 d-none" id="btnStopGen" onclick="stopGeneration()">
+            <i class="bi bi-stop-circle"></i> Stop
+          </button>
+          <button type="submit" class="btn-modern-primary py-2 px-3.5 d-inline-flex align-items-center gap-2" id="btnSendChat">
+            <i class="bi bi-send-fill"></i> <span class="d-none d-sm-inline">Send</span>
+          </button>
+        </div>
       </div>
-      <div class="d-flex align-items-center gap-2">
-        <button type="button" class="btn-modern-ghost text-danger border-0 d-none" id="btnStopGen" onclick="stopGeneration()">
-          <i class="bi bi-stop-circle"></i> Stop
-        </button>
-        <button type="submit" class="btn-modern-primary py-2 px-3.5 d-inline-flex align-items-center gap-2" id="btnSendChat">
-          <i class="bi bi-send-fill"></i> <span class="d-none d-sm-inline">Send</span>
-        </button>
+      <div class="d-flex align-items-center justify-content-between px-1 text-dim" style="font-size: 0.72rem;">
+        <span id="promptCounter" class="font-monospace">0 chars • ~0 tokens</span>
+        <span class="d-none d-sm-inline text-muted font-monospace"><kbd class="bg-dark text-dim border border-secondary border-opacity-25 px-1">Enter</kbd> to send, <kbd class="bg-dark text-dim border border-secondary border-opacity-25 px-1">Shift+Enter</kbd> newline</span>
       </div>
     </form>
   </div>
@@ -303,7 +309,7 @@ function exportCurrentSessionJSON() {
     };
   }
   if (!sess || !sess.messages || sess.messages.length === 0) {
-    alert('No messages in current session to export.');
+    if (window.showToast) window.showToast('No messages in current session to export.', 'ℹ️');
     return;
   }
   const blob = new Blob([JSON.stringify(sess, null, 2)], { type: 'application/json' });
@@ -318,7 +324,7 @@ function exportCurrentSessionJSON() {
 
 function exportAllSessionsJSON() {
   if (savedSessions.length === 0) {
-    alert('No saved chat sessions to backup.');
+    if (window.showToast) window.showToast('No saved chat sessions to backup.', 'ℹ️');
     return;
   }
   const payload = {
@@ -517,12 +523,12 @@ function applyPreset(preset, customId) {
 function saveCurrentAsCustomPreset() {
   const prompt = document.getElementById('systemPrompt').value.trim();
   if (!prompt) {
-    alert('Please enter system instructions before saving as preset.');
+    if (window.showToast) window.showToast('Please enter system instructions before saving as preset.', '⚠️');
     return;
   }
   const temp = parseFloat(document.getElementById('tempRange').value) || 0.7;
   const defaultName = prompt.substring(0, 16);
-  const name = promptFn = window.prompt('Enter name for custom preset:', defaultName);
+  const name = window.prompt('Enter name for custom preset:', defaultName);
   if (!name || !name.trim()) return;
   customPresets.push({
     name: name.trim(),
@@ -545,6 +551,14 @@ function resetSystemPrompt() {
   }
   renderPresetChips();
   if (window.showToast) window.showToast('System instructions reset to default', '🔄');
+}
+
+function updatePromptCounter(el) {
+  const counter = document.getElementById('promptCounter');
+  if (!counter || !el) return;
+  const chars = el.value.length;
+  const estTokens = Math.ceil(chars / 4);
+  counter.textContent = `${chars} chars • ~${estTokens} tokens`;
 }
 
 function autoResizeTextarea(el) {
@@ -605,6 +619,7 @@ async function handleSendChat(e) {
   // Reset input
   inputEl.value = '';
   inputEl.style.height = 'auto';
+  updatePromptCounter(inputEl);
 
   // Append user message
   chatMessages.push({ role: 'user', content: userText });

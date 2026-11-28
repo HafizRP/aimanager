@@ -1,9 +1,12 @@
 package v1
 
 import (
+	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"9router-gateway/internal/entity"
 )
@@ -60,13 +63,156 @@ func (h *Handler) SkillsPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// EndpointItem describes an HTTP entrypoint exposed by AI Manager Gateway or its upstream.
+type EndpointItem struct {
+	Name      string `json:"name"`
+	Method    string `json:"method"`
+	Path      string `json:"path"`
+	URL       string `json:"url"`
+	Purpose   string `json:"purpose"`
+	Category  string `json:"category"`
+	IsProbing bool   `json:"is_probing"`
+}
+
+// getGatewayEndpoints returns the structured endpoint catalog for display and export.
+func getGatewayEndpoints(baseURL, upstreamURL string) []EndpointItem {
+	return []EndpointItem{
+		{
+			Name:      "OpenAI Chat Completions",
+			Method:    "POST",
+			Path:      "/v1/chat/completions",
+			URL:       baseURL + "/v1/chat/completions",
+			Purpose:   "OpenAI-compatible chat completions with streaming & thinking options",
+			Category:  "Inference",
+			IsProbing: false,
+		},
+		{
+			Name:      "OpenAI Models Catalog",
+			Method:    "GET",
+			Path:      "/v1/models",
+			URL:       baseURL + "/v1/models",
+			Purpose:   "List available models, combos, and custom upstream nodes",
+			Category:  "Inference",
+			IsProbing: true,
+		},
+		{
+			Name:      "Anthropic Messages API",
+			Method:    "POST",
+			Path:      "/v1/messages",
+			URL:       baseURL + "/v1/messages",
+			Purpose:   "Anthropic Messages protocol compatible endpoint",
+			Category:  "Inference",
+			IsProbing: false,
+		},
+		{
+			Name:      "Text Embeddings",
+			Method:    "POST",
+			Path:      "/v1/embeddings",
+			URL:       baseURL + "/v1/embeddings",
+			Purpose:   "OpenAI-compatible vector text embeddings",
+			Category:  "Inference",
+			IsProbing: false,
+		},
+		{
+			Name:      "OpenAPI 3.1 Specification",
+			Method:    "GET",
+			Path:      "/openapi.json",
+			URL:       baseURL + "/openapi.json",
+			Purpose:   "Machine-readable API specification for Postman, Insomnia, or Swagger UI",
+			Category:  "Documentation",
+			IsProbing: true,
+		},
+		{
+			Name:      "Liveness Probe (Health)",
+			Method:    "GET",
+			Path:      "/healthz",
+			URL:       baseURL + "/healthz",
+			Purpose:   "Kubernetes and Docker liveness check (returns 200 OK)",
+			Category:  "Monitoring",
+			IsProbing: true,
+		},
+		{
+			Name:      "Readiness Probe (DB Ping)",
+			Method:    "GET",
+			Path:      "/readyz",
+			URL:       baseURL + "/readyz",
+			Purpose:   "Readiness check verifying database connection availability",
+			Category:  "Monitoring",
+			IsProbing: true,
+		},
+		{
+			Name:      "Service Version & Info",
+			Method:    "GET",
+			Path:      "/version",
+			URL:       baseURL + "/version",
+			Purpose:   "Service metadata, version string, and application status",
+			Category:  "Monitoring",
+			IsProbing: true,
+		},
+		{
+			Name:      "Upstream 9router Core",
+			Method:    "ANY",
+			Path:      "/",
+			URL:       upstreamURL,
+			Purpose:   "Internal 9router Core engine (strictly loopback bound)",
+			Category:  "Upstream",
+			IsProbing: false,
+		},
+	}
+}
+
 // EndpointPage renders the gateway endpoint configuration hub.
 func (h *Handler) EndpointPage(w http.ResponseWriter, r *http.Request) {
+	baseURL := h.deriveCurrentBaseURL(r)
+	upstreamURL := h.cfg.GetUpstreamURL()
+	endpoints := getGatewayEndpoints(baseURL, upstreamURL)
+
 	h.render(w, r, "endpoint.html", "base.html", map[string]interface{}{
 		"ActivePage":     "endpoint",
-		"CurrentBaseURL": h.deriveCurrentBaseURL(r),
-		"UpstreamURL":    h.cfg.GetUpstreamURL(),
+		"CurrentBaseURL": baseURL,
+		"UpstreamURL":    upstreamURL,
+		"Endpoints":      endpoints,
 	})
+}
+
+// APIEndpointsExport exports the gateway endpoint catalog as CSV or JSON.
+func (h *Handler) APIEndpointsExport(w http.ResponseWriter, r *http.Request) {
+	baseURL := h.deriveCurrentBaseURL(r)
+	upstreamURL := h.cfg.GetUpstreamURL()
+	endpoints := getGatewayEndpoints(baseURL, upstreamURL)
+
+	format := strings.ToLower(r.URL.Query().Get("format"))
+	if format == "" {
+		format = "csv"
+	}
+
+	timestamp := time.Now().Format("20060102_150405")
+
+	if format == "json" {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=endpoints_%s.json", timestamp))
+		_ = json.NewEncoder(w).Encode(endpoints)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=endpoints_%s.csv", timestamp))
+
+	writer := csv.NewWriter(w)
+	defer writer.Flush()
+
+	_ = writer.Write([]string{"Name", "Method", "Path", "URL", "Category", "Purpose"})
+
+	for _, ep := range endpoints {
+		_ = writer.Write([]string{
+			ep.Name,
+			ep.Method,
+			ep.Path,
+			ep.URL,
+			ep.Category,
+			ep.Purpose,
+		})
+	}
 }
 
 // ProfilePage renders the current user's own account overview.
