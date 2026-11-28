@@ -243,6 +243,7 @@ func NewRouter(cfg *config.Config, db *sql.DB, repo repository.Repository, h *v1
 		authRouter.Put("/api/skills/{id}", h.APIUpdateSkill)
 		authRouter.Delete("/api/skills/{id}", h.APIDeleteSkill)
 		authRouter.Get("/endpoint", h.EndpointPage)
+		authRouter.Get("/api/endpoints/export", h.APIEndpointsExport)
 		authRouter.Get("/profile", h.ProfilePage)
 		authRouter.Post("/profile", h.UpdateProfilePost)
 		authRouter.Post("/api/profile", h.APIUpdateProfile)
